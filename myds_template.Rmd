@@ -1,0 +1,53 @@
+---
+# Get YAML keywords from myYAML_ref.Rmd
+```{r source, echo=FALSE}
+source("~/Dropbox/datascience/R/myYAML_ref.Rmd")
+```
+output: html_document
+---
+
+Data: Device data is from an anonymous individual whose number of steps was sampled in 5 minute intervals.  
+Source: 
+Time period: October and November, 2012
+
+### Synopsis:
+
+Potential next steps include:
+
+```{r set_global_options}
+rm(list=ls())
+set.seed(12345)
+source("~/Dropbox/datascience/R/mydsutils.R")
+source("~/Dropbox/datascience/R/myplot.R")
+# Gather all package requirements here
+#suppressPackageStartupMessages(require())
+```
+
+```{r set_global_options_wd, echo=FALSE}
+setwd("~/Documents/Work/Courses/Coursera/jhu-datascience/E-Reproducible-Research/PA1")
+```
+
+### Step 01: import data
+```{r import_data, cache=TRUE}
+
+
+```
+
+#### Step 02.1: inspect data
+```{r inspect_steps_1, cache=TRUE}
+print(str(entity_df))
+
+# List info gathered for various columns
+# steps:
+# date:
+# interval:
+
+print(summary(entity_df))
+pairs(subset(entity_df, select=-c(col_symbol)))
+
+# Create new features that help diagnostics
+```
+
+```{r print_sessionInfo, echo=FALSE}
+sessionInfo()
+```
