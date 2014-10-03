@@ -53,7 +53,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     } else {
     }
     
-    g <- g + geom_boxplot() + stat_summary(fun.y=mean, pch=22, geom='point', color='red') +
+    g <- g + geom_boxplot(fill="grey80", color="blue") + 
+             stat_summary(fun.y=mean, pch=22, geom='point', color='red') +
              scale_y_continuous(labels=myformat_number)
     
     if (length(ycol_names) == 1) {
@@ -252,46 +253,47 @@ myplot_plotly <- function(ggplot_obj) {
     return(pyout$response$url)
 }
 
-myplot_scatter <- function(df, xcol_name, ycol_name, 
+myplot_scatter <- function(df, xcol_name, ycol_name,
                            colorcol_name=NULL, jitter=FALSE, smooth=FALSE,
                            facet_rowcol_name=".", facet_colcol_name=".",
                            ylabel=NULL,
-                           stats_df=NULL, predict_df=NULL, i_pkg="NULL") {
+                           stats_df=NULL, predict_df=NULL, i_pkg=NULL) {
 
+    #cat("\nentering myplot_scatter:")
     if (!missing(i_pkg) & (i_pkg == "plotly") & is.factor(df[, xcol_name]))
         stop("plotly rendering of xvar as factor crashes")
-        
+
     p <- ggplot(df, aes_string(x=xcol_name, y=ycol_name))
-    
-    if (!missing(colorcol_name))
+
+    if (!missing(colorcol_name) & mycheck_validarg(colorcol_name))
         p <- p + geom_point() + aes_string(color=colorcol_name)
     else
         p <- p + geom_point(color="grey")
-    
+
     facets <- paste(facet_rowcol_name, '~', facet_colcol_name)
     if (facets != '. ~ .')
         p <- p + facet_grid(facets)
-    
+
     if (jitter)
         p <- p + geom_jitter()
     if (smooth)
         p <- p + geom_smooth()
-    
+
     # Format y-axis
     if (!missing(ylabel))
         p <- p + ylab(ylabel)
-    if (is.numeric(df[, ycol_name]))    
+    if (is.numeric(df[, ycol_name]))
         p <- p + scale_y_continuous(labels=myformat_number)
-    
+
     if (!missing(stats_df)) {
         # Display stats of x-axis feature
         aes_str <- paste0("linetype=\"dotted\", xintercept=as.numeric(", xcol_name, ")")
-        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))            
-        p <- p + geom_vline(mapping=aes_mapping, 
+        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+        p <- p + geom_vline(mapping=aes_mapping,
                             data=stats_df, show_guide=TRUE)
         p <- p + scale_linetype_identity(guide="legend", name="Stats", labels=rownames(stats_df))
     }
-    
+
     if (!missing(stats_df)) {
         # Plot the prediction point & conf. interval
         aes_str <- paste0("y=", ycol_name, ".predict.fit, x=", xcol_name)
@@ -300,21 +302,22 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
             p <- p + geom_point(aes_mapping,
                                 data=predict_df,
                                 color="red", pch=7, size=5)
-    
+
         aes_str <- paste0(
             "ymax=", ycol_name, ".predict.upr, ymin=", ycol_name, ".predict.lwr, x=", xcol_name)
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
         if (missing(i_pkg) | i_pkg != "plotly")
             p <- p + geom_errorbar(aes_mapping,
-                                   data=predict_df,    
+                                   data=predict_df,
                                    color="red", width=0.1)
-    }                           
-    
+    }
+
     # Plot the regression line
     p <- p + geom_smooth(method="lm")
-    
+
     # linetype legend messes up the fill legend
     p <- p + guides(color=guide_legend(override.aes=list(linetype=0)))
 
+    #cat("\nexiting myplot_scatter:")
     return(p)
-}    
+}

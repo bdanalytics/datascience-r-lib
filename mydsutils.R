@@ -156,6 +156,15 @@ myaggregate_numorlgcl <- function (df, by_names, func) {
 #                                            "date", sum)
 
 mycheck_identity <- function(obj1, obj2) {
+	
+	if (class(obj1) == "data.frame") {
+		# ensure row names are same
+		if (rownames(obj1) != rownames(obj2)) {
+			warning("data.frame(s) not identical due to differing row names")
+			return (FALSE)                                
+		}
+	}	
+
     result <- (obj1 != obj2)
     
     if (sum(is.na(result)) > 0) {
@@ -171,7 +180,7 @@ mycheck_identity <- function(obj1, obj2) {
                 return (FALSE)                
             }
 
-                 if (class(obj1) == "data.frame") {
+            if (class(obj1) == "data.frame") {
                 # ensure NA indexes are same
                 if (sum(row.names(obj1[complete.cases(obj1), ]) != 
                         row.names(obj1[complete.cases(obj1), ])) > 0) {
@@ -203,6 +212,31 @@ mycheck_identity <- function(obj1, obj2) {
     
     if (sum(result) > 0) { return(FALSE) } else { return(TRUE) }
 }
+
+mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
+# mycheck_prime(1)
+# mycheck_prime(2)
+# mycheck_prime(3)
+# mycheck_prime(4)
+# mycheck_prime(5)
+# mycheck_prime(7)
+# mycheck_prime(9)
+
+mycheck_validarg <- function(value) {
+	     if (is.null(value)) 	return FALSE
+	else if (is.na(value))   	return FALSE
+	else if (value == "None")	return FALSE	# for shiny inputs
+	else return(TRUE)
+}
+# mycheck_validarg(NULL)
+# mycheck_validarg(NA)
+# mycheck_validarg("None")
+# mycheck_validarg("WTF")
+# mycheck_validarg(-2)
+# mycheck_validarg(0)
+# mycheck_validarg(FALSE)
+# mycheck_validarg(TRUE)
+# mycheck_validarg("none")
 
 mycompute_median <- function(vector) {
     if (is.factor(vector)) 
@@ -238,6 +272,7 @@ mycreate_xtab <- function(df, xtab_col_names) {
 myformat_number <- function(x) {
     if (class(x) != "num") x <- as.numeric(x)
     return(format(x, big.mark=',')) # 000's separator
+    #format(x, digits=4, scientific=FALSE)	# other format options
 }
 
 myformat_time_MS <- function(x) {

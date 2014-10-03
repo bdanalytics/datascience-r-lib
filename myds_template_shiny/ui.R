@@ -1,8 +1,11 @@
-require(shiny)
+#print("ui code being executed...")
+source("uisrvrinit.R")
 
 shinyUI(pageWithSidebar(
     
-    headerPanel("myappname: mytitle"),
+#     headerPanel("myappname: mytitle"),
+    headerPanel(title=HTML("DiamondsApp:Plotly"),
+                windowTitle="Diamonds Price Predictor"),
     
     sidebarPanel(
         h1('H1 text'),
@@ -10,16 +13,22 @@ shinyUI(pageWithSidebar(
         h3('H3 Text'),
         h4('H4 Text'),
 
-        checkboxGroupInput("id2", "Checkbox",
-                           c("Value 1" = "1",
-                             "Value 2" = "2",
-                             "Value 3" = "3")),
+        # Sorted by *Input
+        checkboxInput('plot.jitter', 'Jitter'),
 
+        checkboxGroupInput(inputId="check_group",  # ID to be used in server.R
+                           label="Select species:",
+                           choices=list("Setosa"="setosa",  # Make sure not to mix names with values
+                                        "Versicolor"="versicolor",
+                                        "Virginica"="virginica"),
+                           selected=list("setosa", "versicolor", "virginica")),
+                     
         dateInput("date", "Date:"),
         
-        numericInput('glucose', 'Glucose mg/dl', 90, min = 50, max = 200, step = 5),        
+        numericInput('glucose', 'Glucose mg/dl', 90, min=50, max=200, step=5),        
 
-        selectInput('y', 'Y', names(dataset), names(dataset)[[2]]),
+        selectInput('predict.cut', 'cut', levels(diamonds_df$cut),
+                    selected=median_diamonds_df$cut, multiple=FALSE),
 
         sliderInput('sampleSize', 'Sample Size', 
                      min=1, max=nrow(dataset), step=500, 
@@ -34,16 +43,19 @@ shinyUI(pageWithSidebar(
     
     mainPanel(
         h3('Prediction Results'),
-        
-        p('text1 + text2:'), textOutput('text3'),
-        
-        plotOutput('newHist'),
-        
-        h4('You entered'), verbatimTextOutput("inputValue"),
-        
+
         code('some code'),
         
         p('some ordinary text'),
+
+        # Sorted by *Output
+        htmlOutput("plot")  # Argument name from server.R
+                        
+        plotOutput('newHist'),
+        
+        p('text1 + text2:'), textOutput('text3'),
+        
+        h4('You entered'), verbatimTextOutput("inputValue"),
         
         h5(' ')	# Placeholder so that all other commands have a comma
     )
