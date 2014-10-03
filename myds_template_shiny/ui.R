@@ -37,16 +37,39 @@ shinyUI(pageWithSidebar(
 
         textInput(inputId="text1", label="Enter Text1"),
         
+        h5('Notes:'),
+        helpText("1. While the plot shows only the ",
+                 "specified number of observations,",
+                 "the prediction is based on the ",
+                 "full dataset."),
+
         h5(" ")#, submitButton('Submit')
         h5(" ")#, actionButton("goButton", "Go!")
     ),
     
     mainPanel(
+        textOutput('debug_str'),
+            
         h3('Prediction Results'),
 
         code('some code'),
         
         p('some ordinary text'),
+
+        tabsetPanel(
+            tabPanel("ggplot",
+                     plotOutput('plot'),
+
+                     h5(' ')    # Placeholder so that all other commands have a comma
+            ),
+
+            tabPanel("plotly",
+                     uiOutput('iplot'),
+
+                     h5(' ')    # Placeholder so that all other commands have a comma
+            ),
+
+        id="plot.tab"),
 
         # Sorted by *Output
         htmlOutput("plot")  # Argument name from server.R
@@ -54,6 +77,8 @@ shinyUI(pageWithSidebar(
         plotOutput('newHist'),
         
         p('text1 + text2:'), textOutput('text3'),
+        
+        h4('Data Plot:'), uiOutput('iplot'),
         
         h4('You entered'), verbatimTextOutput("inputValue"),
         

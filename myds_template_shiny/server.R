@@ -50,6 +50,8 @@ shinyServer(
 
 #         create_ggplot_reactive_fn <- reactive({
 #             #cat("\nin create_ggplot_reactive_fn:")
+#             if (input$plot.tab == "ggplot") i_pkg <- "None"
+#             else                            i_pkg <- input$plot.tab
 #             myplot_scatter (diamonds_smp_df_fn(), input$plot.x, "price",
 #                             colorcol_name=input$plot.color,
 #                             jitter=input$plot.jitter, smooth=input$plot.smooth,
@@ -58,7 +60,7 @@ shinyServer(
 #                             ylabel="price ($)",
 #                             stats_df=median_diamonds_df,
 #                             predict_df=test_diamonds_df_fn()
-#                             , i_pkg="plotly"
+#                             , i_pkg=i_pkg
 #                             )
 #         })
 
@@ -79,6 +81,7 @@ shinyServer(
 #             gp <- create_ggplot_reactive_fn()
 #             print(gp)            
 #         }, height=700)
+#         })
 #
 #         
 #         output$prediction <- renderPrint({diabetesRisk(input$glucose)})
@@ -144,7 +147,12 @@ shinyServer(
 #             tags$iframe(src=pyout$response$url,
 #                         frameBorder="0",  # Some aesthetics
 #                         height=600, width=800)
-#         })     
+#         })
+#         output$overview <- renderUI({
+#             tags$iframe(src="http://bdanalytics.github.io/DiamondsApp/DiamondsApp_Rpres.html#/",
+#                         frameBorder="0",  # Some aesthetics
+#                         height=600, width=800)
+#         })
     
     }
 )
