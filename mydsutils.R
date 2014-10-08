@@ -155,6 +155,7 @@ myaggregate_numorlgcl <- function (df, by_names, func) {
 #                                                   select=-c(interval)), 
 #                                            "date", sum)
 
+# same as all.equal() or identical() ?
 mycheck_identity <- function(obj1, obj2) {
 	
 	if (class(obj1) == "data.frame") {
@@ -223,9 +224,9 @@ mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
 # mycheck_prime(9)
 
 mycheck_validarg <- function(value) {
-	     if (is.null(value)) 	return FALSE
-	else if (is.na(value))   	return FALSE
-	else if (value == "None")	return FALSE	# for shiny inputs
+	     if (is.null(value)) 	return(FALSE)
+	else if (is.na(value))   	return(FALSE)
+	else if (value == "None")	return(FALSE)	# for shiny inputs
 	else return(TRUE)
 }
 # mycheck_validarg(NULL)
@@ -337,38 +338,36 @@ mycreate_date2daytype <- function (df, date_col_name) {
 
 ## 03.3     create feature combinations
 
-## 04.      transform features
+## 04.	    build training and test data
+## 04.1	    simple shuffle sample
+## 04.2     stratified shuffle sample
+## 04.3	    cross-validation sample
+
+## 05.      transform features
 #require(plyr)
 #intersect(names(entity_df), names(entity_agg_intrvl_df))
 #entimptd_df <- join(entity_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
-## 04.1	    collect all numeric features
-## 04.2	    remove row keys & prediction variable
-## 04.3	    remove features that should not be part of estimation
-## 04.4	    remove features / create feature combinations for highly correlated features
-## 04.5     scale / normalize selected features for data distribution requirements in various models
+## 05.1	    collect all numeric features
+## 05.2	    remove row keys & prediction variable
+## 05.3	    remove features that should not be part of estimation
+## 05.4	    select significant features
+# print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
+#              subset(cars_df, am_fctr == "manual")$mpg, 
+#              var.equal=FALSE)$conf)
 
-## 05.	    build training and test data
-## 05.1	    simple shuffle sample
-## 05.2     stratified shuffle sample
-## 05.3	    cross-validation sample
+## 05.5	    remove features / create feature combinations for highly correlated features
+## 05.5.1	add back in key features even though they might have been eliminated
+## 05.5.2   cv of significance
+## 05.6     scale / normalize selected features for data distribution requirements in various models
 
 ## 06.	    select models
 ## 06.1	    select base models
 ## 06.1.1	regression models
 # prediction_mdl <- lm(reformulate(features_lst, response="price"), 
 #                      data = diamonds_df)
-# print(summary(prediction_mdl))
-predict_price <- function(df) {
-    prediction <- predict(prediction_mdl, df, interval="confidence")
-    df$price.predict.fit <- prediction[, "fit"]
-    df$price.predict.lwr <- prediction[, "lwr"]
-    df$price.predict.upr <- prediction[, "upr"]
-    return(df)
-}
-# test_diamonds_df <- predict_price(median_diamonds_df)
                      
 ## 06.1.2	classification models
 ## 06.1.3	clustering models
@@ -376,17 +375,20 @@ predict_price <- function(df) {
 ## 06.2	    select ensemble models
 
 ## 07.	    design models
-## 07.1	    select significant features
-## 07.1.1	add back in key features even though they might have been eliminated
-## 07.1.2   cv of significance
 ## 07.2	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    run models
+# print(summary(prediction_mdl))
+
 ## 08.1	    fit on simple shuffled sample
 ## 08.2     fit on stratified shuffled sample
 ## 08.3     fit on cross-validated samples
 
 ## 09.	    test model results  for k-fold0 test set
+# mpg_residuals_df <- data.frame(mpg_fit$residuals, cars_df$mpg, cars_df$am_fctr)
+# #print(summaryBy(mpg_fit.residuals ~ cars_df.am_fctr, data=mpg_residuals_df, FUN=mean))
+# print(myplot_violin(mpg_residuals_df, "mpg_fit.residuals", "cars_df.am_fctr"))
+
 ## 09.1	    collect votes from each cross-validation for each model
 ## 09.2	    collect votes from each model
 ## 09.3     export cv test data for inspection

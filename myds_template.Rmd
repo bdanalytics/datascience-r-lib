@@ -1,10 +1,10 @@
 ---
 # Get YAML keywords from myYAML_ref.Rmd
-```{r source, echo=FALSE}
-source("~/Dropbox/datascience/R/myYAML_ref.Rmd")
-```
-output: html_document
+title: "Motor Trend: mpg regression"
+author: "bdanalytics"
+#output: html_document
 ---
+#### Date: `r format(Sys.time(), "(%a) %b %d, %Y")`
 
 Data: Device data is from an anonymous individual whose number of steps was sampled in 5 minute intervals.  
 Source: 
@@ -47,6 +47,15 @@ pairs(subset(entity_df, select=-c(col_symbol)))
 
 # Create new features that help diagnostics
 ```
+
+Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
+The variance by am_fctr appears to be independent. 
+```{r q1, cache=TRUE}
+print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
+             subset(cars_df, am_fctr == "manual")$mpg, 
+             var.equal=FALSE)$conf)
+```
+We reject the null hypothesis i.e. we have evidence to conclude that am_fctr impacts mpg (95% confidence). Manual transmission is better for miles per gallon versus automatic transmission.
 
 ```{r print_sessionInfo, echo=FALSE}
 sessionInfo()

@@ -260,8 +260,6 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
                            stats_df=NULL, predict_df=NULL, i_pkg=NULL) {
 
     #cat("\nentering myplot_scatter:")
-    if (!missing(i_pkg) & (i_pkg == "plotly") & is.factor(df[, xcol_name]))
-        stop("plotly rendering of xvar as factor crashes")
 
     p <- ggplot(df, aes_string(x=xcol_name, y=ycol_name))
 
@@ -287,14 +285,14 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
 
     if (!missing(stats_df)) {
         # Display stats of x-axis feature
-        aes_str <- paste0("linetype=\"dotted\", xintercept=as.numeric(", xcol_name, ")")
+        aes_str <- paste0("linetype=\"dashed\", xintercept=as.numeric(", xcol_name, ")")
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
         p <- p + geom_vline(mapping=aes_mapping,
                             data=stats_df, show_guide=TRUE)
         p <- p + scale_linetype_identity(guide="legend", name="Stats", labels=rownames(stats_df))
     }
 
-    if (!missing(stats_df)) {
+    if (!missing(predict_df)) {
         # Plot the prediction point & conf. interval
         aes_str <- paste0("y=", ycol_name, ".predict.fit, x=", xcol_name)
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
@@ -313,7 +311,10 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
     }
 
     # Plot the regression line
-    p <- p + geom_smooth(method="lm")
+    if (mycheck_validarg(i_pkg)) {
+        if (!((i_pkg == "plotly") & is.factor(df[, xcol_name]))) 
+            p <- p + geom_smooth(method="lm")
+    } else p <- p + geom_smooth(method="lm")
 
     # linetype legend messes up the fill legend
     p <- p + guides(color=guide_legend(override.aes=list(linetype=0)))
@@ -321,3 +322,75 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
     #cat("\nexiting myplot_scatter:")
     return(p)
 }
+
+myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
+    if ((length(ycol_names) > 1) & (!missing(xcol_name)))
+        stop("Multiple feats not implemented with x variable.", 
+             "\n  Consider using facet parameter instead.")
+    
+    if (!missing(xcol_name) & !is.factor(df[, xcol_name])) {
+        xcol_name_par <- xcol_name
+        xcol_name <- paste(xcol_name_par, "fctr", sep="_")
+        warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)
+        df[, xcol_name] <- as.factor(df[, xcol_name_par])
+    }
+    
+    if (length(ycol_names) == 1) {
+        if (missing(xcol_name)) {
+            medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df, 
+                                    FUN=c(median), na.rm=TRUE)
+            p <- ggplot(df, aes_string(x=factor(0), y=ycol_names))
+            p <- p + xlab(" ")            
+        } else {
+            medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df, 
+                                    FUN=c(median), na.rm=TRUE)
+            p <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))            
+        }
+    } else {
+        require(reshape)
+        mltd_df <- melt(df,, measure.vars=ycol_names)
+        require(doBy)        
+        medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
+        p <- ggplot(mltd_df, aes(x=variable, y=value))
+        p <- p + xlab(" ")
+    }
+    
+    if (!is.null(facet_spec)) {
+        stop("facets not supported yet")
+        require(doBy)
+        sum_df <- summaryBy(steps ~ . , df, FUN=c(median))
+    } else {
+    }
+    
+    p <- p + geom_violin(fill="grey80", color="blue") + 
+             stat_summary(fun.y=mean, pch=22, geom='point', color='red') +
+             scale_y_continuous(labels=myformat_number)
+    
+    if (length(ycol_names) == 1) {
+        aes_str <- paste0("linetype=\"dashed\", yintercept=as.numeric(", ycol_names, ")")        
+        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+#         p <- p + geom_hline(data=medians_df, 
+#                             mapping=aes_mapping, show_guide=TRUE
+#                             , color="black", size=1)
+#         p <- p + scale_linetype_identity(guide="legend", name="Stats", 
+#                                          labels=rownames(medians_df))
+        
+        aes_str <- paste0("y=", ycol_names, ".median * 1.05", 
+                          ", label=myformat_number(round(", ycol_names, ".median))")
+        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+        p <- p + geom_text(data=medians_df, 
+                           mapping=aes_mapping
+                           , color="NavyBlue", size=3.5)
+    } else {
+        #print(medians_df)
+        p <- p + geom_text(data=medians_df,
+                           mapping=aes_string(x="variable", 
+                                              y="value.median * 1.05",
+                                              label="myformat_number(round(value.median))")
+                           , color="NavyBlue", size=3.5)
+        #print("median text layer applied")
+    }
+    
+    return(p)
+}
+
