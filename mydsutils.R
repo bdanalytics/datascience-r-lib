@@ -33,6 +33,7 @@ myimport_data <- function(url, filename=NULL){
                   format(dim(df)[1], big.mark=","), 
                   format(dim(df)[2], big.mark=",")))
     myprint_df(df)
+    myprint_str_df(df)
     
     return(df)
 }
@@ -52,6 +53,18 @@ myprint_df <- function(df, dims=FALSE) {
 		print(df[sort(sample(1:dim(df)[1], 6)),])
 	
 		print(tail(df))
+    }
+}
+
+myprint_str_df <- function(df) {
+    if (ncol(df) <= 20) print(str(df)) else { 
+        print(str(df[, 1:20]))
+	
+		# print 20 middle cols
+		print(str(df[, sort(sample(21:(ncol(df)-20), 20))]))
+
+        print(str(df[, (ncol(df) - 20):ncol(df)]))
+        warning("[list output truncated]")
     }
 }
 
@@ -242,7 +255,7 @@ mycheck_validarg <- function(value) {
 mycompute_median <- function(vector) {
     if (is.factor(vector)) 
         return(factor(levels(vector)[median(as.numeric(vector))], levels(vector)))
-    else return(median(vector))
+    else return(median(vector, na.rm=TRUE))
 }
 
 mycompute_medians_df <- function(df, keep.names=FALSE) {
@@ -268,6 +281,15 @@ mycreate_xtab <- function(df, xtab_col_names) {
     
     names(count_df) <- gsub("`", "", names(count_df))
     return(count_df)
+}
+
+mydelete_cols_df <- function(df, colnames) {
+    return(subset(df, select=names(df)[!names(df) %in% colnames]))
+}
+
+myfind_all_na_cols_df <- function(df) {
+    na_cols <- which(as.numeric(colSums(is.na(df))) == nrow(df))
+    return(names(df)[na_cols])
 }
 
 myformat_number <- function(x) {
@@ -375,7 +397,7 @@ mycreate_date2daytype <- function (df, date_col_name) {
 ## 06.2	    select ensemble models
 
 ## 07.	    design models
-## 07.2	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
+## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    run models
 # print(summary(prediction_mdl))
@@ -393,9 +415,11 @@ mycreate_date2daytype <- function (df, date_col_name) {
 ## 09.2	    collect votes from each model
 ## 09.3     export cv test data for inspection
 
-## 10.	    predict results for new data
-## 10.1	    run models with data to predict
-## 10.2	    collect votes from each cross-validation for each model
-## 10.3	    collect votes from each model
+## 10.	    build finalized model on all training data
 
-## 11.	    export results
+## 11.	    predict results for new data
+## 11.1	    run models with data to predict
+## 11.2	    collect votes from each cross-validation for each model
+## 11.3	    collect votes from each model
+
+## 12.	    export results

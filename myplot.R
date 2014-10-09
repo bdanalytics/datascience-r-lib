@@ -132,22 +132,22 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
     
     if (is.null(fill_col_name)) {
         # Fill with raw counts
-        g <- ggplot(df, aes_string(x=hst_col_name))
-        g <- g + geom_histogram(aes(fill=..count..)) + 
+        p <- ggplot(df, aes_string(x=hst_col_name))
+        p <- p + geom_histogram(aes(fill=..count..)) + 
                  scale_fill_gradient("Count", low="red", high="blue")           
     }
     else {
-        # If fill variable has 5 or less unique values use raw data 
-        if (length(unique(df[, fill_col_name])) <= 5) {
+        # If fill variable has 7 or less unique values use raw data 
+        if (length(unique(df[, fill_col_name])) <= 7) {
             
             # if fill variable is a factor use raw data
             if (class(df[, fill_col_name]) == "factor") {
-                g <- ggplot(df, aes_string(x=hst_col_name, fill=fill_col_name))
+                p <- ggplot(df, aes_string(x=hst_col_name, fill=fill_col_name))
             } else {
                 # else create a factor of the fill variable    
                 fill_col_fctr_name <- paste0(fill_col_name, "_fctr")
                 df[, fill_col_fctr_name] <- as.factor(df[, fill_col_name])
-                g <- ggplot(df, aes_string(x=hst_col_name, 
+                p <- ggplot(df, aes_string(x=hst_col_name, 
                                            fill=fill_col_fctr_name))
             }
         } else {
@@ -156,51 +156,52 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
             df[, fill_col_grp_name] <- cut(df[, fill_col_name], 5) 
             # Why does cut create labels with -ve values although min is 0 ?
             
-            g <- ggplot(df, aes_string(x=hst_col_name, fill=fill_col_grp_name))
+            p <- ggplot(df, aes_string(x=hst_col_name, fill=fill_col_grp_name))
         }
-        g <- g + geom_bar()
+        p <- p + geom_bar()
     }
     
-    g <- g + scale_y_continuous(labels=myformat_number)
+    p <- p + scale_y_continuous(labels=myformat_number)
     if ((class(df[, hst_col_name]) == "integer") | 
         (class(df[, hst_col_name]) == "number"))
-    	g <- g + scale_x_continuous(labels=myformat_number)
+        p <- p + scale_x_continuous(labels=myformat_number)
     
-    # Add median & mean as vertical lines
-    #aes_str <- paste0("xintercept=mean(df[, \"", hst_col_name, "\"], na.rm=TRUE),
-    #                  linetype=\"", "dotted", "\"")
-    #aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-    #g <- g + geom_vline(mapping=aes_mapping, show_guide=TRUE)
-
     if (show_stats) {
-        g <- g + geom_vline(aes_string(xintercept=mean(df[, hst_col_name], na.rm=TRUE),
-                                       linetype="\"dotted\""), show_guide=TRUE) 
-        g <- g + geom_vline(aes_string(xintercept=median(df[, hst_col_name], na.rm=TRUE),
+        if (is.numeric(df[, hst_col_name]))
+            p <- p + geom_vline(aes_string(xintercept=mean(df[, hst_col_name], 
+                                                           na.rm=TRUE),
+                                linetype="\"dotted\""), show_guide=TRUE) 
+        p <- p + geom_vline(aes_string(xintercept=mycompute_median(df[, hst_col_name]),
                                        linetype="\"dashed\""), show_guide=TRUE)         
     }
 
     # Add number of missing values as a horizontal line
     num_na <- sum(is.na(df[, hst_col_name]))
-    if (num_na == 0) 
-        g <- g + scale_linetype_manual(name="Stats", values=c("dotted", "dashed"), 
-                                       labels=c("mean", "median"))
-    else {
-        g <- g + geom_hline(aes_string(yintercept=num_na,
+    if (num_na > 0) 
+        p <- p + geom_hline(aes_string(yintercept=num_na,
                                        linetype="\"dotdash\""), show_guide=TRUE)  
-        g <- g + scale_linetype_manual(name="Stats", values=c("dotted", "dashed", "dotdash"), 
-                                       labels=c("mean", "median", "missing"))
-
-    }
     
     #if ((class(facet_frmla) == "formula") | (!is.na(facet_frmla)))
     if (!missing(facet_frmla))
-        g <- g + facet_grid(facet_frmla)
-        
-    # Lines legend messes up the fill legend
-    g + guides(fill=guide_legend(override.aes=list(linetype=0)))
+        p <- p + facet_grid(facet_frmla)
     
+    if (show_stats) {
+        # Display stats legend
+        stats_legend_labels <- c("median")
+        if (is.numeric(df[, hst_col_name]))
+            stats_legend_labels <- c(stats_legend_labels, "mean")
+        if (num_na > 0)
+            stats_legend_labels <- c(stats_legend_labels, "missing")
+        
+        p <- p + scale_linetype_identity(guide="legend", name="Stats", 
+                                         labels=stats_legend_labels)
+        # Lines legend messes up the fill legend
+        p <- p + guides(fill=guide_legend(override.aes=list(linetype=0)))        
+    }
+    
+    return(p)
 }
-#myplot_histogram(entity_agg_date_df, "steps_sum", fill_col_name="date_dytyp")
+#print(myplot_histogram(entity_agg_date_df, "steps_sum", fill_col_name="date_dytyp"))
 
 myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, 
                         facet_row_colnames=NULL, facet_col_colnames=NULL) {
