@@ -5,61 +5,83 @@
 
 ## 01.      import data
 
-myimport_data <- function(url, filename=NULL){
+myimport_data <- function(url, filename=NULL, nrows=-1, print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
     url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
     download_filename <- gsub("%2F", "-", url_split[length(url_split)], fixed=TRUE)
     download_filepath <- paste("./data", download_filename, sep="/")
-    if (!file.exists(download_filepath))
+    if (!file.exists(download_filepath)) {
+    	print(sprintf("Downloading file %s from %s...", download_filepath, url))
         download.file(url, destfile=download_filepath, method="curl")
-    
+    }
+
     url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
     download_filename_ext <- url_split[length(url_split)]
     if (download_filename_ext == "zip") {
         if (is.null(filename))
-            stop("Please specify which file(filename=) should be imported from ", 
+            stop("Please specify which file(filename=) should be imported from ",
                  download_filepath)
 
         file_path <- paste("./data", filename, sep="/")
-        if (!file.exists(file_path))
+        if (!file.exists(file_path)) {
+    		print(sprintf("Unzipping file %s...", file_path))
             unzip(file_path)
+        }
     } else file_path <- download_filepath
 
-    # read.csv reads files with ext %in% c(".csv", ".csv.bz2)     
-    df <- read.csv(file_path)
-    
-    print(sprintf("dimensions of data in %s: %s rows x %s cols", file_path, 
-                  format(dim(df)[1], big.mark=","), 
+    # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
+    #	check if file contains header
+    first_record <- read.csv(file_path, header=FALSE, quote="", nrows=1)
+	if (length(grep('"', first_record[1, 1])) == 0)
+	{
+    	header <- FALSE
+    	warning(file_path, " does not contain header")
+	    print("first 10 records:")
+	    #print(system(paste0("head ", file_path)))
+	    #system(paste0("head ", file_path, " | cat")))
+	    print(readLines(file_path, n=10))
+	} else header <- TRUE
+
+    print(sprintf("Reading file %s...", file_path))
+    df <- read.csv(file_path, header=header, nrows=nrows, ...)
+
+    if (nrows > 0)
+    	warning("first ", nrows, " records read")
+
+    print(sprintf("dimensions of data in %s: %s rows x %s cols", file_path,
+                  format(dim(df)[1], big.mark=","),
                   format(dim(df)[2], big.mark=",")))
-    myprint_df(df)
-    myprint_str_df(df)
-    
+    if (print_diagn) {
+		myprint_df(df)
+		myprint_str_df(df)
+    }
+
     return(df)
 }
-#activity_df <- myimport_data("activity.csv", 
+#activity_df <- myimport_data("activity.csv",
 #                "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip")
 
 myprint_df <- function(df, dims=FALSE) {
     if (dims)
-        print(sprintf("Rows: %s; Cols: %s", 
-                      format(dim(df)[1], big.mark=","), 
+        print(sprintf("Rows: %s; Cols: %s",
+                      format(dim(df)[1], big.mark=","),
                       format(dim(df)[2], big.mark=",")))
-    
-    if (dim(df)[1] <= 20) print(df) else { 
+
+    if (dim(df)[1] <= 20) print(df) else {
     	print(head(df))
-	
+
 		# print 6 sample obs
 		print(df[sort(sample(1:dim(df)[1], 6)),])
-	
+
 		print(tail(df))
     }
 }
 
 myprint_str_df <- function(df) {
-    if (ncol(df) <= 20) print(str(df)) else { 
+    if (ncol(df) <= 20) print(str(df)) else {
         print(str(df[, 1:20]))
-	
+
 		# print 20 middle cols
 		print(str(df[, sort(sample(21:(ncol(df)-20), 20))]))
 
@@ -79,7 +101,7 @@ myprint_str_df <- function(df) {
 #INJURIES -> number of personal injuries (numeric variable)
 #PROPDMG -> number of damages to properties (numeric variable)
 #PROPDMGEXP -> H is 00s; K is 000s; M is MMs; B is Billions
-#CROPDMG -> number of damages to crops (numeric variable) 
+#CROPDMG -> number of damages to crops (numeric variable)
 #CROPDMGEXP -> same as PROPDMGEXP
 #BGN_DATE
 
@@ -90,97 +112,97 @@ map_event_grp <- function(evtype) {
     retval <- as.factor("Other.Grp")
     evtype <- toupper(evtype)
 
-         if (length(grep("TORNADO"                      , evtype)) > 0) { retval <- as.factor("Tornado.Grp")      } 
-    else if (length(grep("HEAT"                         , evtype)) > 0) { retval <- as.factor("Heat.Grp")         } 
+         if (length(grep("TORNADO"                      , evtype)) > 0) { retval <- as.factor("Tornado.Grp")      }
+    else if (length(grep("HEAT"                         , evtype)) > 0) { retval <- as.factor("Heat.Grp")         }
     else if (length(grep("COLD|CHILL"                   , evtype)) > 0) { retval <- as.factor("Cold.Grp")         }
-    else if (length(grep("WINTER|SNOW"                  , evtype)) > 0) { retval <- as.factor("WinterStorm.Grp")  }    
+    else if (length(grep("WINTER|SNOW"                  , evtype)) > 0) { retval <- as.factor("WinterStorm.Grp")  }
     else if (length(grep("NON TSTM WIND"                , evtype)) > 0) { retval <- as.factor("Wind.Grp")         }
-    else if (length(grep("THUNDERSTORM|TSTM|THUNDERTORM", evtype)) > 0) { retval <- as.factor("ThunderStorm.Grp") }    
-    else if (length(grep("HURRICANE"                    , evtype)) > 0) { retval <- as.factor("Hurricane.Grp")    }    
-    else if (length(grep("WIND"                         , evtype)) > 0) { retval <- as.factor("Wind.Grp")         }    
-    else if (length(grep("ICE"                          , evtype)) > 0) { retval <- as.factor("WinterStorm.Grp")  }    
-    else if (length(grep("HEAVY RAIN"                   , evtype)) > 0) { retval <- as.factor("ThunderStorm.Grp") }    
-    else if (length(grep("FLOOD"                        , evtype)) > 0) { retval <- as.factor("Flood.Grp")        }    
-    else if (length(grep("LIGHTNING"                    , evtype)) > 0) { retval <- as.factor("Lightning.Grp")    }    
+    else if (length(grep("THUNDERSTORM|TSTM|THUNDERTORM", evtype)) > 0) { retval <- as.factor("ThunderStorm.Grp") }
+    else if (length(grep("HURRICANE"                    , evtype)) > 0) { retval <- as.factor("Hurricane.Grp")    }
+    else if (length(grep("WIND"                         , evtype)) > 0) { retval <- as.factor("Wind.Grp")         }
+    else if (length(grep("ICE"                          , evtype)) > 0) { retval <- as.factor("WinterStorm.Grp")  }
+    else if (length(grep("HEAVY RAIN"                   , evtype)) > 0) { retval <- as.factor("ThunderStorm.Grp") }
+    else if (length(grep("FLOOD"                        , evtype)) > 0) { retval <- as.factor("Flood.Grp")        }
+    else if (length(grep("LIGHTNING"                    , evtype)) > 0) { retval <- as.factor("Lightning.Grp")    }
     else if (length(grep("STORM SURGE"                  , evtype)) > 0) { retval <- as.factor("Flood.Grp")        }
     else if (length(grep("HAIL"                         , evtype)) > 0) { retval <- as.factor("Hail.Grp")         }
-    else if (length(grep("TROPICAL STORM"               , evtype)) > 0) { retval <- as.factor("TropicalStorm.Grp")}    
+    else if (length(grep("TROPICAL STORM"               , evtype)) > 0) { retval <- as.factor("TropicalStorm.Grp")}
     else if (length(grep("DROUGHT"                      , evtype)) > 0) { retval <- as.factor("Drought.Grp")      }
-    
+
     return(retval)
 }
 
-#entity_agg_intrvl_df[which(entity_agg_intrvl_df["steps_mean"] == 
+#entity_agg_intrvl_df[which(entity_agg_intrvl_df["steps_mean"] ==
 #                           max(entity_agg_intrvl_df$steps_mean)), ]
 
 #subset(entity_df, select=-c(interval))
-       
-# sql <- "SELECT EVTYPE, SUM(FATALITIES) AS FATALITIES, SUM(INJURIES) AS INJURIES, 
+
+# sql <- "SELECT EVTYPE, SUM(FATALITIES) AS FATALITIES, SUM(INJURIES) AS INJURIES,
 #                SUM(FATALITIES + INJURIES) AS health_dmg, SUM(1) AS storms_n
 #         FROM storms_df
 #         GROUP BY EVTYPE
-#         HAVING health_dmg > 0                   
+#         HAVING health_dmg > 0
 #         ORDER BY health_dmg DESC
 #        "
 #EVTYPE_health_df <- sqldf(sql)
 #summary(EVTYPE_health_df)
-       
+
 myaggregate_numorlgcl <- function (df, by_names, func) {
-    
+
     # Keep only numeric or logical columns
     dfcols_df <- data.frame(type=sapply(df, class))
-    keep_cols <- rownames(dfcols_df)[dfcols_df[, "type"] %in% 
+    keep_cols <- rownames(dfcols_df)[dfcols_df[, "type"] %in%
                                          c("integer", "numeric", "logical")]
     # Drop cols in by_names
     keep_cols <- setdiff(keep_cols, by_names)
-    
+
     # Build df with only numeric/logical & by cols
     subset_df <- cbind(df[, keep_cols, drop=FALSE], df[, by_names, drop=FALSE])
     names(subset_df) <- c(keep_cols, by_names)
-    
+
     # Drop obs with NAs
     num_complete_cases <- sum(complete.cases(subset_df))
     if (num_complete_cases < dim(df)[1]) {
         num_excl_cases <- dim(df)[1] - num_complete_cases
-        warning (sprintf("excluding %s (%0.1f pct) obs with NA", 
+        warning (sprintf("excluding %s (%0.1f pct) obs with NA",
                          prettyNum(num_excl_cases, big.mark=","),
                          num_excl_cases * 100.0 / dim(df)[1]))
-        subset_df <- subset_df[complete.cases(subset_df), , drop=FALSE]         
+        subset_df <- subset_df[complete.cases(subset_df), , drop=FALSE]
     }
-    
+
     by_lst <- sapply(by_names, function(byvar) list(subset_df[, byvar]))
     agg_df <- aggregate(subset_df[, keep_cols], by_lst, func)
-    
+
     # Add a suffix of the function name to the aggregated columns
     func_names_dct <- list(mean=mean, sum=sum)
     if (c(func) %in% func_names_dct) {
         name_suffix <- names(func_names_dct)[match(c(func), func_names_dct)]
-        new_col_names <- sapply(keep_cols, function(name) paste(name, 
+        new_col_names <- sapply(keep_cols, function(name) paste(name,
                                                                 name_suffix,
                                                                 sep="_"))
         names(agg_df) <- c(by_names, new_col_names)
-    } else warning("column names renaming unsupported for unknown func", 
-                   str(func))    
-    
+    } else warning("column names renaming unsupported for unknown func",
+                   str(func))
+
     return(agg_df)
 }
-#entity_agg_date_df <- myaggregate_numorlgcl(subset(entity_df, 
-#                                                   select=-c(interval)), 
+#entity_agg_date_df <- myaggregate_numorlgcl(subset(entity_df,
+#                                                   select=-c(interval)),
 #                                            "date", sum)
 
 # same as all.equal() or identical() ?
 mycheck_identity <- function(obj1, obj2) {
-	
+
 	if (class(obj1) == "data.frame") {
 		# ensure row names are same
 		if (rownames(obj1) != rownames(obj2)) {
 			warning("data.frame(s) not identical due to differing row names")
-			return (FALSE)                                
+			return (FALSE)
 		}
-	}	
+	}
 
     result <- (obj1 != obj2)
-    
+
     if (sum(is.na(result)) > 0) {
         # Objects contain NA
         #   ensure same number of NAs
@@ -191,28 +213,28 @@ mycheck_identity <- function(obj1, obj2) {
         else {
             if (length(obj1) != length(obj2)) {
                 warning("Objects not identical due to differing lengths")
-                return (FALSE)                
+                return (FALSE)
             }
 
             if (class(obj1) == "data.frame") {
                 # ensure NA indexes are same
-                if (sum(row.names(obj1[complete.cases(obj1), ]) != 
+                if (sum(row.names(obj1[complete.cases(obj1), ]) !=
                         row.names(obj1[complete.cases(obj1), ])) > 0) {
                     warning("data.frame(s) not identical due to differing NA rows")
-                    return (FALSE)                                
+                    return (FALSE)
                 }
-    
+
                 # ensure each column is similar
                 retval <- TRUE
                 for (col in 1:max(length(names(obj1)), length(names(obj2))))
                     retval <- retval & mycheck_identity(obj1[, col], obj2[, col])
-                
+
                 if (!retval) {
-                    warning("data.frame(s) not identical due to differing col values")    
+                    warning("data.frame(s) not identical due to differing col values")
                 }
-                
-                return(mycheck_identity(obj1[complete.cases(obj1), ], obj2[complete.cases(obj2), ]))                
-            } 
+
+                return(mycheck_identity(obj1[complete.cases(obj1), ], obj2[complete.cases(obj2), ]))
+            }
             else if (class(obj1) == "integer") {
                 # ensure NA indexes are same
                 if (sum(is.na(obj1) != is.na(obj2)) > 0) {
@@ -223,7 +245,7 @@ mycheck_identity <- function(obj1, obj2) {
             else stop("unsupported class")
         }
     }
-    
+
     if (sum(result) > 0) { return(FALSE) } else { return(TRUE) }
 }
 
@@ -253,7 +275,7 @@ mycheck_validarg <- function(value) {
 # mycheck_validarg("none")
 
 mycompute_median <- function(vector) {
-    if (is.factor(vector)) 
+    if (is.factor(vector))
         return(factor(levels(vector)[median(as.numeric(vector))], levels(vector)))
     else return(median(vector, na.rm=TRUE))
 }
@@ -263,22 +285,22 @@ mycompute_medians_df <- function(df, keep.names=FALSE) {
     # summaryBy does not compute stats for factor variables
     fctrs_lst <- sapply(names(df), function(col) if (is.factor(df[, col])) return(col))
     fctrs_lst <- fctrs_lst[!sapply(fctrs_lst, is.null)]
-    
+
     for (fctr in fctrs_lst) {
         if (keep.names) new_name <- fctr else new_name <- paste0(fctr, ".median")
-        medians_df[, new_name] <- mycompute_median(diamonds_df[, fctr])        
+        medians_df[, new_name] <- mycompute_median(diamonds_df[, fctr])
     }
-    
+
     rownames(medians_df) <- "median"
     return(medians_df)
 }
 
 mycreate_xtab <- function(df, xtab_col_names) {
-    require(doBy)        
+    require(doBy)
     df[, "_n"] <- 1
     count_df <- summaryBy(reformulate(xtab_col_names, "`_n`"), df, FUN=c(length))
     #count_df <- summaryBy(reformulate(xtab_col_names, "_n"), df, FUN=c(length))
-    
+
     names(count_df) <- gsub("`", "", names(count_df))
     return(count_df)
 }
@@ -308,7 +330,7 @@ myformat_time_MS <- function(x) {
 #myformat_time_MS(2355)
 
 mysort_df <- function(df, col_name, desc=FALSE) {
-    return(df[order(df[, col_name], decreasing=desc), ])    
+    return(df[order(df[, col_name], decreasing=desc), ])
 }
 
 ## 02.2	    impute missing data
@@ -321,17 +343,17 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 ## 02.3	    convert types / create mappings
 mymap <- function(df, from_col_name, to_col_name, map_func) {
     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
-    
-    if (length(unique(df[, from_col_name])) == dim(df)[1]) map_summry_df <- df else { 
+
+    if (length(unique(df[, from_col_name])) == dim(df)[1]) map_summry_df <- df else {
         require(sqldf)
         sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS _n ")
-        sql <- paste(sql, "FROM df GROUP BY", paste(from_col_name, to_col_name, sep=","), 
+        sql <- paste(sql, "FROM df GROUP BY", paste(from_col_name, to_col_name, sep=","),
                      "ORDER BY _n DESC", sep=" ")
         map_summry_df <- sqldf(sql)
     }
-    
+
 	myprint_df(map_summry_df)
-    
+
     return(df)
 }
 
@@ -340,10 +362,10 @@ mymap <- function(df, from_col_name, to_col_name, map_func) {
 mycreate_date2daytype <- function (df, date_col_name) {
     new_df <- df
     varname_suffix_sep <- "."
-    
+
     day_col_name <- paste(date_col_name, "day", sep=varname_suffix_sep)
     new_df[, day_col_name] <- weekdays(as.Date(df[, date_col_name]))
-    
+
     daytype_col_name <- paste(date_col_name, "dytyp", sep=varname_suffix_sep)
     new_df[, daytype_col_name] <- ifelse((new_df[, day_col_name] == "Saturday") |
                                              (new_df[, day_col_name] == "Sunday"),
@@ -352,17 +374,79 @@ mycreate_date2daytype <- function (df, date_col_name) {
     myprint_df(count_df)
     return(new_df)
 }
-#entity_agg_date_df <- mycreate_date2daytype(entity_agg_date_df, "date") 
+#entity_agg_date_df <- mycreate_date2daytype(entity_agg_date_df, "date")
 
 ## 03.2		filter features
 #features_lst <- features_lst[features_lst != "price"]
 #fctrs_lst <- fctrs_lst[!sapply(fctrs_lst, is.null)]
 
 ## 03.3     create feature combinations
+## 03.4		add random variable
 
-## 04.	    build training and test data
+## 04.	    partition data
 ## 04.1	    simple shuffle sample
 ## 04.2     stratified shuffle sample
+mypartition_data <- function(more_stratify_vars=NULL) {
+    print(" "); print(sprintf("nrow(entity_df): %s", format(nrow(entity_df), big.mark=',')))
+    if (missing(more_stratify_vars)) { 
+        print(table(entity_df[, response_varname])) 
+        keep_cols <- response_varname
+    } else {
+        entity_tbl <- table(entity_df[, response_varname], 
+                            entity_df[, more_stratify_vars])
+        print(entity_tbl)
+        keep_cols <- c(response_varname, more_stratify_vars)
+    }    
+    
+    inTrainValidate <- createDataPartition(y=entity_df[, response_varname], 
+                                           p=0.8, list=FALSE)
+    train_validate_df <- entity_df[inTrainValidate, keep_cols]
+    
+    inTest <- setdiff(seq(1:nrow(entity_df)), inTrainValidate)
+    inTest <- matrix(inTest, nrow=length(inTest), 
+                     dimnames=dimnames(inTrainValidate)) 
+    test_df <- entity_df[inTest, keep_cols]
+    
+    inTrain <- createDataPartition(y=train_validate_df[, response_varname], 
+                                   p=0.8, list=FALSE)
+    train_df <- train_validate_df[inTrain, keep_cols]
+    
+    inValidate <- setdiff(seq(1:nrow(train_validate_df)), inTrain)
+    inValidate <- matrix(inValidate, nrow=length(inValidate), 
+                     dimnames=dimnames(inTrain))     
+    validate_df <- train_validate_df[inValidate, keep_cols]
+    
+    chk_nrow <- nrow(train_df) + nrow(validate_df) + nrow(test_df)
+    if (nrow(entity_df) != chk_nrow)
+        stop("entity_df not partitioned properly; nrow(entity_df): ", 
+             format(nrow(train_df), big.mark=','),
+             " nrow of train+validate+test_df:", 
+             format(chk_nrow, big.mark=','))
+    
+    print(" "); print(sprintf("nrow(train_df): %s", format(nrow(train_df), big.mark=',')))
+    print(suppressWarnings(formatC(table(train_df$classe, 
+        train_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
+
+    print(" "); print(sprintf("nrow(validate_df): %s", format(nrow(validate_df), big.mark=',')))
+    print(suppressWarnings(formatC(table(validate_df$classe, 
+        validate_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
+
+    print(" "); print(sprintf("nrow(test_df): %s", format(nrow(test_df), big.mark=',')))
+    print(suppressWarnings(formatC(table(test_df$classe, 
+        test_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
+    
+    return(list(inTrain=inTrain, inValidate=inValidate, inTest=inTest))
+}
+# mypartition_data_lst <- mypartition_data(more_stratify_vars="user_name")
+# keep_cols <- c(feats_df$feature, response_varname, id_varnames)
+# train_df <- entity_df[mypartition_data_lst$inTrain, keep_cols]
+# validate_df <- entity_df[mypartition_data_lst$inValidate, keep_cols]
+# test_df <- entity_df[mypartition_data_lst$inTest, keep_cols]
+
+# all.equal(train_save_df, train_df)
+# setdiff(union(names(train_save_df), names(train_df)), intersect(names(train_save_df), names(train_df)))
+
+
 ## 04.3	    cross-validation sample
 
 ## 05.      transform features
@@ -376,8 +460,8 @@ mycreate_date2daytype <- function (df, date_col_name) {
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
-# print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
-#              subset(cars_df, am_fctr == "manual")$mpg, 
+# print(t.test(subset(cars_df, am_fctr == "automatic")$mpg,
+#              subset(cars_df, am_fctr == "manual")$mpg,
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
@@ -388,9 +472,9 @@ mycreate_date2daytype <- function (df, date_col_name) {
 ## 06.	    select models
 ## 06.1	    select base models
 ## 06.1.1	regression models
-# prediction_mdl <- lm(reformulate(features_lst, response="price"), 
+# prediction_mdl <- lm(reformulate(features_lst, response="price"),
 #                      data = diamonds_df)
-                     
+
 ## 06.1.2	classification models
 ## 06.1.3	clustering models
 ## 06.1.4	dimensionality reduction models

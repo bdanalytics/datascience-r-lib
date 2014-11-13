@@ -21,6 +21,9 @@ source("~/Dropbox/datascience/R/mydsutils.R")
 source("~/Dropbox/datascience/R/myplot.R")
 # Gather all package requirements here
 #suppressPackageStartupMessages(require())
+
+library(sos)
+findFn("cosine", maxPages=2, sortby="MaxScore")
 ```
 
 ```{r set_global_options_wd, echo=FALSE}
@@ -36,6 +39,7 @@ setwd("~/Documents/Work/Courses/Coursera/jhu-datascience/E-Reproducible-Research
 #### Step 02.1: inspect data
 ```{r inspect_steps_1, cache=TRUE}
 print(str(entity_df))
+#View(entity_df)
 
 # List info gathered for various columns
 # steps:
@@ -46,6 +50,9 @@ print(summary(entity_df))
 pairs(subset(entity_df, select=-c(col_symbol)))
 
 # Create new features that help diagnostics
+#   Convert factors to dummy variables
+#   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
+
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
@@ -56,6 +63,35 @@ print(t.test(subset(cars_df, am_fctr == "automatic")$mpg,
              var.equal=FALSE)$conf)
 ```
 We reject the null hypothesis i.e. we have evidence to conclude that am_fctr impacts mpg (95% confidence). Manual transmission is better for miles per gallon versus automatic transmission.
+
+## remove nearZeroVar features (not much variance)
+#require(reshape)
+#var_features_df <- melt(summaryBy(. ~ factor(0), data=entity_df[, features_lst], 
+#                             FUN=var, keep.names=TRUE), 
+#                             variable_name=c("feature"))
+#names(var_features_df)[2] <- "var"
+#print(var_features_df[order(var_features_df$var), ])
+# summaryBy ignores factors whereas nearZeroVar inspects factors
+
+# k_fold <- 5
+# entity_df[order(entity_df$classe, 
+#                   entity_df$user_name, 
+#                   entity_df$my.rnorm),"my.cv_ix"] <- 
+#     rep(1:k_fold, length.out=nrow(entity_df))
+# summaryBy(X ~ my.cv_ix, data=entity_df, FUN=length)
+# tapply(entity_df$X, list(entity_df$classe, entity_df$user_name, 
+#                            entity_df$my.cv_ix), length)
+
+#require(DAAG)
+#entity_df$classe.proper <- as.numeric(entity_df$classe == "A")
+#rnorm.glm <- glm(classe.proper ~ rnorm, family=binomial, data=entity_df)
+#cv.binary(rnorm.glm, nfolds=k_fold, print.details=TRUE)
+#result <- cv.lm(df=entity_df, form.lm=formula(classe ~ rnorm), 
+#                    m=k_fold, seed=12345, printit=TRUE)
+
+#plot(mdl_1$finalModel, uniform=TRUE, main="base")
+#text(mdl_1$finalModel, use.n=TRUE, all=TRUE, cex=0.8)
+
 
 ```{r print_sessionInfo, echo=FALSE}
 sessionInfo()

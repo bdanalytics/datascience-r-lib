@@ -182,7 +182,7 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
                                        linetype="\"dotdash\""), show_guide=TRUE)  
     
     #if ((class(facet_frmla) == "formula") | (!is.na(facet_frmla)))
-    if (!missing(facet_frmla))
+    if (mycheck_validarg(facet_frmla))
         p <- p + facet_grid(facet_frmla)
     
     if (show_stats) {
@@ -235,7 +235,7 @@ myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL,
         g <- g + scale_x_continuous(labels=xlabel_formatter)            
     }
     
-    g
+    return(g)
 }
 #myplot_line(interval_activity_df, "interval", "steps.mean", 
 #			xlabel_formatter=myformat_time_MS)
@@ -258,7 +258,7 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
                            colorcol_name=NULL, jitter=FALSE, smooth=FALSE,
                            facet_rowcol_name=".", facet_colcol_name=".",
                            ylabel=NULL,
-                           stats_df=NULL, predict_df=NULL, i_pkg=NULL) {
+                           stats_df=NULL, predict_df=NULL, i_pkg=NULL, group=NULL) {
 
     #cat("\nentering myplot_scatter:")
 
@@ -312,10 +312,21 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
     }
 
     # Plot the regression line
-    if (mycheck_validarg(i_pkg)) {
-        if (!((i_pkg == "plotly") & is.factor(df[, xcol_name]))) 
-            p <- p + geom_smooth(method="lm")
-    } else p <- p + geom_smooth(method="lm")
+    if (smooth) {
+        if (!mycheck_validarg(group)) {
+            if (mycheck_validarg(i_pkg)) {
+                if (!((i_pkg == "plotly") & is.factor(df[, xcol_name]))) 
+                    p <- p + geom_smooth(method="lm")
+            } else p <- p + geom_smooth(method="lm")
+        } else {
+            aes_str <- paste0("group=", group)
+            aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+            if (mycheck_validarg(i_pkg)) {
+                if (!((i_pkg == "plotly") & is.factor(df[, xcol_name]))) 
+                    p <- p + geom_smooth(aes_mapping, method="lm")
+            } else p <- p + geom_smooth(aes_mapping, method="lm")
+        }
+    }
 
     # linetype legend messes up the fill legend
     p <- p + guides(color=guide_legend(override.aes=list(linetype=0)))
@@ -325,9 +336,9 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
 }
 
 myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
-    if ((length(ycol_names) > 1) & (!missing(xcol_name)))
-        stop("Multiple feats not implemented with x variable.", 
-             "\n  Consider using facet parameter instead.")
+#     if ((length(ycol_names) > 1) & (!missing(xcol_name)))
+#         stop("Multiple feats not implemented with x variable.", 
+#              "\n  Consider using facet parameter instead.")
     
     if (!missing(xcol_name) & !is.factor(df[, xcol_name])) {
         xcol_name_par <- xcol_name
@@ -348,12 +359,15 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             p <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))            
         }
     } else {
-        require(reshape)
         mltd_df <- melt(df,, measure.vars=ycol_names)
-        require(doBy)        
-        medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
-        p <- ggplot(mltd_df, aes(x=variable, y=value))
-        p <- p + xlab(" ")
+        if (is.null(xcol_name)) {
+            medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
+            p <- ggplot(mltd_df, aes(x=variable, y=value))
+            p <- p + xlab(" ")
+        } else {
+            medians_df <- summaryBy(reformulate(c("variable", xcol_name), "value") , mltd_df, FUN=c(median), na.rm=TRUE)
+            p <- ggplot(mltd_df, aes_string(x=xcol_name, y="value"))
+        }
     }
     
     if (!is.null(facet_spec)) {
@@ -383,13 +397,20 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
                            mapping=aes_mapping
                            , color="NavyBlue", size=3.5)
     } else {
-        #print(medians_df)
-        p <- p + geom_text(data=medians_df,
+        if (is.null(xcol_name)) {
+            p <- p + geom_text(data=medians_df,
                            mapping=aes_string(x="variable", 
                                               y="value.median * 1.05",
                                               label="myformat_number(round(value.median))")
                            , color="NavyBlue", size=3.5)
-        #print("median text layer applied")
+        } else {                   
+            p <- p + geom_text(data=medians_df,
+                           mapping=aes_string(x=xcol_name, 
+                                              y="value.median * 1.05",
+                                              label="myformat_number(round(value.median))")
+                           , color="NavyBlue", size=3.5)        
+            p <- p + facet_wrap(~ variable, scales="free")
+        }    
     }
     
     return(p)
