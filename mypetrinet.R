@@ -57,12 +57,16 @@ petrinet <- function(name, places_df, trans_df, arcs_df) {
         p_out <- match(arcs_df[row, "begin"], places$name)
         p_in  <- match(arcs_df[row, "end"],   places$name)
         if ((is.na(t_in) & is.na(p_in)) |
-            (is.na(t_out) & is.na(p_out)))
-            stop("this should not happen")
+            (is.na(t_out) & is.na(p_out))) {
+            stop("arc: ", arcs_df[row, ], ": this should not happen")
+        }    
 
-             if (!is.na(t_in) & !is.na(p_out)) Cin [t_in,  p_out] <- 1
-        else if (!is.na(t_out) & !is.na(p_in)) Cout[t_out, p_in ] <- 1
-        else stop("this should not happen")
+        if (!is.na(t_in) & !is.na(p_out)) {
+            Cin [t_in,  p_out] <- Cin [t_in,  p_out]  + 1
+        } else if (!is.na(t_out) & !is.na(p_in)) {
+            Cout[t_out, p_in ] <- Cout[t_out, p_in ] + 1
+        } else stop("this should not happen")
+
     }
 
     #Update Matrix (i.e. token transition)
@@ -119,7 +123,9 @@ plot.petrinet <- function(x,...) {
     r2 <- 4/5*dy
     r3  <- dx/3
     #Draw places and transitions.
-    plot(pn$places$x,pn$places$y,cex=10,xlim=xlim,ylim=ylim,axes=FALSE,xlab="",ylab="")
+    #if ((xlim[2] - xlim[1]) > 100) cex <- 7 else cex <- 10
+    cex <- 10
+    plot(pn$places$x,pn$places$y,cex=cex,xlim=xlim,ylim=ylim,axes=FALSE,xlab="",ylab="")
     rect(pn$trans$x-dx,pn$trans$y-dy,pn$trans$x+dx,pn$trans$y+dy)
 
     ######################################################################
@@ -224,6 +230,123 @@ plot.petrinet <- function(x,...) {
     invisible()
 }
 
+ggplot.petrinet <- function(pn) {
+    require(ggplot2)
+    require(grid)
+
+    dx <- 1; dy <- 1
+    gp <- ggplot() +
+            geom_point(aes_string(x="x", y="y"), shape=1, size=15,
+                       data=pn$places) +
+            geom_text(aes_string(x="x", y=paste0("y-",0.5*dy), label="name"),
+                      data=pn$places, color="blue") +
+            geom_point(aes_string(x="x", y="y"), shape=0, size=10,
+                       data=pn$trans) +
+            geom_text(aes_string(x="x", y=paste0("y-",0.0*dy), label="name"),
+                      data=pn$trans, color="blue") +
+            theme(axis.ticks=element_blank(),
+                     #axis.text=element_blank(),
+                    axis.line=element_blank(), axis.title = element_blank())
+
+    ######################################################################
+    #Draw arrows by looping over all trans x places pairs.
+    ######################################################################
+
+    for (t in  1:nrow(pn$trans)) {
+        for (p in 1:nrow(pn$places)) {
+            #In arrows: place -> transition
+            if (pn$Cin[t,p]>0) {
+                if ((pn$places$y[p] - pn$trans$y[t]) > 0) {
+                    beg_dy <- 0 - dy; end_dy <- dy
+                } else if ((pn$places$y[p] - pn$trans$y[t]) < 0) {
+                    beg_dy <- dy; end_dy <- 0 - dy
+                } else {
+                    beg_dy <- 0; end_dy <- 0
+                }
+                if ((pn$places$x[p] - pn$trans$x[t]) > 0) {
+                    beg_dx <- 0 - dx; end_dx <- dx
+                } else if ((pn$places$x[p] - pn$trans$x[t]) < 0) {
+                    beg_dx <- dx; end_dx <- 0 - dx
+                } else {
+                    beg_dx <- 0; end_dx <- 0
+                }
+
+                #Show enabled transitions in green
+                color <- ifelse((enabled.transitions(pn)[t] > 0), "green",
+                                "black")
+                gp <- gp + geom_segment(aes_string(
+                    x=paste0(pn$places$x[p]+1.2*beg_dx),
+                    y=paste0(pn$places$y[p]+0.2*beg_dy),
+                    xend=paste0(pn$trans$x[t]+1.0*end_dx),
+                    yend=paste0(pn$trans$y[t]+0.25*end_dy)),
+                    arrow=arrow(length=unit(0.35, "cm")), col=color)
+            }
+
+            #Out arrows, i.e. transition -> place
+            if (pn$Cout[t,p]>0) {
+                if ((pn$places$y[p] - pn$trans$y[t]) < 0) {
+                    beg_dy <- 0 - dy; end_dy <- dy
+                } else if ((pn$places$y[p] - pn$trans$y[t]) > 0) {
+                    beg_dy <- dy; end_dy <- 0 - dy
+                } else  {
+                    beg_dy <- 0; end_dy <- 0
+                }
+                if ((pn$places$x[p] - pn$trans$x[t]) < 0) {
+                    beg_dx <- 0 - dx; end_dx <- dx
+                } else if ((pn$places$x[p] - pn$trans$x[t]) > 0) {
+                    beg_dx <- dx; end_dx <- 0 - dx
+                } else  {
+                    beg_dx <- 0; end_dx <- 0
+                }
+
+                gp <- gp + geom_segment(aes_string(
+                    x=paste0(pn$trans$x[t]+0.9*beg_dx),
+                    y=paste0(pn$trans$y[t]+0.2*beg_dy),
+                    xend=paste0(pn$places$x[p]+0.9*end_dx),
+                    yend=paste0(pn$places$y[p]+0.3*end_dy)),
+                    arrow=arrow(length=unit(0.35, "cm")), col="black")
+            }
+
+            #show weight if greater than one
+            cx <- (pn$places$x[p] + pn$trans$x[t])/2
+            cy <- (pn$places$y[p] + pn$trans$y[t])/2
+            if (pn$Cin[t,p]>1 )
+                gp <- gp + geom_text(aes_string(
+                    x=paste0(cx),y=paste0(cy),label=paste0(pn$Cin[t,p])),
+                                    color="blue")
+            if (pn$Cout[t,p]>1)
+                gp <- gp + geom_text(aes_string(
+                    x=paste0(cx),y=paste0(cy),label=paste0(pn$Cout[t,p])),
+                                    color="blue")
+        }
+    }
+
+    ######################################################################
+    #Plot markings
+    ######################################################################
+    for (i in 1:pn$p) {
+        mark <- pn$M[i]
+        #If the place is marked then show all marks
+        #Draw marks so its centered about the place's centre
+        if (mark>0) {
+            #Center
+            cx <- pn$places$x[i]
+            cy <- pn$places$y[i]
+            if (mark == 1) {
+                gp <- gp + geom_point(aes_string(x=paste0(cx), y=paste0(cy)),
+                                      size=2, color="red")
+            } else {
+                for (m in 1:mark)
+                    gp <- gp + geom_point(aes_string(x=paste0(cx), y=paste0(cy)),
+                                          size=2, color="red", position="jitter")
+            }
+        }
+    }
+
+    return(gp)
+}
+
+
 ######################################################################
 # Petri Net simulator. With our without animation.
 #
@@ -307,7 +430,7 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
         #!(reset & (stepCounter==1)))
 
         #Plot it.
-        if (animate) {plot(pn,draw.enabled=TRUE)}
+        if (animate) {print(ggplot.petrinet(pn))}
 
         #Wait
         for (i in 1:wait*timestep) {}
@@ -319,7 +442,35 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
         #Did one step
         stepCounter <- stepCounter + 1;
     }
-    return(pn)
+    invisible(pn)
+}
+
+######################################################################
+# Check if a sequence of transitions (replay) is valid in Petri-Net simulation
+#
+# Params:
+#   pn - Obj. of class petrinet to be simulated
+#   replay.trans - sequence of transitions to be replayed
+#
+# Returns:
+#   TRUE if the transitions can be fired in the sequence
+#   FALSE otherwise
+######################################################################
+replay.petrisim <- function(pn, replay.trans) {
+    print(ggplot.petrinet(pn))
+    par(ask=TRUE) 
+
+    first <- TRUE; replay_pn <- pn
+    for (trans in replay.trans) {
+        if (!enabled.transitions(replay_pn)[trans]) {
+            warning("Transition: ", trans, " not enabled")
+            par(ask=FALSE); return(FALSE)
+        }
+        replay_pn <- token.game(replay_pn, steps=1, high.priority.trans=trans,
+                                animate=TRUE, reset=first, wait=100)
+        first <- FALSE
+    }
+    par(ask=FALSE); return(TRUE)
 }
 
 ######################################################################
