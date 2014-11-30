@@ -457,17 +457,19 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
 #   FALSE otherwise
 ######################################################################
 replay.petrisim <- function(pn, replay.trans) {
-    print(ggplot.petrinet(pn))
-    par(ask=TRUE) 
+#     print(ggplot.petrinet(pn))
+#     par(ask=TRUE) 
 
     first <- TRUE; replay_pn <- pn
-    for (trans in replay.trans) {
+    for (tix in 1:length(replay.trans)) {
+        trans <- replay.trans[tix]
         if (!enabled.transitions(replay_pn)[trans]) {
             warning("Transition: ", trans, " not enabled")
             par(ask=FALSE); return(FALSE)
         }
+        last <- ifelse((tix == length(replay.trans)), TRUE, FALSE)
         replay_pn <- token.game(replay_pn, steps=1, high.priority.trans=trans,
-                                animate=TRUE, reset=first, wait=100)
+                                animate=last, reset=first, wait=100)
         first <- FALSE
     }
     par(ask=FALSE); return(TRUE)
