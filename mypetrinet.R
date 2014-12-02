@@ -761,6 +761,97 @@ footprint.traces <- function(traces_df) {
 }
 
 ######################################################################
+# Create Xl pairs of footprint matrix of a trace(log) stream
+#
+# Params:
+#  L_mtrx 
+#
+# Returns:
+#  dataframe of Xl pairs
+######################################################################
+Xl.pairs <- function(L_mtrx) {
+    require(doBy)
+    require(plyr)
+
+    pairs_df <- data.frame(A=NULL, B=NULL)
+
+    # all A single element pairs
+    for (trs in 1:nrow(L_mtrx)) {
+        #print(sprintf("trs: %d", trs))
+        if (L_mtrx[trs, trs] != "#") next
+        
+        L_trs_row <- L_mtrx[trs, ]
+        L_trs_row <- L_trs_row[L_trs_row == "->"]
+        if (length(L_trs_row) == 0) next
+        for (B_n in 1:length(L_trs_row)) {
+            #print(sprintf("B_n: %d", B_n))
+            B_n_combns_mtrx <- combn(names(L_trs_row), B_n)
+            for (B_trs_col_ix in ncol(B_n_combns_mtrx):1) {
+                # check if all pairs in this B column are #
+                B_trs_col <- B_n_combns_mtrx[, B_trs_col_ix];  valid <- TRUE
+                for (B_trs_elem_ix in 1:length(B_trs_col))
+                    if (valid &
+                        (L_mtrx[B_trs_col[1], B_trs_col[B_trs_elem_ix]] != "#")) {
+                        valid <- FALSE; next
+                    }
+                if (!valid) {
+                    # remove column from B_n_combns_mtrx
+                    B_n_combns_mtrx <- as.matrix(B_n_combns_mtrx[, -B_trs_col_ix])
+                }
+            }
+            if (ncol(B_n_combns_mtrx) > 0)
+            {
+                pairs_df <- rbind(pairs_df,
+    data.frame(A=rep(row.names(L_mtrx)[trs], ncol(B_n_combns_mtrx)),
+                B=sapply(1:ncol(B_n_combns_mtrx),
+                    function(col) paste0(B_n_combns_mtrx[, col], collapse=",")),
+               stringsAsFactors=FALSE))
+            }
+        }
+    }
+
+    if (nrow(pairs_df) == 0) return(pairs_df)
+
+    # collect & check multiple A element pairs
+    pairs_df <- orderBy(~B+A, pairs_df)
+    counts_df <- ddply(pairs_df, .(pairs_df$B), nrow)
+    names(counts_df) <- c("B", "freq")
+    counts_df <- subset(counts_df, freq > 1)
+    for (B in counts_df$B) {
+        A_union <- unique(pairs_df[pairs_df$B == B, "A"])
+        if (length(A_union) < 2) next
+        for (A_n in 2:length(A_union)) {
+            #print(sprintf("B_n: %d", B_n))
+            A_n_combns_mtrx <- combn(A_union, A_n)
+            for (A_trs_col_ix in ncol(A_n_combns_mtrx):1) {
+                # check if all pairs in this A column are #
+                A_trs_col <- A_n_combns_mtrx[, A_trs_col_ix];  valid <- TRUE
+                for (A_trs_elem_ix in 1:length(A_trs_col))
+                    if (valid &
+                        (L_mtrx[A_trs_col[1], A_trs_col[A_trs_elem_ix]] != "#")) {
+                        valid <- FALSE; next
+                    }
+                if (!valid) {
+                    # remove column from A_n_combns_mtrx
+                    A_n_combns_mtrx <- as.matrix(A_n_combns_mtrx[, -A_trs_col_ix])
+                }
+            }
+            if (ncol(A_n_combns_mtrx) > 0)
+            {
+                pairs_df <- rbind(pairs_df,
+                                  data.frame(
+                                             A=sapply(1:ncol(A_n_combns_mtrx),
+                    function(col) paste0(A_n_combns_mtrx[, col], collapse=",")),
+                                             B=rep(B, ncol(A_n_combns_mtrx)),
+                                             stringsAsFactors=FALSE))
+            }
+        }
+    }
+
+    return(orderBy(~A+B, pairs_df))
+}
+
+######################################################################
 # Create petrinet of a trace(log) stream using alpha algorithm
 #
 # Params:
@@ -771,140 +862,80 @@ footprint.traces <- function(traces_df) {
 #  petrinet object
 ######################################################################
 alpha.petrinet <- function(traces_df) {
-    L_mtrx <- footprint.traces(traces_df)
-    print(L_mtrx)
+    L_mtrx <- footprint.traces(traces_df); print(L_mtrx)
+    
     Tl <- unique.trans(traces_df); print(Tl)
     Ti <- first.trans(traces_df);  print(Ti)
     To <- last.trans(traces_df);   print(To)
     
-    Xl.pairs <- function(L_mtrx) {
-        require(doBy)
-        require(plyr)
-
-        pairs_df <- data.frame(A=NULL, B=NULL)
-
-        # all A single element pairs
-        for (trs in 1:nrow(L_mtrx)) {
-            #print(sprintf("trs: %d", trs))
-            L_trs_row <- L_mtrx[trs, ]
-            L_trs_row <- L_trs_row[L_trs_row == "->"]
-            if (length(L_trs_row) == 0) next
-            for (B_n in 1:length(L_trs_row)) {
-                #print(sprintf("B_n: %d", B_n))
-                B_n_combns_mtrx <- combn(names(L_trs_row), B_n)
-                for (B_trs_col_ix in ncol(B_n_combns_mtrx):1) {
-                    # check if all pairs in this B column are #
-                    B_trs_col <- B_n_combns_mtrx[, B_trs_col_ix];  valid <- TRUE
-                    for (B_trs_elem_ix in 1:length(B_trs_col))
-                        if (valid &
-                            (L_mtrx[B_trs_col[1], B_trs_col[B_trs_elem_ix]] != "#")) {
-                            valid <- FALSE; next
-                        }
-                    if (!valid) {
-                        # remove column from B_n_combns_mtrx
-                        B_n_combns_mtrx <- B_n_combns_mtrx[, -B_trs_col_ix]
-                    }
-                }
-                if (ncol(B_n_combns_mtrx) > 0)
-                {
-                    pairs_df <- rbind(pairs_df,
-        data.frame(A=rep(row.names(L_mtrx)[trs], ncol(B_n_combns_mtrx)),
-                    B=sapply(1:ncol(B_n_combns_mtrx),
-                        function(col) paste0(B_n_combns_mtrx[, col], collapse=",")),
-                   stringsAsFactors=FALSE))
-                }
-            }
-        }
-
-        # collect & check multiple A element pairs
-        pairs_df <- orderBy(~B+A, pairs_df)
-        counts_df <- ddply(pairs_df, .(pairs_df$B), nrow)
-        names(counts_df) <- c("B", "freq")
-        counts_df <- subset(counts_df, freq > 1)
-        for (B in counts_df$B) {
-            A_union <- unique(pairs_df[pairs_df$B == B, "A"])
-            if (length(A_union) < 2) next
-            for (A_n in 2:length(A_union)) {
-                #print(sprintf("B_n: %d", B_n))
-                A_n_combns_mtrx <- combn(A_union, A_n)
-                for (A_trs_col_ix in ncol(B_n_combns_mtrx):1) {
-                    # check if all pairs in this A column are #
-                    A_trs_col <- A_n_combns_mtrx[, A_trs_col_ix];  valid <- TRUE
-                    for (A_trs_elem_ix in 1:length(A_trs_col))
-                        if (valid &
-                            (L_mtrx[A_trs_col[1], A_trs_col[A_trs_elem_ix]] != "#")) {
-                            valid <- FALSE; next
-                        }
-                    if (!valid) {
-                        # remove column from A_n_combns_mtrx
-                        A_n_combns_mtrx <- A_n_combns_mtrx[, -A_trs_col_ix]
-                    }
-                }
-                if (ncol(A_n_combns_mtrx) > 0)
-                {
-                    pairs_df <- rbind(pairs_df,
-                                      data.frame(
-                                                 A=sapply(1:ncol(A_n_combns_mtrx),
-                        function(col) paste0(A_n_combns_mtrx[, col], collapse=",")),
-                                                 B=rep(B, ncol(A_n_combns_mtrx)),
-                                                 stringsAsFactors=FALSE))
-                }
-            }
-        }
-
-        return(orderBy(~A+B, pairs_df))
-    }
     Xl_df <- Xl.pairs(L_mtrx); print(Xl_df)
-
-    Yl.pairs <- function(pairs_df) {
+    
+    select_maximal_pairs <- function(pairs_df, dups_col, sets_col)
+    {
         require(doBy)
         require(plyr)
+        require(gtools)
 
-        pairs_df <- orderBy(~A+B, pairs_df); pairs_df$maximal <- TRUE
+        if (nrow(pairs_df) == 0) return(pairs_df)
+        
+        pairs_df <- orderBy(as.formula(paste0("~", dups_col, "+", sets_col)), pairs_df)
+        pairs_df$maximal <- TRUE
 
-        # Check all dups of A
-        counts_df <- ddply(pairs_df, .(pairs_df$A), nrow)
-        names(counts_df) <- c("A", "freq")
+        # Check all dups of dups_col
+        counts_df <- ddply(pairs_df, .(pairs_df[, dups_col]), nrow)
+        names(counts_df) <- c(dups_col, "freq")
         counts_df <- subset(counts_df, freq > 1)
-        for (A in counts_df$A) {
-            pairs_df[pairs_df$A == A, "B_union"] <-
-                paste0(unique(pairs_df[pairs_df$A == A, "B"]), collapse="|")
+        pairs_df$sets_union <- NA
+            
+        for (value in counts_df[, dups_col]) {
+            unique_sets <- unique(pairs_df[pairs_df[, dups_col] == value, sets_col])
+            # Generate value possible permutations
+            unique_sets_save <- unique_sets
+            for (this_set in unique_sets_save) {
+                #print(sprintf("this_set: %s", this_set))
+                this_set_elems <- unlist(strsplit(this_set, split="[,]"))
+                if (length(this_set_elems) <= 1) next
+                perms <- permutations(length(this_set_elems), length(this_set_elems), 
+                                      this_set_elems)
+                #print(perms)
+                for (row in 1:nrow(perms)) {
+                    this_perm <- paste0(perms[row, ], collapse=",")
+                    if (length(grep(this_perm, unique_sets)) == 0)
+                        unique_sets <- c(unique_sets, this_perm)
+                }
+            }
+            pairs_df[pairs_df[, dups_col] == value, "sets_union"] <-
+                paste0(unique_sets, collapse="|")
         }
-
-    #     pairs_df <- mutate(pairs_df,
-    #         maximal=ifelse((!is.na(A_union) &
-    #                         (length(grep(A, A_union, fixed=TRUE)) > 1)),
-    #                        FALSE, TRUE))
+        
         pairs_df$maximal <- sapply(1:nrow(pairs_df),
-            function(row) ifelse((pairs_df[row, "maximal"] &
-                                !is.na(pairs_df[row, "B_union"]) &
-                                (length(grep(pairs_df[row, "B"],
-                            unlist(strsplit(pairs_df[row, "B_union"], split="[|]")),
-                            fixed=TRUE)) > 1)),
-                                          FALSE, TRUE))
+            function(row) 
+#             ifelse((pairs_df[row, "maximal"] &
+#                                 !is.na(pairs_df[row, "sets_union"]) &
+#                                 (length(grep(pairs_df[row, sets_col],
+#                             unlist(strsplit(pairs_df[row, "sets_union"], split="[|]")),
+#                             fixed=TRUE)) > 1)),
+#                                           FALSE, TRUE)  # first ifelse
+            ifelse(is.na(pairs_df[row, "sets_union"]), TRUE, 
+                #FALSE
+                ifelse((pairs_df[row, "maximal"] &
+                                (length(grep(pairs_df[row, sets_col],
+                            unlist(strsplit(pairs_df[row, "sets_union"], split="[|]")),
+                            fixed=TRUE)) > 1)), FALSE, TRUE)
+                  )  # first ifelse
+                                  ) # sapply
 
         pairs_df <- subset(pairs_df, maximal)
-
-        # Check all dups of B
-        counts_df <- ddply(pairs_df, .(pairs_df$B), nrow)
-        names(counts_df) <- c("B", "freq")
-        counts_df <- subset(counts_df, freq > 1)
-        for (B in counts_df$B) {
-            pairs_df[pairs_df$B == B, "A_union"] <-
-                paste0(unique(pairs_df[pairs_df$B == B, "A"]), collapse="|")
-        }
-
-        pairs_df$maximal <- sapply(1:nrow(pairs_df),
-            function(row) ifelse((pairs_df[row, "maximal"] &
-                                !is.na(pairs_df[row, "A_union"]) &
-                                (length(grep(pairs_df[row, "A"],
-                            unlist(strsplit(pairs_df[row, "A_union"], split="[|]")),
-                                            fixed=TRUE)) > 1)),
-                                                        FALSE, TRUE))
-
-        return(subset(pairs_df, maximal, select=c(A, B)))
+        
+        return(pairs_df[, c(dups_col, sets_col)])
     }
-    Yl_df <- Yl.pairs(Xl_df);  print(Yl_df)
+
+    Yl_df <- select_maximal_pairs(Xl_df, dups_col="A", sets_col="B")
+    Yl_df <- select_maximal_pairs(Yl_df, dups_col="B", sets_col="A")
+    if (nrow(Yl_df) == 0) {
+        warning("No places found")
+        return(NULL)
+    }
 
     places_df <- data.frame(id=2:(nrow(Yl_df)+1),
                                    name=paste0("p", 1:nrow(Yl_df)),
