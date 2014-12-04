@@ -35,6 +35,9 @@
 ######################################################################
 
 petrinet <- function(name, places_df, trans_df, arcs_df) {
+    # (mostly) duplicated code in add.petrinet
+    #   refactor code if it needs to be changed 
+
     trans <- trans_df[, c("id","name","x","y")]
     places <- places_df[, c("id","name","x","y","M0")]
 
@@ -85,6 +88,58 @@ petrinet <- function(name, places_df, trans_df, arcs_df) {
 
     class(pn) <- "petrinet"
     #print(pn)
+    return(pn)
+}
+
+add.petrinet <- function(pn, places_df=data.frame(), arcs_df=data.frame()) {
+    # (mostly) duplicated code in petrinet
+    #   refactor code if it needs to be changed 
+
+    # Reset the petrinet first
+    pn$M <- pn$M0; pn$time = 0
+
+    if(nrow(places_df) > 0) {
+        pn$places <- rbind(pn$places, cbind(
+            data.frame(id=(nrow(pn$places)+1):(nrow(pn$places)+nrow(places_df))),
+                                            places_df))
+        #Update arc matrices
+        pn$Cin <- cbind(pn$Cin, matrix(rep(0, nrow(pn$Cin)*nrow(places_df)),
+                                       nrow=nrow(pn$Cin),
+                                dimnames=list(rownames(pn$Cin), places_df$name)))
+        pn$Cout <- cbind(pn$Cout, matrix(rep(0, nrow(pn$Cout)*nrow(places_df)),
+                                       nrow=nrow(pn$Cout),
+                                dimnames=list(rownames(pn$Cout), places_df$name)))
+        pn$C <- cbind(pn$C, matrix(rep(0, nrow(pn$C)*nrow(places_df)),
+                                       nrow=nrow(pn$C),
+                                    dimnames=list(rownames(pn$C), places_df$name)))
+
+        pn$p <- pn$p + nrow(places_df)
+        pn$M <- pn$M0 <- c(pn$M0, places_df$M0)
+    }
+
+    if(nrow(arcs_df) > 0) {
+        for (row in (1:nrow(arcs_df))) {
+            t_out <- match(arcs_df[row, "begin"], pn$trans$name)
+            t_in  <- match(arcs_df[row, "end"],   pn$trans$name)
+            p_out <- match(arcs_df[row, "begin"], pn$places$name)
+            p_in  <- match(arcs_df[row, "end"],   pn$places$name)
+            if ((is.na(t_in) & is.na(p_in)) |
+                    (is.na(t_out) & is.na(p_out))) {
+                stop("arc: ", arcs_df[row, ], ": this should not happen")
+            }
+
+            if (!is.na(t_in) & !is.na(p_out)) {
+                pn$Cin [t_in,  p_out] <- pn$Cin [t_in,  p_out]  + 1
+            } else if (!is.na(t_out) & !is.na(p_in)) {
+                pn$Cout[t_out, p_in ] <- pn$Cout[t_out, p_in ] + 1
+            } else stop("this should not happen")
+
+        }
+
+        #Update Matrix (i.e. token transition)
+        pn$C <- pn$Cout - pn$Cin
+    }
+
     return(pn)
 }
 
@@ -760,6 +815,46 @@ footprint.traces <- function(traces_df) {
     return(L_mtrx)
 }
 
+freq.traces <- function(traces_df) {
+    unique_trans <- unique.trans(traces_df)
+    L_freq_mtrx <- matrix(rep(0, length(unique_trans) ^ 2),
+                     nrow=length(unique_trans),
+                     dimnames=list(unique_trans, unique_trans))
+
+    # Count direct succession freq by trace
+    for (trc in 1:nrow(traces_df)) {
+        transs <- unlist(strsplit(traces_df$trace[trc], split=","))
+        for (trs in 1:length(transs)) {
+            if (trs != length(transs)) {
+                L_freq_mtrx[transs[trs], transs[trs+1]] <-
+                    L_freq_mtrx[transs[trs], transs[trs+1]] + 1
+            }
+        }
+    }
+
+    return(L_freq_mtrx)
+}
+
+dependency.traces <- function(L_freq_mtrx) {
+    L_depnd_mtrx <- matrix(rep(0, nrow(L_freq_mtrx) ^ 2),
+                          nrow=nrow(L_freq_mtrx),
+                          dimnames=dimnames(L_freq_mtrx))
+
+    # Compute dependencies for each element in matrix
+    for (row in 1:nrow(L_freq_mtrx))
+        for (col in 1:ncol(L_freq_mtrx))
+            if (row == col) {
+                L_depnd_mtrx[row, col] <-
+                    (L_freq_mtrx[row, col] * 1.0) / (L_freq_mtrx[row, col] + 1)
+            } else {
+                L_depnd_mtrx[row, col] <-
+                    ((L_freq_mtrx[row, col] * 1.0) -
+                     (L_freq_mtrx[col, row] * 1.0)) /
+                    (L_freq_mtrx[row, col] + L_freq_mtrx[col, row] + 1)
+            }
+
+    return(L_depnd_mtrx)
+}
 ######################################################################
 # Create Xl pairs of footprint matrix of a trace(log) stream
 #
@@ -796,7 +891,8 @@ Xl.pairs <- function(L_mtrx) {
                     }
                 if (!valid) {
                     # remove column from B_n_combns_mtrx
-                    B_n_combns_mtrx <- as.matrix(B_n_combns_mtrx[, -B_trs_col_ix])
+                    B_n_combns_mtrx <- matrix(B_n_combns_mtrx[, -B_trs_col_ix],
+                                                 nrow=nrow(B_n_combns_mtrx))
                 }
             }
             if (ncol(B_n_combns_mtrx) > 0)
@@ -833,7 +929,8 @@ Xl.pairs <- function(L_mtrx) {
                     }
                 if (!valid) {
                     # remove column from A_n_combns_mtrx
-                    A_n_combns_mtrx <- as.matrix(A_n_combns_mtrx[, -A_trs_col_ix])
+                    A_n_combns_mtrx <- matrix(A_n_combns_mtrx[, -B_trs_col_ix],
+                                                 nrow=nrow(A_n_combns_mtrx))
                 }
             }
             if (ncol(A_n_combns_mtrx) > 0)
