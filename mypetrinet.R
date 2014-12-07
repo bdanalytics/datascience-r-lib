@@ -509,9 +509,12 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
 #       e.g. c("a", "b", "c", "d")
 #       e.g. "a,b,c,d"
 #
-# Returns:
-#   TRUE if the transitions can be fired in the sequence
-#   FALSE otherwise
+# Returns: list of 
+#   tcf - Token based Conformance Fitness metric
+#   tokens_p - tokens produced
+#   tokens_c - tokens consumed
+#   tokens_m - tokens missing
+#   tokens_r - tokens remaining
 ######################################################################
 replay.petrisim <- function(pn, replay.trans) {
 #     print(ggplot.petrinet(pn))
@@ -520,19 +523,54 @@ replay.petrisim <- function(pn, replay.trans) {
     if (length(replay.trans) == 1)
         replay.trans <- unlist(strsplit(replay.trans,"[,]"))
 
-    first <- TRUE; replay_pn <- pn
+    first <- TRUE; replay_pn <- pn;
+    tokens_p <- tokens_c <- sum(pn$M0)
+    tokens_m <- tokens_r <- 0
     for (tix in 1:length(replay.trans)) {
         trans <- replay.trans[tix]
-        if (!enabled.transitions(replay_pn)[trans]) {
-            warning("Transition: ", trans, " not enabled")
-            par(ask=FALSE); return(FALSE)
+        
+        # if trans does not exist in pn skip it
+        if (length(grep(trans, replay_pn$trans$name, fixed=TRUE)) == 0) {
+#             warning("Transition: ", trans, " not present; terminating replay")
+#             print(ggplot.petrinet(replay_pn))
+#             break
+
+            warning("Transition: ", trans, " not present; skipping transition")
+#            print(ggplot.petrinet(replay_pn))
+            next
         }
+        
+        if (!enabled.transitions(replay_pn)[trans]) {
+            warning("Transition: ", trans, " not enabled; adding missing token(s)")
+            for (place in replay_pn$places$name[replay_pn$Cin[trans, ] == 1]) {
+                if (replay_pn$M[replay_pn$places$id[replay_pn$places$name == place]] == 0) {
+                    tokens_m <- tokens_m + 1
+                    replay_pn$M[replay_pn$places$id[replay_pn$places$name == place]] <- 1
+                    warning("Place: ", place, ": added 1 missing token")
+                }
+            }
+        }
+        
+        tokens_c <- tokens_c + sum(replay_pn$Cin[trans, ])
         last <- ifelse((tix == length(replay.trans)), TRUE, FALSE)
         replay_pn <- token.game(replay_pn, steps=1, high.priority.trans=trans,
                                 animate=last, reset=first, wait=100)
+        tokens_p <- tokens_p + sum(replay_pn$Cout[trans, ])                        
         first <- FALSE
     }
-    par(ask=FALSE); return(TRUE)
+    
+    if (replay_pn$M[replay_pn$p] == 0)  { # missing token in "end" place 
+        tokens_m <- tokens_m + 1
+        replay_pn$M[replay_pn$p] <- 1
+    }    
+    
+    tokens_r <- sum(replay_pn$M) - pn$M0[1]       # minus valid tokens in final place
+    
+    par(ask=FALSE)
+    tcf <- 0.5 * (1 - ((tokens_m * 1.0) / tokens_c)) + 
+           0.5 * (1 - ((tokens_r * 1.0) / tokens_p))
+    return(list(tcf=tcf, 
+                tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r))       
 }
 
 ######################################################################
@@ -860,6 +898,27 @@ dependency.traces <- function(L_freq_mtrx) {
 
     return(L_depnd_mtrx)
 }
+
+fitness.traces <- function(pn, traces_df) {
+    tokens_p <- tokens_c <- tokens_m <- tokens_r <- 0
+    
+    unique_traces_df <- ddply(traces_df, .(traces_df$trace), nrow)
+    names(unique_traces_df) <- c("trace", "freq")
+    
+    for (row_pos in 1:nrow(unique_traces_df)) {
+        fitness_lst <- replay.petrisim(pn, unique_traces_df[row_pos, "trace"])
+        tokens_p <- tokens_p + fitness_lst$tokens_p * unique_traces_df[row_pos, "freq"]
+        tokens_c <- tokens_c + fitness_lst$tokens_c * unique_traces_df[row_pos, "freq"]
+        tokens_m <- tokens_m + fitness_lst$tokens_m * unique_traces_df[row_pos, "freq"]
+        tokens_r <- tokens_r + fitness_lst$tokens_r * unique_traces_df[row_pos, "freq"]                        
+    }
+
+    tcf <- 0.5 * (1 - ((tokens_m * 1.0) / tokens_c)) + 
+           0.5 * (1 - ((tokens_r * 1.0) / tokens_p))
+    return(list(tcf=tcf, 
+                tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r))       
+}
+
 ######################################################################
 # Create Xl pairs of footprint matrix of a trace(log) stream
 #
