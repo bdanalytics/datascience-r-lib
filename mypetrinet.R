@@ -549,6 +549,7 @@ replay.petrisim <- function(pn, replay.trans) {
                     warning("Place: ", place, ": added 1 missing token")
                 }
             }
+            first <- FALSE  # if first is TRUE, token.game will reset tokens
         }
         
         tokens_c <- tokens_c + sum(replay_pn$Cin[trans, ])
@@ -564,7 +565,14 @@ replay.petrisim <- function(pn, replay.trans) {
         replay_pn$M[replay_pn$p] <- 1
     }    
     
-    tokens_r <- sum(replay_pn$M) - pn$M0[1]       # minus valid tokens in final place
+#     tokens_r <- sum(replay_pn$M) - 
+#                     # minus valid tokens in final place assuming first transition was fired
+#                     ifelse((replay_pn$M[1] == 0), pn$M0[1], 0)     
+#     if (replay_pn$M[1] == 0) {
+#         # minus valid tokens in final place assuming first transition was fired
+#         tokens_r <- sum(replay_pn$M) - pn$M0[1]
+#     } else tokens_r <- sum(replay_pn$M)   
+    tokens_r <- sum(replay_pn$M) - pn$M0[1]
     
     par(ask=FALSE)
     tcf <- 0.5 * (1 - ((tokens_m * 1.0) / tokens_c)) + 
@@ -899,7 +907,9 @@ dependency.traces <- function(L_freq_mtrx) {
     return(L_depnd_mtrx)
 }
 
-fitness.traces <- function(pn, traces_df) {
+token.fitness.traces <- function(pn, traces_df) {
+    require(plyr)
+
     tokens_p <- tokens_c <- tokens_m <- tokens_r <- 0
     
     unique_traces_df <- ddply(traces_df, .(traces_df$trace), nrow)
@@ -917,6 +927,9 @@ fitness.traces <- function(pn, traces_df) {
            0.5 * (1 - ((tokens_r * 1.0) / tokens_p))
     return(list(tcf=tcf, 
                 tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r))       
+}
+
+alignment.fitness.trace <- function(shortest_path_trace, trace) {
 }
 
 ######################################################################
