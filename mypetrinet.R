@@ -91,6 +91,13 @@ petrinet <- function(name, places_df, trans_df, arcs_df) {
     return(pn)
 }
 
+######################################################################
+# Add to a Petri net.
+#
+# Params:
+#  pn - the petri net to modify
+#  places_df - should not contain "id"
+######################################################################
 add.petrinet <- function(pn, places_df=data.frame(), arcs_df=data.frame()) {
     # (mostly) duplicated code in petrinet
     #   refactor code if it needs to be changed 
@@ -140,6 +147,33 @@ add.petrinet <- function(pn, places_df=data.frame(), arcs_df=data.frame()) {
         pn$C <- pn$Cout - pn$Cin
     }
 
+    print(ggplot.petrinet(pn))
+
+    return(pn)
+}
+
+######################################################################
+# Change markings of a Petri net.
+#
+# Params:
+#  pn - the petri net to modify
+#  marking_df - should contain rows of place "name" & number of "tokens" in that place
+######################################################################
+mark.petrinet <- function(pn, marking_df) {
+    pn$M0 <- rep(0, length(pn$M0))
+
+    for(row in 1:nrow(marking_df)) {
+        place_name <- marking_df$name[row]
+        place_pos <- grep(place_name, pn$places$name, fixed=TRUE)
+        if (length(place_pos) == 0)
+            stop(place_name, " not found in pn$places:", pn$places$name) else
+        if (length(place_pos) > 1)
+            stop(place_name, " found multiple times in pn$places:", pn$places$name) else
+        pn$M0[place_pos[1]] <- marking_df$tokens[row]
+    }
+
+    pn$M <- pn$M0
+    print(ggplot.petrinet(pn))
     return(pn)
 }
 
@@ -293,12 +327,12 @@ ggplot.petrinet <- function(pn) {
     gp <- ggplot() +
             geom_point(aes_string(x="x", y="y"), shape=1, size=15,
                        data=pn$places) +
-            geom_text(aes_string(x="x", y=paste0("y-",0.5*dy), label="name"),
-                      data=pn$places, color="blue") +
+            geom_text(aes_string(x="x", y=paste0("y-",1.0*dy), label="name"),
+                      data=pn$places, color="blue", size=3.5) +
             geom_point(aes_string(x="x", y="y"), shape=0, size=10,
                        data=pn$trans) +
             geom_text(aes_string(x="x", y=paste0("y-",0.0*dy), label="name"),
-                      data=pn$trans, color="blue") +
+                      data=pn$trans, color="blue", size=3.5) +
             theme(axis.ticks=element_blank(),
                      #axis.text=element_blank(),
                     axis.line=element_blank(), axis.title = element_blank())
@@ -306,6 +340,12 @@ ggplot.petrinet <- function(pn) {
     ######################################################################
     #Draw arrows by looping over all trans x places pairs.
     ######################################################################
+
+    arc_r <- 0.50
+    arc_t <- seq(0, 90, by = 10) * pi / 180
+    arc_x <- arc_r*01.0 * cos(arc_t)
+    arc_y <- arc_r*05.0 * sin(arc_t)
+    arc_df <- data.frame(arc_x=arc_x, arc_y=arc_y)
 
     for (t in  1:nrow(pn$trans)) {
         for (p in 1:nrow(pn$places)) {
@@ -329,6 +369,7 @@ ggplot.petrinet <- function(pn) {
                 #Show enabled transitions in green
                 color <- ifelse((enabled.transitions(pn)[t] > 0), "green",
                                 "black")
+                                
                 gp <- gp + geom_segment(aes_string(
                     x=paste0(pn$places$x[p]+1.2*beg_dx),
                     y=paste0(pn$places$y[p]+0.2*beg_dy),
@@ -353,6 +394,20 @@ ggplot.petrinet <- function(pn) {
                 } else  {
                     beg_dx <- 0; end_dx <- 0
                 }
+
+#                 if (pn$Cout[t, p] > 0) {
+#                     color="red"
+#                     thisarc_df <- orderBy(~+arc_x+arc_y, mutate(arc_df, 
+#                                 arc_x=pn$trans$x[t]+1.00*end_dx+arc_x,
+#                                 arc_y=pn$trans$y[t]+0.25*end_dy+arc_y))
+#                     #myprint_df(thisarc_df)            
+#                     print(thisarc_df)            
+#                     gp <- gp + geom_line(data=thisarc_df, mapping=aes(
+#                         x=arc_x,
+#                         y=arc_y
+#                         ),
+#                         arrow=arrow(length=unit(0.35, "cm")), col=color)
+#                 } else {        
 
                 gp <- gp + geom_segment(aes_string(
                     x=paste0(pn$trans$x[t]+0.9*beg_dx),
@@ -530,6 +585,7 @@ replay.petrisim <- function(pn, replay.trans) {
         trans <- replay.trans[tix]
         
         # if trans does not exist in pn skip it
+        #   fix bug: trans could be embedded e.g. "r2" in "or2" but is not a valid trans
         if (length(grep(trans, replay_pn$trans$name, fixed=TRUE)) == 0) {
 #             warning("Transition: ", trans, " not present; terminating replay")
 #             print(ggplot.petrinet(replay_pn))
@@ -929,7 +985,9 @@ token.fitness.traces <- function(pn, traces_df) {
                 tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r))       
 }
 
-alignment.fitness.trace <- function(shortest_path_trace, trace) {
+alignment.fitness.trace <- function(trace, shortest_path_trace, edit_distance) {
+    return(1 - ((edit_distance * 1.0) / (length(unlist(strsplit(trace, "[,]"))) +
+                        length(unlist(strsplit(shortest_path_trace, "[,]"))))))
 }
 
 ######################################################################

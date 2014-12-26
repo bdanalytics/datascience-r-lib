@@ -80,6 +80,9 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL) {
     require(ggplot2)
     
+    if (xcol_name == ".rownames")
+        df[, xcol_name] <- rownames(df)
+    
     # Summarize data by xcol_name to get the proper display order 
     if (length(unique(df[, xcol_name])) != dim(df)[1]) {
         require(sqldf)
@@ -253,6 +256,99 @@ myplot_plotly <- function(ggplot_obj) {
     pyout <- py$ggplotly(ggplot_obj)
     return(pyout$response$url)
 }
+
+##########################################
+##Radar Plot Code
+##########################################
+myplot_radar <- function(radar_inp_df) {
+
+    ##Assumes df is in the form:
+    # instance plot_var1 plot_var2 plot_var3 plot_var4 facet
+    # inst_lbl  -0.038   1.438      -0.571      0.832  facet_val
+    ##where instance is the individual instance identifier
+    ##facet is the facet variable
+    ##and the variables from plot_var1..4 are used for grouping
+    ##and thus should be individual lines on the radar plot
+
+    radarFix <- function(df) {
+        ##assuming the passed in data frame 
+        ##includes only columns listed above
+        
+        df$instance <- as.factor(df$instance)
+        
+        ##find increment
+        theta <- seq(from=0, to=2*pi, by=(2*pi)/(ncol(df)-2))
+        theta <- theta + pi/2
+        ##create graph data frame
+        graphData= data.frame(instance="", x=0,y=0)
+        graphData=graphData[-1,]
+        
+        for(i in levels(df$instance)) {
+            instanceData <- df[df$instance == i,]
+            x0 <- y0 <- r <- 0.5
+            
+            for(j in c(2:(ncol(df)-1))) {
+                ##set minimum value such that it occurs at 0. (center the data at -3 sd)
+                #instanceData[,j]= instanceData[,j] #+ 3
+                
+                graphData <- rbind(graphData, 
+                    data.frame(instance=i,
+                                theta=theta[j-1],
+                                x=r * instanceData[,j] * cos(theta[j-1]) + x0,
+                                y=r * instanceData[,j] * sin(theta[j-1]) + y0,
+                                label=ifelse((instanceData[,j] == max(df[,j])), 
+                                                names(instanceData)[j],
+                                                ""),
+                                label_max=ifelse((instanceData[,j] == max(df[,j])), 
+                                                format(instanceData[,j], digits=6),
+                                                NA),                               
+                                label_angle=ifelse(((180*theta[j-1]/pi)-90) < 90,
+                                                   ((180*theta[j-1]/pi)-90),
+                                                   ((180*theta[j-1]/pi)-270))
+                                ))
+            }
+            ##completes the connection
+            graphData <- rbind(graphData, 
+                    data.frame(instance=i,
+                                theta=theta[1],
+                                x=r * instanceData[,2] * cos(theta[1]) + x0,
+                                y=r * instanceData[,2] * sin(theta[1]) + y0,
+                                label="",
+                                label_max=NA,                               
+                                label_angle=0
+                                ))
+            
+        }
+        
+        # Fix this hack !
+        graphData <- mutate(graphData, 
+            label_angle=ifelse(label_angle > 90, 90 - label_angle, label_angle)) 
+        
+        graphData
+        
+    }
+
+    # to debug radarFix
+    #radarData <- radarFix(df=subset(radar_inp_df, facet=<sample>))
+    radarData <- ddply(radar_inp_df, .(facet), radarFix)
+    
+    gp <- ggplot(radarData, aes(x=x, y=y, group=instance)) +
+            geom_path(alpha=0.5, aes(color=instance)) +
+            geom_point(alpha=0.2) + 
+            geom_text(aes(x=x*1.05, y=y*1.05, 
+                          label=label_max, angle=label_angle), size=3.5) +    
+            geom_text(aes(x=x*1.15, y=y*1.15, 
+                          label=label,angle=label_angle), size=3.5) +
+            geom_segment(aes(x=0.5, y=0.5, xend=x, yend=y), linetype="dotted",
+                         data=subset(radarData, !is.na(label_max))) +
+            theme(axis.ticks.y = element_blank(), axis.text.y=element_blank(), 
+                    axis.title.y = element_blank()) + 
+            theme(axis.ticks.x = element_blank(), axis.text.x=element_blank(), 
+                    axis.title.x = element_blank()) + 
+            facet_wrap(~facet, scales="free_y")
+
+    return(gp)
+}   
 
 myplot_scatter <- function(df, xcol_name, ycol_name,
                            colorcol_name=NULL, jitter=FALSE, smooth=FALSE,
