@@ -327,9 +327,9 @@ ggplot.petrinet <- function(pn) {
     gp <- ggplot() +
             geom_point(aes_string(x="x", y="y"), shape=1, size=15,
                        data=pn$places) +
-            geom_text(aes_string(x="x", y=paste0("y-",1.0*dy), label="name"),
+            geom_text(aes_string(x="x", y=paste0("y-",1.50*dy), label="name"),
                       data=pn$places, color="blue", size=3.5) +
-            geom_point(aes_string(x="x", y="y"), shape=0, size=10,
+            geom_point(aes_string(x="x", y="y"), shape=0, size=12.5,
                        data=pn$trans) +
             geom_text(aes_string(x="x", y=paste0("y-",0.0*dy), label="name"),
                       data=pn$trans, color="blue", size=3.5) +
@@ -340,12 +340,6 @@ ggplot.petrinet <- function(pn) {
     ######################################################################
     #Draw arrows by looping over all trans x places pairs.
     ######################################################################
-
-    arc_r <- 0.50
-    arc_t <- seq(0, 90, by = 10) * pi / 180
-    arc_x <- arc_r*01.0 * cos(arc_t)
-    arc_y <- arc_r*05.0 * sin(arc_t)
-    arc_df <- data.frame(arc_x=arc_x, arc_y=arc_y)
 
     for (t in  1:nrow(pn$trans)) {
         for (p in 1:nrow(pn$places)) {
@@ -380,41 +374,88 @@ ggplot.petrinet <- function(pn) {
 
             #Out arrows, i.e. transition -> place
             if (pn$Cout[t,p]>0) {
-                if ((pn$places$y[p] - pn$trans$y[t]) < 0) {
+                
+                diff_y <- pn$places$y[p] - pn$trans$y[t]
+                if (diff_y < 0) {
                     beg_dy <- 0 - dy; end_dy <- dy
-                } else if ((pn$places$y[p] - pn$trans$y[t]) > 0) {
+                } else if (diff_y > 0) {
                     beg_dy <- dy; end_dy <- 0 - dy
                 } else  {
                     beg_dy <- 0; end_dy <- 0
                 }
-                if ((pn$places$x[p] - pn$trans$x[t]) < 0) {
+                
+                diff_x <- pn$places$x[p] - pn$trans$x[t]
+                if (diff_x < 0) {
                     beg_dx <- 0 - dx; end_dx <- dx
-                } else if ((pn$places$x[p] - pn$trans$x[t]) > 0) {
+                } else if (diff_x > 0) {
                     beg_dx <- dx; end_dx <- 0 - dx
                 } else  {
                     beg_dx <- 0; end_dx <- 0
                 }
 
-#                 if (pn$Cout[t, p] > 0) {
-#                     color="red"
-#                     thisarc_df <- orderBy(~+arc_x+arc_y, mutate(arc_df, 
-#                                 arc_x=pn$trans$x[t]+1.00*end_dx+arc_x,
-#                                 arc_y=pn$trans$y[t]+0.25*end_dy+arc_y))
-#                     #myprint_df(thisarc_df)            
-#                     print(thisarc_df)            
-#                     gp <- gp + geom_line(data=thisarc_df, mapping=aes(
-#                         x=arc_x,
-#                         y=arc_y
-#                         ),
-#                         arrow=arrow(length=unit(0.35, "cm")), col=color)
-#                 } else {        
-
-                gp <- gp + geom_segment(aes_string(
-                    x=paste0(pn$trans$x[t]+0.9*beg_dx),
-                    y=paste0(pn$trans$y[t]+0.2*beg_dy),
-                    xend=paste0(pn$places$x[p]+0.9*end_dx),
-                    yend=paste0(pn$places$y[p]+0.3*end_dy)),
-                    arrow=arrow(length=unit(0.35, "cm")), col="black")
+                arc_r <- 1.0; arc_diff_x <- 0; arc_diff_y <- 0
+                
+                       if ((diff_x < 0) & (diff_y < 0)) {
+                    arc_beg <- 90; arc_end <- 179; arc_diff_y <- diff_y
+                } else if ((diff_x < 0) & (diff_y == 0)) {
+                    arc_beg <- 0; arc_end <- 180; 
+                    arc_diff_x <- (diff_x / 2.0)+0.5; arc_diff_y <- 1.0
+                } else if ((diff_x < 0) & (diff_y > 0)) {
+                    arc_beg <- 270; arc_end <- 180
+                } else if ((diff_x == 0) & (diff_y < 0)) {
+                    arc_beg <- 90; arc_end <- 270
+                } else if ((diff_x == 0) & (diff_y == 0)) {
+                    arc_beg <- 0; arc_end <- 360
+                } else if ((diff_x == 0) & (diff_y > 0)) {
+                    arc_beg <- 270; arc_end <- 90
+                } else if ((diff_x > 0) & (diff_y < 0)) {
+                    arc_beg <- 90; arc_end <- 0
+                } else if ((diff_x > 0) & (diff_y == 0)) {
+                    arc_beg <- -180; arc_end <- 0
+                } else if ((diff_x > 0) & (diff_y > 0)) {
+                    arc_beg <- -90; arc_end <- 0
+                } else stop("diff_x & diff_y sitn not coded")
+                
+                       if (arc_beg < arc_end) {
+                    arc_t <- seq(arc_beg, arc_end, by=10) * pi / 180
+                } else if (arc_beg > arc_end) {
+                    arc_t <- seq(arc_beg, arc_end, by=-10) * pi / 180
+                } else stop("arc_beg == arg_end")
+                
+                if (abs(diff_y) > 0) {
+                    arc_x <- arc_r*max(5.0/4, abs(diff_x)) * cos(arc_t)
+                } else {
+                    arc_x <- arc_r*max(5.0/4, abs(diff_x)/2.0) * cos(arc_t)
+                }
+                    
+                if (abs(diff_x) > 0) {
+                    arc_y <- arc_r*max(5.0/4, abs(diff_y)) * sin(arc_t)
+                } else {
+                    arc_y <- arc_r*max(5.0/4, abs(diff_y)/2.0) * sin(arc_t)
+                }   
+                
+                arc_df <- data.frame(arc_x=arc_x, arc_y=arc_y)
+                
+                if (pn$Cin[t, p] > 0) {
+                    # Need an arc here
+                    color="red"
+                    thisarc_df <- orderBy(~+arc_x+arc_y, mutate(arc_df, 
+                            arc_x=(pn$trans$x[t]+0.9*beg_dx)+arc_x+arc_diff_x,
+                            arc_y=(pn$trans$y[t]+0.1*beg_dy)+arc_y+arc_diff_y))
+                    #myprint_df(thisarc_df)            
+                    #print(thisarc_df)            
+                    gp <- gp + geom_line(data=thisarc_df, 
+                        mapping=aes(x=arc_x, y=arc_y),
+                        arrow=arrow(length=unit(0.35, "cm"), end="first"), 
+                                    color="gray50")
+                } else {        
+                    gp <- gp + geom_segment(aes_string(
+                        x=paste0(pn$trans$x[t]+0.9*beg_dx),
+                        y=paste0(pn$trans$y[t]+0.2*beg_dy),
+                        xend=paste0(pn$places$x[p]+0.9*end_dx),
+                        yend=paste0(pn$places$y[p]+0.3*end_dy)),
+                        arrow=arrow(length=unit(0.35, "cm")), col="black")
+                }    
             }
 
             #show weight if greater than one
@@ -473,7 +514,7 @@ ggplot.petrinet <- function(pn) {
 ######################################################################
 token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
                            animate=TRUE,reset=FALSE,
-                           wait=1000000,file="") {
+                           wait=1000000, verbose=TRUE, file="") {
     #The rewind option goes back to the initial marking.
     if (reset) {pn$M <- pn$M0; pn$time = 0}
 
@@ -493,7 +534,8 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
     #Write header if reset
     if (reset) {
         names <- paste("\"",paste(pn$places$name,col="\""),sep="")
-        cat("time\ttrans\t",names,"\n",file=file,append=FALSE)
+        if (verbose)
+            cat("time\ttrans\t",names,"\n",file=file,append=FALSE)
     }
     #Loop until there are no more possible transitions
     while (length(enabled)>0 && (stepCounter <= steps)) {
@@ -508,9 +550,11 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
                 if (fire.enabled.trans.ix == 0) {
                     seltrans <- sample(enabled,size=1)
                 } else seltrans <- fire.enabled.trans.ix
-                cat(formatC(pn$time,format="f"),
-                    "\tmultiple enabled transitions: ", pn$trans$name[enabled],
-                    "\tfiring: ", pn$trans$name[seltrans], "\n", append=TRUE)
+                
+                if (verbose)
+                    cat(formatC(pn$time,format="f"),
+                        "\tmultiple enabled transitions: ", pn$trans$name[enabled],
+                        "\tfiring: ", pn$trans$name[seltrans], "\n", append=TRUE)
             }
         } else {
             #####################################################################
@@ -533,10 +577,13 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
         pn$time <- pn$time + timestep
 
         #Log info - Debug info.
+        if (verbose) {
 #         cat("writing to log file: ", formatC(pn$time,format="f"),"\t",
 #             seltrans,"\t",pn$M,"\n", append=TRUE)
         cat(formatC(pn$time,format="f"),"\t",seltrans,"\t",pn$M,"\n",
             file=file,append=TRUE)
+        }
+            
         #!(reset & (stepCounter==1)))
 
         #Plot it.
@@ -571,7 +618,7 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
 #   tokens_m - tokens missing
 #   tokens_r - tokens remaining
 ######################################################################
-replay.petrisim <- function(pn, replay.trans) {
+replay.petrisim <- function(pn, replay.trans, verbose=TRUE) {
 #     print(ggplot.petrinet(pn))
 #     par(ask=TRUE) 
 
@@ -611,7 +658,7 @@ replay.petrisim <- function(pn, replay.trans) {
         tokens_c <- tokens_c + sum(replay_pn$Cin[trans, ])
         last <- ifelse((tix == length(replay.trans)), TRUE, FALSE)
         replay_pn <- token.game(replay_pn, steps=1, high.priority.trans=trans,
-                                animate=last, reset=first, wait=100)
+                                animate=last, reset=first, wait=100, verbose=verbose)
         tokens_p <- tokens_p + sum(replay_pn$Cout[trans, ])                        
         first <- FALSE
     }
@@ -633,8 +680,9 @@ replay.petrisim <- function(pn, replay.trans) {
     par(ask=FALSE)
     tcf <- 0.5 * (1 - ((tokens_m * 1.0) / tokens_c)) + 
            0.5 * (1 - ((tokens_r * 1.0) / tokens_p))
-    return(list(tcf=tcf, 
-                tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r))       
+    invisible(list(tcf=tcf, 
+                tokens_p=tokens_p, tokens_c=tokens_c, tokens_m=tokens_m, tokens_r=tokens_r,
+                pn=replay_pn))       
 }
 
 ######################################################################
