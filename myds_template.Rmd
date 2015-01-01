@@ -3,40 +3,57 @@
 title: "Motor Trend: mpg regression"
 author: "bdanalytics"
 #output: html_document
+output:
+  pdf_document:
+    fig_width: 8
+    highlight: zenburn
+    #keep_md: yes
+    keep_tex: yes
+    number_sections: yes
+    toc: yes
 ---
-#### Date: `r format(Sys.time(), "(%a) %b %d, %Y")`
 
-Data: Device data is from an anonymous individual whose number of steps was sampled in 5 minute intervals.  
+**  **    
+**Date: `r format(Sys.time(), "(%a) %b %d, %Y")`**    
+
+# Introduction:  
+
+Data: 
 Source: 
-Time period: October and November, 2012
+Time period: 
 
-### Synopsis:
+# Synopsis:
 
-Potential next steps include:
+Based on analysis utilizing <> techniques, <conclusion heading>:  
+
+### ![](<filename>.png)
+
+## Potential next steps include:
 
 ```{r set_global_options}
 rm(list=ls())
 set.seed(12345)
+options(stringsAsFactors=FALSE)
 source("~/Dropbox/datascience/R/mydsutils.R")
 source("~/Dropbox/datascience/R/myplot.R")
+source("~/Dropbox/datascience/R/mypetrinet.R")
 # Gather all package requirements here
 #suppressPackageStartupMessages(require())
 
-library(sos)
-findFn("cosine", maxPages=2, sortby="MaxScore")
+require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
 ```
 
 ```{r set_global_options_wd, echo=FALSE}
 setwd("~/Documents/Work/Courses/Coursera/jhu-datascience/E-Reproducible-Research/PA1")
 ```
 
-### Step 01: import data
+# Step 01: import data
 ```{r import_data, cache=TRUE}
 
 
 ```
 
-#### Step 02.1: inspect data
+## Step 02.1: inspect data
 ```{r inspect_steps_1, cache=TRUE}
 print(str(entity_df))
 #View(entity_df)
