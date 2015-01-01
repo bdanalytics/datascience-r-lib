@@ -81,13 +81,23 @@ petrinet <- function(name, places_df, trans_df, arcs_df) {
     #Initial time
     time <- 0
 
+    #Track firings
+    firings <- NULL
+
     #Define petri net object using a list construct.
     pn <- list( name=name, trans=trans, places=places,
                 Cin=Cin,Cout=Cout,C=C,
-                p=p,t=t,M0=M,M=M,time=time)
+                p=p,t=t,M0=M,M=M,time=time, firings=firings)
 
     class(pn) <- "petrinet"
+    
     #print(pn)
+    return(pn)
+}
+
+reset.petrinet <- function(pn) {
+    pn$M <- pn$M0; pn$time <- 0; pn$firings <- NULL;
+    
     return(pn)
 }
 
@@ -103,7 +113,7 @@ add.petrinet <- function(pn, places_df=data.frame(), arcs_df=data.frame()) {
     #   refactor code if it needs to be changed 
 
     # Reset the petrinet first
-    pn$M <- pn$M0; pn$time = 0
+    pn <- reset.petrinet(pn)
 
     if(nrow(places_df) > 0) {
         pn$places <- rbind(pn$places, cbind(
@@ -330,7 +340,9 @@ ggplot.petrinet <- function(pn) {
             geom_text(aes_string(x="x", y=paste0("y-",1.50*dy), label="name"),
                       data=pn$places, color="blue", size=3.5) +
             geom_point(aes_string(x="x", y="y"), shape=0, size=12.5,
-                       data=pn$trans) +
+                       data=subset(pn$trans, !(name %in% pn$firings))) +
+            geom_point(aes_string(x="x", y="y"), shape=15, size=12.5, color="yellow",
+                       data=subset(pn$trans, (name %in% pn$firings))) +           
             geom_text(aes_string(x="x", y=paste0("y-",0.0*dy), label="name"),
                       data=pn$trans, color="blue", size=3.5) +
             theme(axis.ticks=element_blank(),
@@ -516,7 +528,8 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
                            animate=TRUE,reset=FALSE,
                            wait=1000000, verbose=TRUE, file="") {
     #The rewind option goes back to the initial marking.
-    if (reset) {pn$M <- pn$M0; pn$time = 0}
+    if (reset)     
+        pn <- reset.petrinet(pn)
 
     #Find the set of enabled transitions.
     isenabled <- enabled.transitions(pn)
@@ -575,6 +588,7 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
         #Fire the transition and update marking.
         pn$M <- pn$M + pn$C[seltrans,]
         pn$time <- pn$time + timestep
+        pn$firings <- c(pn$firings, pn$trans[seltrans, "name"])
 
         #Log info - Debug info.
         if (verbose) {
@@ -971,7 +985,7 @@ footprint.traces <- function(traces_df) {
 }
 
 freq.traces <- function(traces_df) {
-    unique_trans <- unique.trans(traces_df)
+    unique_trans <- sort(unique.trans(traces_df))
     L_freq_mtrx <- matrix(rep(0, length(unique_trans) ^ 2),
                      nrow=length(unique_trans),
                      dimnames=list(unique_trans, unique_trans))
@@ -1138,10 +1152,19 @@ Xl.pairs <- function(L_mtrx) {
 #  traces_df - data.frame containing comma separated transitions as column "trace"
 #               e.g. "a, b, c, d, e"
 #
+# Bugs: Process Mining Course Final Question 5; arc missing e -> p4
+#
+# Potential Enhancements:
+#   Utilize heuristics for place & trans co-ordinates e.g. n trans after "Start"
+#       positions better y-coords for the trans
+#
 # Returns:
 #  petrinet object
 ######################################################################
 alpha.petrinet <- function(traces_df) {
+
+    traces_df$trace <- as.character(traces_df$trace)
+
     L_mtrx <- footprint.traces(traces_df); print(L_mtrx)
     
     Tl <- unique.trans(traces_df); print(Tl)
