@@ -301,6 +301,9 @@ myplot_radar <- function(radar_inp_df) {
                                                 ""),
                                 label_max=ifelse((instanceData[,j] == max(df[,j])), 
                                                 format(instanceData[,j], digits=6),
+                                                NA),
+                                label_min=ifelse((instanceData[,j] == max(df[,j])), 
+                                                format(min(df[,j]), digits=6),
                                                 NA),                               
                                 label_angle=ifelse(((180*theta[j-1]/pi)-90) < 90,
                                                    ((180*theta[j-1]/pi)-90),
@@ -314,15 +317,15 @@ myplot_radar <- function(radar_inp_df) {
                                 x=r * instanceData[,2] * cos(theta[1]) + x0,
                                 y=r * instanceData[,2] * sin(theta[1]) + y0,
                                 label="",
-                                label_max=NA,                               
+                                label_max=NA, label_min=NA,                              
                                 label_angle=0
                                 ))
             
         }
         
         # Fix this hack !
-        graphData <- mutate(graphData, 
-            label_angle=ifelse(label_angle > 90, 90 - label_angle, label_angle)) 
+        #graphData <- mutate(graphData, 
+        #    label_angle=ifelse(label_angle > 90, 90 - label_angle, label_angle)) 
         
         graphData
         
@@ -330,13 +333,25 @@ myplot_radar <- function(radar_inp_df) {
 
     # to debug radarFix
     #radarData <- radarFix(df=subset(radar_inp_df, facet=<sample>))
-    radarData <- ddply(radar_inp_df, .(facet), radarFix)
+    instance_varname <- names(radar_inp_df)[1]
+    names(radar_inp_df)[1] <- "instance"
+    names(radar_inp_df)[length(names(radar_inp_df))] <- "facet"
+
+    radar_scld_df <- cbind(radar_inp_df[, "instance", FALSE],
+                data.frame(scale(radar_inp_df[, seq(2, ncol(radar_inp_df)-1)], 
+                   scale=TRUE, center=FALSE)),
+                radar_inp_df[, "facet", FALSE])
+
+    radarData <- ddply(radar_scld_df, .(facet), radarFix)
+    radarDataRange <- ddply(radar_inp_df, .(facet), radarFix)
+    radarData$label_range <- paste0("[", radarDataRange$label_min, ", ", radarDataRange$label_max, "]")
     
     gp <- ggplot(radarData, aes(x=x, y=y, group=instance)) +
             geom_path(alpha=0.5, aes(color=instance)) +
             geom_point(alpha=0.2) + 
             geom_text(aes(x=x*1.05, y=y*1.05, 
-                          label=label_max, angle=label_angle), size=3.5) +    
+                          label=label_range, angle=label_angle), size=3.5,
+                      data=subset(radarData, !is.na(label_max))) +    
             geom_text(aes(x=x*1.15, y=y*1.15, 
                           label=label,angle=label_angle), size=3.5) +
             geom_segment(aes(x=0.5, y=0.5, xend=x, yend=y), linetype="dotted",
@@ -345,7 +360,8 @@ myplot_radar <- function(radar_inp_df) {
                     axis.title.y = element_blank()) + 
             theme(axis.ticks.x = element_blank(), axis.text.x=element_blank(), 
                     axis.title.x = element_blank()) + 
-            facet_wrap(~facet, scales="free_y")
+            facet_wrap(~facet, scales="free") + 
+            scale_color_discrete(name=instance_varname)
 
     return(gp)
 }   
