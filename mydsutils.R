@@ -33,15 +33,21 @@ myimport_data <- function(url, filename=NULL, nrows=-1, print_diagn=TRUE, ...){
     # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
     #	check if file contains header
     first_record <- read.csv(file_path, header=FALSE, quote="", nrows=1)
-	if (length(grep('"', first_record[1, 1])) == 0)
+    header <- FALSE
+	
+	col_names <- paste(first_record[,])
+	if ((all(make.names(col_names) == col_names)) ||
+		(length(grep('"', first_record[1, 1])) != 0))
+    	header <- TRUE
+
+	if (!(header))
 	{
-    	header <- FALSE
     	warning(file_path, " does not contain header")
 	    print("first 10 records:")
 	    #print(system(paste0("head ", file_path)))
 	    #system(paste0("head ", file_path, " | cat")))
 	    print(readLines(file_path, n=10))
-	} else header <- TRUE
+	}
 
     print(sprintf("Reading file %s...", file_path))
     df <- read.csv(file_path, header=header, nrows=nrows, ...)
