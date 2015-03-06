@@ -6,8 +6,8 @@ pandoc_args: ["+RTS", "-K64M", "-RTS"]
 
 # Choose one:
 output:
-  html_document:
-    keep_md: yes
+    html_document:
+        keep_md: yes
 
 # output:
 #   pdf_document:
@@ -53,12 +53,23 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 
 require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
 
+# Analysis sepcific global variables
+glb_separate_predict_dataset <- FALSE
+
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
 print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: import data
 ```{r import_data, cache=TRUE}
+entity_df <- myimport_data(
+    url="<url>", 
+    print_diagn=FALSE)
+if (glb_separate_predict_dataset) {
+    predict_df <- myimport_data(
+        url="<url>", 
+        print_diagn=FALSE)
+} else predict_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]     
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="inspect_data", 
