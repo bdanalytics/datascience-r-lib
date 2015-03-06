@@ -1,13 +1,13 @@
 ---
 # Get YAML keywords from myYAML_ref.Rmd
-title: "Motor Trend: mpg regression"
+title: "<Project name>: <Predicted attribute> <regression/classification>"
 author: "bdanalytics"
 pandoc_args: ["+RTS", "-K64M", "-RTS"]
 
 # Choose one:
-# output:
-#   html_document:
-#     keep_md: yes
+output:
+  html_document:
+    keep_md: yes
 
 # output:
 #   pdf_document:
@@ -29,7 +29,7 @@ Source:
 Time period: 
 
 ```{r set_global_options_wd, echo=FALSE}
-setwd("~/Documents/Work/Courses/Coursera/jhu-datascience/E-Reproducible-Research/PA1")
+setwd("~/Documents/Work/<path>")
 ```
 
 # Synopsis:
@@ -67,9 +67,9 @@ script_df <- rbind(script_df,
 print(script_df)
 ```
 
-### Step ``r script_df[nrow(script_df), "chunk_step_major"] . r script_df[nrow(script_df), "chunk_step_minor"]``: inspect data
+### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: inspect data
 ```{r inspect_data_1, cache=TRUE}
-print(str(entity_df))
+#print(str(entity_df))
 #View(entity_df)
 
 # List info gathered for various columns
@@ -77,8 +77,8 @@ print(str(entity_df))
 # date:
 # interval:
 
-print(summary(entity_df))
-pairs(subset(entity_df, select=-c(col_symbol)))
+#print(summary(entity_df))
+#pairs(subset(entity_df, select=-c(col_symbol)))
 
 # Create new features that help diagnostics
 #   Convert factors to dummy variables
@@ -89,9 +89,9 @@ pairs(subset(entity_df, select=-c(col_symbol)))
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
 The variance by am_fctr appears to be independent. 
 ```{r q1, cache=TRUE}
-print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
-             subset(cars_df, am_fctr == "manual")$mpg, 
-             var.equal=FALSE)$conf)
+# print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
+#              subset(cars_df, am_fctr == "manual")$mpg, 
+#              var.equal=FALSE)$conf)
 ```
 We reject the null hypothesis i.e. we have evidence to conclude that am_fctr impacts mpg (95% confidence). Manual transmission is better for miles per gallon versus automatic transmission.
 

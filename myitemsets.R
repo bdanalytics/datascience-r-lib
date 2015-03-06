@@ -1,4 +1,4 @@
-get_rules <- function(baskets_df, minsup, minconf) {
+old_get_rules <- function(baskets_df, minsup, minconf) {
     ######################################################################
     # Extract association rules from itemsets
     #
