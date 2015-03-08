@@ -26,6 +26,8 @@ output:
 
 Data: 
 Source: 
+    Training:   <trnng_url>  
+    New:        <prdct_url>  
 Time period: 
 
 ```{r set_global_options_wd, echo=FALSE}
@@ -51,7 +53,7 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 # Gather all package requirements here
 #suppressPackageStartupMessages(require())
 
-require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
+#require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
 
 # Analysis sepcific global variables
 glb_separate_predict_dataset <- FALSE
@@ -63,11 +65,11 @@ print(script_df)
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: import data
 ```{r import_data, cache=TRUE}
 entity_df <- myimport_data(
-    url="<url>", 
+    url="<trnng_url>", 
     print_diagn=TRUE)
 if (glb_separate_predict_dataset) {
     predict_df <- myimport_data(
-        url="<url>", 
+        url="<prdct_url>", 
         print_diagn=TRUE)
 } else {
     predict_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]
