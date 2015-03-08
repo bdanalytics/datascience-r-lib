@@ -64,12 +64,16 @@ print(script_df)
 ```{r import_data, cache=TRUE}
 entity_df <- myimport_data(
     url="<url>", 
-    print_diagn=FALSE)
+    print_diagn=TRUE)
 if (glb_separate_predict_dataset) {
     predict_df <- myimport_data(
         url="<url>", 
-        print_diagn=FALSE)
-} else predict_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]     
+        print_diagn=TRUE)
+} else {
+    predict_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]
+    myprint_df(predict_df)
+    str(predict_df)
+}         
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="inspect_data", 
@@ -88,13 +92,33 @@ print(script_df)
 # date:
 # interval:
 
-#print(summary(entity_df))
+print(summary(entity_df))
+print(summary(predict_df))
+
 #pairs(subset(entity_df, select=-c(col_symbol)))
+
+#   Histogram of predictor in entity_df & predict_df
+# Check for predict_df & entity_df features range mismatches
 
 # Create new features that help diagnostics
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
 
+script_df <- rbind(script_df, 
+                   data.frame(chunk_label="extract_features", 
+                              chunk_step_major=max(script_df$chunk_step_major)+1, 
+                              chunk_step_minor=0))
+print(script_df)
+```
+
+## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: extract features
+```{r extract_features, cache=TRUE}
+
+# script_df <- rbind(script_df, 
+#                    data.frame(chunk_label="extract_features", 
+#                               chunk_step_major=max(script_df$chunk_step_major)+1, 
+#                               chunk_step_minor=0))
+print(script_df)
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  

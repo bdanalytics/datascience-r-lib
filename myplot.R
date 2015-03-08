@@ -19,11 +19,13 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         stop("Multiple feats not implemented with x variable.", 
              "\n  Consider using facet parameter instead.")
     
-    if (!is.factor(df[, xcol_name])) {
-        xcol_name_par <- xcol_name
-        xcol_name <- paste(xcol_name_par, "fctr", sep="_")
-        warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)
-        df[, xcol_name] <- as.factor(df[, xcol_name_par])
+    if (!missing(xcol_name)) {
+        if (!is.factor(df[, xcol_name])) {
+            xcol_name_par <- xcol_name
+            xcol_name <- paste(xcol_name_par, "fctr", sep="_")
+            warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)
+            df[, xcol_name] <- as.factor(df[, xcol_name_par])
+        }
     }
     
     if (length(ycol_names) == 1) {
