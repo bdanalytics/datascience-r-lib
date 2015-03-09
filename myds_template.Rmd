@@ -90,9 +90,12 @@ print(script_df)
 #View(entity_df)
 
 # List info gathered for various columns
-# steps:
-# date:
-# interval:
+# <col_name>:   <description>; <notes>
+
+# Create new features that help diagnostics
+#   Convert factors to dummy variables
+#   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
+#entity_df$<col_name>_fctr <- as.factor(entity_df$<col_name>)
 
 print(summary(entity_df))
 print(summary(predict_df))
@@ -102,9 +105,8 @@ print(summary(predict_df))
 #   Histogram of predictor in entity_df & predict_df
 # Check for predict_df & entity_df features range mismatches
 
-# Create new features that help diagnostics
-#   Convert factors to dummy variables
-#   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
+# Other diagnostics:
+#print(table(entity_df$<col_name>))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
