@@ -5,7 +5,7 @@
 
 ## 01.      import data
 
-myimport_data <- function(url, filename=NULL, nrows=-1, print_diagn=TRUE, ...){
+myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
     url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
@@ -58,6 +58,10 @@ myimport_data <- function(url, filename=NULL, nrows=-1, print_diagn=TRUE, ...){
     print(sprintf("dimensions of data in %s: %s rows x %s cols", file_path,
                   format(dim(df)[1], big.mark=","),
                   format(dim(df)[2], big.mark=",")))
+
+	if (!(missing(comment)))
+		comment(df) <- comment
+
     if (print_diagn) {
 		myprint_df(df)
 		myprint_str_df(df)

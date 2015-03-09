@@ -55,7 +55,7 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 
 #require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
 
-# Analysis sepcific global variables
+# Analysis specific global variables
 glb_separate_predict_dataset <- FALSE
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -66,15 +66,16 @@ print(script_df)
 ```{r import_data, cache=TRUE}
 entity_df <- myimport_data(
     url="<trnng_url>", 
-    print_diagn=TRUE)
+    comment="entity_df", print_diagn=TRUE)
 if (glb_separate_predict_dataset) {
-    predict_df <- myimport_data(
+    predct_df <- myimport_data(
         url="<prdct_url>", 
-        print_diagn=TRUE)
+        comment="predct_df", print_diagn=TRUE)
 } else {
-    predict_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]
-    myprint_df(predict_df)
-    str(predict_df)
+    predct_df <- entity_df[sample(1:nrow(entity_df), nrow(entity_df) / 1000),]
+    comment(predct_df) <- "predct_df"
+    myprint_df(predct_df)
+    str(predct_df)
 }         
 
 script_df <- rbind(script_df, 
@@ -94,19 +95,39 @@ print(script_df)
 
 # Create new features that help diagnostics
 #   Convert factors to dummy variables
-#   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
-#entity_df$<col_name>_fctr <- as.factor(entity_df$<col_name>)
+#   Potential Enhancements:
+#       One code chunk to cycle thru entity_df & predct_df ?
+#           Use with / within ?
+#           for (df in c(entity_df, predct_df)) cycles thru column names
+#           for (df in list(entity_df, predct_df)) does not change the actual dataframes
+#
+#       Build splines   require(splines); bsBasis <- bs(training$age, df=3)
+
+# entity_df <- mutate(entity_df, 
+#     <col_name>_fctr=as.factor(<col_name>),
+#     
+#     Date.my=as.Date(strptime(Date, "%m/%d/%y %H:%M")),
+#     Month=months(Date.my),
+#     Weekday=weekdays(Date.my)
+#     
+#                     )
+# 
+# predct_df <- mutate(predct_df, 
+#                     )
 
 print(summary(entity_df))
-print(summary(predict_df))
+print(summary(predct_df))
 
 #pairs(subset(entity_df, select=-c(col_symbol)))
 
-#   Histogram of predictor in entity_df & predict_df
-# Check for predict_df & entity_df features range mismatches
+#   Histogram of predictor in entity_df & predct_df
+# Check for predct_df & entity_df features range mismatches
 
 # Other diagnostics:
-#print(table(entity_df$<col_name>))
+# print(table(entity_df$<col_name>))
+# print(which.min(table(entity_df$<col_name>)))
+# print(which.max(table(entity_df$<col_name>)))
+# print(which.max(table(entity_df$<col1_name>, entity_df$<col2_name>)[, 2]))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
