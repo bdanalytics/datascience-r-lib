@@ -1,9 +1,10 @@
 # Balaji Iyengar's Data Science Process
 # Created 2014-08-12
+# Check if functions are assigned to proper data science process steps
 
 #suppressPackageStartupMessages(require(<<package name>>))
 
-## 01.      import data
+## 01. 		import data
 
 myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
@@ -286,33 +287,103 @@ mycheck_validarg <- function(value) {
 
 mycompute_median <- function(vector) {
     if (is.factor(vector))
-        return(factor(levels(vector)[median(as.numeric(vector))], levels(vector)))
-    else return(median(vector, na.rm=TRUE))
+        return(factor(levels(vector)[median(as.numeric(vector), na.rm=TRUE)], levels(vector)))
+#     if (class(vector) == "Date")
+#     	return(as.Date(median(vector, na.rm=TRUE), origin="1970-01-01"))   
+    
+    return(median(vector, na.rm=TRUE))
 }
 
-mycompute_medians_df <- function(df, keep.names=FALSE) {
-    medians_df <- summaryBy(. ~ factor(0), data=df, FUN=median, keep.names=keep.names)
-    # summaryBy does not compute stats for factor variables
-    fctrs_lst <- sapply(names(df), function(col) if (is.factor(df[, col])) return(col))
-    fctrs_lst <- fctrs_lst[!sapply(fctrs_lst, is.null)]
+mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
+	if (class(df) != "data.frame")
+		stop("df argument is not a data.frame: it is ", class(df))
+		
+	ret_df <- data.frame()
+	
+	# gather numeric vars
+    num_lst <- sapply(names(df), function(col) if (is.numeric(df[, col])) return(col))
+    num_vctr <- unlist(num_lst[!sapply(num_lst, is.null)])
+    if (length(num_vctr) > 0)
+	    ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df, 
+    							FUN=median, keep.names=keep.names)
+    
+    # summaryBy does not compute stats for factor or Date class variables
+    non_num_lst <- sapply(names(df), function(col) if (!is.numeric(df[, col])) return(col))
+    non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
+    non_num_vctr <- setdiff(non_num_vctr, byvars_lst)
+    for (var in non_num_vctr) {
+    	#print("var="); print(var)
+        #if (byvars_lst != factor(0))
+        #	stop("mycompute_medians_df does not support byvars_lst=", byvars_lst)
 
-    for (fctr in fctrs_lst) {
-        if (keep.names) new_name <- fctr else new_name <- paste0(fctr, ".median")
-        medians_df[, new_name] <- mycompute_median(diamonds_df[, fctr])
+        if (keep.names) new_name <- var else new_name <- paste0(var, ".median")
+        if (nrow(ret_df) == 0) {
+        	if (byvars_lst == factor(0)) {
+        		ret_df <- as.data.frame(mycompute_median(df[, var]))
+        	} else {
+				ret_df <- as.data.frame(tapply(df[, var], df[, byvars_lst], 
+											FUN=mycompute_median))
+			}								
+        	names(ret_df) <- new_name
+        }	
+        else {
+        	if (byvars_lst == factor(0)) {
+        		ret_df[, new_name] <- mycompute_median(df[, var])
+        	} else {
+        		ret_df[, new_name] <- tapply(df[, var], df[, byvars_lst], 
+        								FUN=mycompute_median)
+        	}							
+        }								
+
+		# tapply strips class info        								
+        if (class(df[, var]) == "Date")
+        	ret_df[, new_name] <- as.Date(ret_df[, new_name], origin="1970-01-01")
     }
-
-    rownames(medians_df) <- "median"
-    return(medians_df)
+    
+    if (nrow(ret_df) == 1) rownames(ret_df) <- "median"
+    
+    return(ret_df)
 }
+# medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df, 
+#                                     FUN=c(median), na.rm=TRUE)
+# medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
 mycreate_xtab <- function(df, xtab_col_names) {
     require(doBy)
+    require(reshape2)
+    
     df[, "_n"] <- 1
     count_df <- summaryBy(reformulate(xtab_col_names, "`_n`"), df, FUN=c(length))
     #count_df <- summaryBy(reformulate(xtab_col_names, "_n"), df, FUN=c(length))
 
     names(count_df) <- gsub("`", "", names(count_df))
-    return(count_df)
+    
+    cast_df <- dcast(count_df, 
+    	reformulate(tail(xtab_col_names, 1), head(xtab_col_names, -1)), 
+    	value.var="_n.length")
+    
+    for (col_ix in length(xtab_col_names):ncol(cast_df))
+    	names(cast_df)[col_ix] <- 
+    	paste(tail(xtab_col_names, 1), names(cast_df)[col_ix], sep=".")
+    	
+    return(cast_df)
+    
+#     print(xtabs(~ Month_fctr + Arrest, entity_df))
+# 
+# 	print(prblm_3_2_xtb <- xtabs(~ Month + Arrest, entity_df))
+# 	print(prblm_3_2_df <- data.frame(dimnames(prblm_3_2_xtb)[[1]],
+#                                  prblm_3_2_xtb[, 1],
+#                                  prblm_3_2_xtb[, 2]))
+# 	names(prblm_3_2_df) <- c(names(dimnames(prblm_3_3_xtb))[1], 
+#     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][1], sep="."),
+#     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][2], sep="."))
+# 	print(prblm_3_2_df)
+# 
+# 	print(prblm_3_3_tbl <- table(entity_df$Year, entity_df$Arrest))
+# 	print(prblm_3_3_df <- data.frame(Year=dimnames(prblm_3_3_tbl)[[1]],
+#                                  Arrest_FALSE=prblm_3_3_tbl[, 1],
+#                                  Arrest_TRUE =prblm_3_3_tbl[, 2]))
+
 }
 
 mydelete_cols_df <- function(df, colnames) {

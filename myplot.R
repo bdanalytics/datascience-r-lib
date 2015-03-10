@@ -19,7 +19,7 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         stop("Multiple feats not implemented with x variable.", 
              "\n  Consider using facet parameter instead.")
     
-    if (!missing(xcol_name)) {
+    if (!is.null(xcol_name)) {
         if (!is.factor(df[, xcol_name])) {
             xcol_name_par <- xcol_name
             xcol_name <- paste(xcol_name_par, "fctr", sep="_")
@@ -27,16 +27,24 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             df[, xcol_name] <- as.factor(df[, xcol_name_par])
         }
     }
-    
+
+    if (!is.null(facet_spec)) {
+        stop("facets not supported yet")
+        require(doBy)
+        sum_df <- summaryBy(steps ~ . , df, FUN=c(median))
+    }
+        
     if (length(ycol_names) == 1) {
-        if (missing(xcol_name)) {
-            medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df, 
-                                    FUN=c(median), na.rm=TRUE)
+        if (is.null(xcol_name)) {
+            medians_df <- mycompute_medians_df(df[, ycol_names, FALSE])
             g <- ggplot(df, aes_string(x=factor(0), y=ycol_names))
             g <- g + xlab(" ")            
         } else {
-            medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df, 
-                                    FUN=c(median), na.rm=TRUE)
+#             medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df, 
+#                                     FUN=c(median), na.rm=TRUE)
+            medians_df <- mycompute_medians_df(df[, c(ycol_names, xcol_name)],
+                                               byvars_lst=xcol_name)
+            medians_df[, xcol_name] <- rownames(medians_df)                                               
             g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))            
         }
     } else {
@@ -48,32 +56,29 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         g <- g + xlab(" ")
     }
     
-    if (!is.null(facet_spec)) {
-        stop("facets not supported yet")
-        require(doBy)
-        sum_df <- summaryBy(steps ~ . , df, FUN=c(median))
-    } else {
-    }
-    
     g <- g + geom_boxplot(fill="grey80", color="blue") + 
-             stat_summary(fun.y=mean, pch=22, geom='point', color='red') +
-             scale_y_continuous(labels=myformat_number)
-    
+             stat_summary(fun.y=mean, pch=22, geom='point', color='red')
+
     if (length(ycol_names) == 1) {
-        aes_str <- paste0("y=", ycol_names, ".median * 1.05", 
-                          ", label=myformat_number(round(", ycol_names, ".median))")
+        if (class(df[, ycol_names]) == "num") {            
+            g <- g + scale_y_continuous(labels=myformat_number)
+
+            aes_str <- paste0("y=", ycol_names, ".median * 1.05", 
+                              ", label=myformat_number(round(", ycol_names, ".median))")
+        } else
+            aes_str <- paste0("y=", ycol_names, ".median", 
+                              ", label=", ycol_names, ".median")
+                         
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
         g <- g + geom_text(data=medians_df, 
                            mapping=aes_mapping
                            , color="NavyBlue", size=3.5)
     } else {
-        #print(medians_df)
         g <- g + geom_text(data=medians_df,
                            mapping=aes_string(x="variable", 
                                               y="value.median * 1.05",
                                               label="myformat_number(round(value.median))")
                            , color="NavyBlue", size=3.5)
-        #print("median text layer applied")
     }
     
     g

@@ -107,6 +107,7 @@ print(script_df)
 #     <col_name>_fctr=as.factor(<col_name>),
 #     
 #     Date.my=as.Date(strptime(Date, "%m/%d/%y %H:%M")),
+#     Year=year(Date.my),
 #     Month=months(Date.my),
 #     Weekday=weekdays(Date.my)
 #     
@@ -128,6 +129,17 @@ print(summary(predct_df))
 # print(which.min(table(entity_df$<col_name>)))
 # print(which.max(table(entity_df$<col_name>)))
 # print(which.max(table(entity_df$<col1_name>, entity_df$<col2_name>)[, 2]))
+# print(table(entity_df$<col1_name>, entity_df$<col2_name>))
+# print(xtabs(~ <col1_name>, entity_df))
+# print(xtabs(~ <col1_name> + <col2_name>, entity_df))
+# print(xtab_entity_df <- mycreate_xtab(entity_df, c("<col1_name>", "<col2_name>")))
+# print(xtab_entity_df <- mutate(xtab_entity_df, 
+#             <col3_name>=(<col1_name> * 1.0) / (<col1_name> + <col2_name>))) 
+
+# Other plots:
+# print(myplot_histogram(entity_df, "<col1_name>"))
+# print(myplot_box(df=entity_df, ycol_names="<col1_name>"))
+# print(myplot_box(df=entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
