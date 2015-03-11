@@ -145,6 +145,11 @@ print(summary(predct_df))
 # print(myplot_histogram(entity_df, "<col1_name>"))
 # print(myplot_box(df=entity_df, ycol_names="<col1_name>"))
 # print(myplot_box(df=entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
+# print(myplot_line(subset(entity_df, Symbol %in% c("KO", "PG")), 
+#                   "Date.my", "StockPrice", facet_row_colnames="Symbol") + 
+#     geom_vline(xintercept=as.numeric(as.Date("2003-03-01"))) +
+#     geom_vline(xintercept=as.numeric(as.Date("1983-01-01")))        
+#         )
 # print(myplot_scatter(entity_df, "<col1_name>", "<col2_name>"))
 
 script_df <- rbind(script_df, 
