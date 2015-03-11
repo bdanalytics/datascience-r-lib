@@ -125,6 +125,9 @@ print(summary(predct_df))
 # Check for predct_df & entity_df features range mismatches
 
 # Other diagnostics:
+# print(subset(entity_df, <col1_name> == max(entity_df$<col1_name>, na.rm=TRUE) & 
+#                         <col2_name> <= mean(entity_df$<col1_name>, na.rm=TRUE)))
+
 # print(table(entity_df$<col_name>))
 # print(which.min(table(entity_df$<col_name>)))
 # print(which.max(table(entity_df$<col_name>)))
@@ -136,10 +139,13 @@ print(summary(predct_df))
 # print(xtab_entity_df <- mutate(xtab_entity_df, 
 #             <col3_name>=(<col1_name> * 1.0) / (<col1_name> + <col2_name>))) 
 
+# print(sort(tapply(entity_df$<col1_name>, entity_df$<col2_name>, min, na.rm=TRUE)))
+
 # Other plots:
 # print(myplot_histogram(entity_df, "<col1_name>"))
 # print(myplot_box(df=entity_df, ycol_names="<col1_name>"))
 # print(myplot_box(df=entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
+# print(myplot_scatter(entity_df, "<col1_name>", "<col2_name>"))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 

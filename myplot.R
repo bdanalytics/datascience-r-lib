@@ -44,7 +44,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 #                                     FUN=c(median), na.rm=TRUE)
             medians_df <- mycompute_medians_df(df[, c(ycol_names, xcol_name)],
                                                byvars_lst=xcol_name)
-            medians_df[, xcol_name] <- rownames(medians_df)                                               
+#            medians_df[, xcol_name] <- rownames(medians_df)
+            medians_df[, xcol_name] <- levels(df[, xcol_name])
             g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))            
         }
     } else {
