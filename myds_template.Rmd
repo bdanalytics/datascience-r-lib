@@ -139,7 +139,8 @@ print(summary(predct_df))
 # print(xtab_entity_df <- mutate(xtab_entity_df, 
 #             <col3_name>=(<col1_name> * 1.0) / (<col1_name> + <col2_name>))) 
 
-# print(sort(tapply(entity_df$<col1_name>, entity_df$<col2_name>, min, na.rm=TRUE)))
+# print(<col2_name>_min_entity_arr <- 
+#    sort(tapply(entity_df$<col1_name>, entity_df$<col2_name>, min, na.rm=TRUE)))
 
 # Other plots:
 # print(myplot_histogram(entity_df, "<col1_name>"))
