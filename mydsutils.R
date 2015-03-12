@@ -104,21 +104,6 @@ myprint_str_df <- function(df) {
 ## 02.	    clean data
 ## 02.1	    inspect data
 
-#print(str(entity_df))
-
-#REFNUM -> event's id (numeric variable)
-#EVTYPE -> event's type (categorical variable)
-#FATALITIES -> number of fatal events (numeric variable)
-#INJURIES -> number of personal injuries (numeric variable)
-#PROPDMG -> number of damages to properties (numeric variable)
-#PROPDMGEXP -> H is 00s; K is 000s; M is MMs; B is Billions
-#CROPDMG -> number of damages to crops (numeric variable)
-#CROPDMGEXP -> same as PROPDMGEXP
-#BGN_DATE
-
-#print(summary(entity_df))
-#print(summary(entity_agg_date_df$steps_sum))
-
 map_event_grp <- function(evtype) {
     retval <- as.factor("Other.Grp")
     evtype <- toupper(evtype)
@@ -142,9 +127,6 @@ map_event_grp <- function(evtype) {
 
     return(retval)
 }
-
-#entity_agg_intrvl_df[which(entity_agg_intrvl_df["steps_mean"] ==
-#                           max(entity_agg_intrvl_df$steps_mean)), ]
 
 #subset(entity_df, select=-c(interval))
 
@@ -348,6 +330,16 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
+mycreate_tbl_df <- function(df, tbl_col_name) {
+
+	ret_df <- as.data.frame(sort(table(df[, tbl_col_name])))
+	names(ret_df) <- ".freq"
+	ret_df[, tbl_col_name] <- rownames(ret_df)
+	rownames(ret_df) <- 1:nrow(ret_df)
+	
+	return(ret_df[, c(tbl_col_name, ".freq")])
+}
+
 mycreate_xtab <- function(df, xtab_col_names) {
     require(doBy)
     require(reshape2)
@@ -414,28 +406,44 @@ mysort_df <- function(df, col_name, desc=FALSE) {
     return(df[order(df[, col_name], decreasing=desc), ])
 }
 
-## 02.2	    impute missing data
+## 02.2	    manage (impute/delete) missing data
 #require(plyr)
 #intersect(names(entity_df), names(entity_agg_intrvl_df))
 #entimptd_df <- join(entity_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
-## 02.3	    convert types / create mappings
-mymap <- function(df, from_col_name, to_col_name, map_func) {
-    df[, to_col_name] <- sapply(df[, from_col_name], map_func)
+## 02.3	    encode data (convert types; map codes)
+# mymap <- function(df, from_col_name, to_col_name, map_func) {
+#     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
-    if (length(unique(df[, from_col_name])) == dim(df)[1]) map_summry_df <- df else {
+mymap_codes <- function(df, from_col_name, to_col_name, 
+						map_df, map_join_col_name=from_col_name, map_tgt_col_name=to_col_name) {
+						
+# 	if (length(intersect(names(df), names(map_df))) > 0)						
+# 		warning("potential column join conflicts: ", intersect(names(df), names(map_df)))						
+		
+	ret_df <- merge(df, map_df[, c(map_join_col_name, map_tgt_col_name)], 
+                    by.x=from_col_name, by.y=map_join_col_name, all.x=TRUE)
+		
+#     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
+
+    if (length(unique(ret_df[, from_col_name])) == nrow(ret_df)) map_summry_df <- ret_df else {
         require(sqldf)
         sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS _n ")
-        sql <- paste(sql, "FROM df GROUP BY", paste(from_col_name, to_col_name, sep=","),
+        sql <- paste(sql, "FROM ret_df GROUP BY", paste(from_col_name, to_col_name, sep=","),
                      "ORDER BY _n DESC", sep=" ")
         map_summry_df <- sqldf(sql)
     }
 
 	myprint_df(map_summry_df)
+	
+	# Works only for 1:1 mapping; 
+	#	Use fill aesthetic to display n:m mappings ?
+	#		Create a variable that contains n:m ratio for each value of to_col_name ?
+	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
 
-    return(df)
+    return(ret_df)
 }
 
 ## 03.	    extract features

@@ -131,7 +131,7 @@ print(sapply(names(predct_df), function(col) sum(is.na(predct_df[, col]))))
 # print(subset(entity_df, <col1_name> == max(entity_df$<col1_name>, na.rm=TRUE) & 
 #                         <col2_name> <= mean(entity_df$<col1_name>, na.rm=TRUE)))
 
-# print(<col_name>_freq_entity_df <- as.data.frame(sort(table(entity_df$<col_name>))))
+# print(<col_name>_freq_entity_df <- mycreate_tbl_df(entity_df, "<col_name>"))
 # print(which.min(table(entity_df$<col_name>)))
 # print(which.max(table(entity_df$<col_name>)))
 # print(which.max(table(entity_df$<col1_name>, entity_df$<col2_name>)[, 2]))
@@ -141,6 +141,7 @@ print(sapply(names(predct_df), function(col) sum(is.na(predct_df[, col]))))
 # print(xtabs(~ <col1_name> + <col2_name>, entity_df))
 # print(<col1_name>_<col2_name>_xtab_entity_df <- 
 #   mycreate_xtab(entity_df, c("<col1_name>", "<col2_name>")))
+# <col1_name>_<col2_name>_xtab_entity_df[is.na(<col1_name>_<col2_name>_xtab_entity_df)] <- 0
 # print(<col1_name>_<col2_name>_xtab_entity_df <- 
 #   mutate(<col1_name>_<col2_name>_xtab_entity_df, 
 #             <col3_name>=(<col1_name> * 1.0) / (<col1_name> + <col2_name>))) 
@@ -162,6 +163,35 @@ print(sapply(names(predct_df), function(col) sum(is.na(predct_df[, col]))))
 #         )
 # print(myplot_scatter(entity_df, "<col1_name>", "<col2_name>"))
 
+script_df <- rbind(script_df, 
+    data.frame(chunk_label="manage_missing_data", 
+        chunk_step_major=max(script_df$chunk_step_major), 
+        chunk_step_minor=script_df[which.max(script_df$chunk_step_major), 
+                                   "chunk_step_minor"]+1))
+print(script_df)
+```
+
+### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: manage missing data
+```{r manage_missing_data_1, cache=TRUE}
+
+script_df <- rbind(script_df, 
+    data.frame(chunk_label="encode_data", 
+        chunk_step_major=max(script_df$chunk_step_major), 
+        chunk_step_minor=script_df[which.max(script_df$chunk_step_major), 
+                                   "chunk_step_minor"]+1))
+print(script_df)
+```
+
+### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: encode data
+```{r encode_data_1, cache=TRUE}
+map_<col_name>_df <- myimport_data(
+    url="<map_url>", 
+    comment="map_<col_name>_df", print_diagn=TRUE)
+
+entity_df <- mymap_codes(entity_df, "<from_col_name>", "<to_col_name>", 
+    map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
+                          map_tgt_col_name="<to_col_name>")
+    					
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
                               chunk_step_major=max(script_df$chunk_step_major)+1, 
