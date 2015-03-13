@@ -578,6 +578,24 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 08.1	    fit on simple shuffled sample
 ## 08.2     fit on stratified shuffled sample
 ## 08.3     fit on cross-validated samples
+## 08.4		fit on all
+
+myrun_mdl_lm <- function(indep_vars_vctr, models_df) {
+    
+    if (length(indep_vars_vctr) == 1)
+	    if (indep_vars_vctr == ".")
+    	    indep_vars_vctr <- setdiff(names(entity_df), glb_predct_var)
+    
+    lcl_models_df <- models_df
+    mdl <- lm(reformulate(indep_vars_vctr, 
+                            response=glb_predct_var), data=entity_df)
+    lcl_models_df <- rbind(lcl_models_df, 
+                            data.frame(feats=paste(indep_vars_vctr, collapse=", "),
+                                        #call.formula=toString(summary(mdl)$call$formula),
+                                        Adj.R.sq=summary(mdl)$adj.r.squared,
+                                        SSE=sum(mdl$residuals ^ 2)))
+    return(list("model"=mdl, "models_df"=lcl_models_df))
+}
 
 ## 09.	    test model results  for k-fold0 test set
 # mpg_residuals_df <- data.frame(mpg_fit$residuals, cars_df$mpg, cars_df$am_fctr)

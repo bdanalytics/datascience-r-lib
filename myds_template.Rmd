@@ -58,6 +58,8 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 # Analysis specific global variables
 glb_separate_predict_dataset <- FALSE   # or TRUE
 glb_predct_var <- "<Predict var>"       # or NULL
+glb_sel_feats <- NULL
+glb_sel_mdl <- NULL
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
 print(script_df)
@@ -240,17 +242,17 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: run models
 ```{r run_models, cache=TRUE}
+models_df <- data.frame()
 
 #   Regression:
 #       Linear:
-# print(summary(model1 <- lm(Price ~ AGST, data=entity_df)))
-# print(SSE_model1 <- sum(model1$residuals ^ 2))
-# 
-# print(summary(model2 <- lm(Price ~ AGST + HarvestRain, data=entity_df)))
-# print(SSE_model2 <- sum(model2$residuals ^ 2))
-# 
-# print(summary(model3 <- lm(Price ~ ., data=entity_df)))
-# print(SSE_model3 <- sum(model3$residuals ^ 2))
+# ret_lst <- myrun_mdl_lm(glb_sel_feats, 
+#                         models_df=models_df)
+# print(summary(mdl <- ret_lst$model)); print(models_df <- ret_lst$models_df)
+# glb_sel_mdl <- mdl
+
+# print(myplot_scatter(models_df, "SSE", "Adj.R.sq") + 
+#           geom_text(aes(label=feats), data=models_df, color="NavyBlue", size=3.5))
 
 # script_df <- rbind(script_df, 
 #                    data.frame(chunk_label="run_models", 
