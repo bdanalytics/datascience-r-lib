@@ -101,8 +101,8 @@ myprint_str_df <- function(df) {
     }
 }
 
-## 02.	    clean data
-## 02.1	    inspect data
+## 02.	    cleanse data
+## 02.1	    inspect/explore data
 
 map_event_grp <- function(evtype) {
     retval <- as.factor("Other.Grp")
@@ -413,7 +413,7 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
-## 02.3	    encode data (convert types; map codes)
+## 02.3	    encode/retype data (convert types; map codes)
 # mymap <- function(df, from_col_name, to_col_name, map_func) {
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
@@ -538,7 +538,7 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 
 ## 04.3	    cross-validation sample
 
-## 05.      transform features
+## 05.      select features
 #require(plyr)
 #intersect(names(entity_df), names(entity_agg_intrvl_df))
 #entimptd_df <- join(entity_df, entity_agg_intrvl_df, by="interval")
