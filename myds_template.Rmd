@@ -184,13 +184,13 @@ print(script_df)
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: encode data
 ```{r encode_data_1, cache=TRUE}
-map_<col_name>_df <- myimport_data(
-    url="<map_url>", 
-    comment="map_<col_name>_df", print_diagn=TRUE)
-
-entity_df <- mymap_codes(entity_df, "<from_col_name>", "<to_col_name>", 
-    map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
-                          map_tgt_col_name="<to_col_name>")
+# map_<col_name>_df <- myimport_data(
+#     url="<map_url>", 
+#     comment="map_<col_name>_df", print_diagn=TRUE)
+# 
+# entity_df <- mymap_codes(entity_df, "<from_col_name>", "<to_col_name>", 
+#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
+#                           map_tgt_col_name="<to_col_name>")
     					
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
@@ -202,8 +202,29 @@ print(script_df)
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: extract features
 ```{r extract_features, cache=TRUE}
 
+script_df <- rbind(script_df, 
+                   data.frame(chunk_label="run_models", 
+                              chunk_step_major=max(script_df$chunk_step_major)+1, 
+                              chunk_step_minor=0))
+print(script_df)
+```
+
+## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: run models
+```{r run_models, cache=TRUE}
+
+#   Regression:
+#       Linear:
+print(summary(model1 <- lm(Price ~ AGST, data=entity_df)))
+print(SSE_model1 <- sum(model1$residuals ^ 2))
+
+print(summary(model2 <- lm(Price ~ AGST + HarvestRain, data=entity_df)))
+print(SSE_model2 <- sum(model2$residuals ^ 2))
+
+print(summary(model3 <- lm(Price ~ ., data=entity_df)))
+print(SSE_model3 <- sum(model3$residuals ^ 2))
+
 # script_df <- rbind(script_df, 
-#                    data.frame(chunk_label="extract_features", 
+#                    data.frame(chunk_label="run_models", 
 #                               chunk_step_major=max(script_df$chunk_step_major)+1, 
 #                               chunk_step_minor=0))
 print(script_df)
@@ -218,6 +239,7 @@ The variance by am_fctr appears to be independent.
 ```
 We reject the null hypothesis i.e. we have evidence to conclude that am_fctr impacts mpg (95% confidence). Manual transmission is better for miles per gallon versus automatic transmission.
 
+```{r print_sessionInfo, echo=FALSE}
 ## remove nearZeroVar features (not much variance)
 #require(reshape)
 #var_features_df <- melt(summaryBy(. ~ factor(0), data=entity_df[, features_lst], 
@@ -246,7 +268,5 @@ We reject the null hypothesis i.e. we have evidence to conclude that am_fctr imp
 #plot(mdl_1$finalModel, uniform=TRUE, main="base")
 #text(mdl_1$finalModel, use.n=TRUE, all=TRUE, cex=0.8)
 
-
-```{r print_sessionInfo, echo=FALSE}
 sessionInfo()
 ```
