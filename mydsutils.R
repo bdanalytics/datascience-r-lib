@@ -554,6 +554,50 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
+mydelete_cor_features <- function() {
+    repeat {
+        print(corxx_mtrx <- cor(glb_entity_df[, glb_feats_df$id]))
+        abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
+        print(abs_corxx_mtrx)
+        if (max(abs_corxx_mtrx) < 0.7) break
+        
+        row_ix <- ceiling(which.max(abs_corxx_mtrx) / ncol(abs_corxx_mtrx))
+        col_ix <- which.max(abs_corxx_mtrx[row_ix, ])
+        feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
+        feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
+        print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
+        print(myplot_scatter(glb_entity_df, feat_1, feat_2))
+        
+        print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_1, 
+            glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]))
+    #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
+        print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_2, 
+            glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]))
+    #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
+    
+        plot_df <- melt(glb_entity_df, id.vars=glb_predct_var, measure.vars=c(feat_1, feat_2))
+    #     print(myplot_scatter(plot_df, glb_predct_var, "value", colorcol_name="variable"))    
+        print(myplot_scatter(plot_df, glb_predct_var, "value", 
+                             facet_colcol_name="variable", smooth=TRUE))    
+    
+        if (glb_id_var %in% c(feat_1, feat_2)) drop_feat <- glb_id_var else {
+            if (feat_1 %in% glb_exclude_vars_as_features) drop_feat <- feat_1 else {
+                if (feat_2 %in% glb_exclude_vars_as_features) drop_feat <- feat_2 else {
+                    drop_feat <- ifelse(
+                        abs(glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]) >=
+                        abs(glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]),
+                                        feat_2, feat_1)
+                }
+            }
+        }
+        warning("Dropping ", drop_feat, " as a feature")
+        print(glb_feats_df <- subset(glb_feats_df, id != drop_feat))
+    }
+    
+    # print(glb_feats_df)
+    return(glb_feats_df)
+}
+
 ## 05.5.1	add back in key features even though they might have been eliminated
 ## 05.5.2   cv of significance
 ## 05.6     scale / normalize selected features for data distribution requirements in various models

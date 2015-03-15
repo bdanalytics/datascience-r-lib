@@ -391,7 +391,7 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
 
     facets <- paste(facet_rowcol_name, '~', facet_colcol_name)
     if (facets != '. ~ .')
-        p <- p + facet_grid(facets)
+        p <- p + facet_grid(facets, scales="free")
 
     if (jitter)
         p <- p + geom_jitter()
