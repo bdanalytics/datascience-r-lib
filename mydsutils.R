@@ -617,29 +617,45 @@ mydelete_cor_features <- function() {
 ## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    run models
-# print(summary(prediction_mdl))
+myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
+    
+    if (length(indep_vars_vctr) == 1)
+	    if (indep_vars_vctr == ".")
+    	    indep_vars_vctr <- setdiff(names(fit_df), glb_predct_var)
+    
+    mdl <- lm(reformulate(indep_vars_vctr, 
+                            response=glb_predct_var), data=fit_df)
+    if (!is.null(OOB_df)) {
+    	OOB_df[, glb_predct_var_name] <- predict(mdl, newdata=OOB_df)
+		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
+							  OOB_df[, glb_predct_var]) ^ 2))
+		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
+							sum((OOB_df[, glb_predct_var] - 
+								#mean(OOB_df[, glb_predct_var])
+								mean(mdl$fitted.values)    
+							) ^ 2)))	
+    } else {SSE.OOB <- NA; R.sq.OOB <- NA}
+    
+#   s2T <- sum(anova(mdl)[[2]]) / sum(anova(mdl)[[1]])
+# 	MSE <- anova(mdl)[[3]][2]
+# 	print(adj.R2 <- (s2T - MSE) / s2T)
+#	adj.R2 undefined for OOB ?
+                           
+    lcl_models_df <- data.frame(feats=paste(indep_vars_vctr, collapse=", "),
+                                #call.formula=toString(summary(mdl)$call$formula),
+                                n.fit=nrow(fit_df),
+                                R.sq.fit=summary(mdl)$r.squared,
+                                R.sq.OOB=R.sq.OOB,
+                                Adj.R.sq.fit=summary(mdl)$adj.r.squared,
+                                SSE.fit=sum(mdl$residuals ^ 2),
+                                SSE.OOB=SSE.OOB)
+    return(list("model"=mdl, "models_df"=lcl_models_df))
+}
 
 ## 08.1	    fit on simple shuffled sample
 ## 08.2     fit on stratified shuffled sample
 ## 08.3     fit on cross-validated samples
 ## 08.4		fit on all
-
-myrun_mdl_lm <- function(indep_vars_vctr, models_df) {
-    
-    if (length(indep_vars_vctr) == 1)
-	    if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(entity_df), glb_predct_var)
-    
-    lcl_models_df <- models_df
-    mdl <- lm(reformulate(indep_vars_vctr, 
-                            response=glb_predct_var), data=entity_df)
-    lcl_models_df <- rbind(lcl_models_df, 
-                            data.frame(feats=paste(indep_vars_vctr, collapse=", "),
-                                        #call.formula=toString(summary(mdl)$call$formula),
-                                        Adj.R.sq=summary(mdl)$adj.r.squared,
-                                        SSE=sum(mdl$residuals ^ 2)))
-    return(list("model"=mdl, "models_df"=lcl_models_df))
-}
 
 ## 09.	    test model results  for k-fold0 test set
 # mpg_residuals_df <- data.frame(mpg_fit$residuals, cars_df$mpg, cars_df$am_fctr)

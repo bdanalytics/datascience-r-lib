@@ -56,10 +56,11 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 #require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
 
 # Analysis control global variables
-glb_is_separate_predict_dataset <- FALSE   # or TRUE
-glb_predct_var <- "<Predict var>"       # or NULL
-glb_id_var <- "<Id var>"                # or NULL                      
-glb_is_id_var_a_feature <- FALSE        # or TRUE
+glb_is_separate_predict_dataset <- FALSE    # or TRUE
+glb_predct_var <- "<Predict var>"           # or NULL
+glb_predct_var_name <- paste0(glb_predct_var, ".predict")
+glb_id_var <- "<Id var>"                    # or NULL                      
+glb_is_id_var_a_feature <- FALSE            # or TRUE
 glb_exclude_vars_as_features <- NULL
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -248,23 +249,51 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: run models
 ```{r run_models, cache=TRUE}
-models_df <- data.frame()
+glb_models_df <- data.frame()
 
 #   Regression:
 #       Linear:
-# ret_lst <- myrun_mdl_lm(glb_sel_feats, 
-#                         models_df=models_df)
-# print(summary(mdl <- ret_lst$model)); print(models_df <- ret_lst$models_df)
-# glb_sel_mdl <- mdl
+ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
+                        fit_df=glb_entity_df, OOB_df=glb_predct_df)
+print(summary(mdl <- ret_lst$model)); 
+print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 
-# print(myplot_scatter(models_df, "SSE", "Adj.R.sq") + 
-#           geom_text(aes(label=feats), data=models_df, color="NavyBlue", size=3.5))
+ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id,
+                        fit_df=glb_entity_df, OOB_df=glb_predct_df)
+print(summary(mdl <- ret_lst$model)); 
+print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+glb_sel_mdl <- mdl
 
-# script_df <- rbind(script_df, 
-#                    data.frame(chunk_label="run_models", 
-#                               chunk_step_major=max(script_df$chunk_step_major)+1, 
-#                               chunk_step_minor=0))
+print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
+          geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", size=3.5))
+
+script_df <- rbind(script_df, 
+                   data.frame(chunk_label="fit_training.all", 
+                              chunk_step_major=max(script_df$chunk_step_major)+1, 
+                              chunk_step_minor=0))
 print(script_df)
+```
+
+## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: fit training.all
+```{r fit_training.all, cache=TRUE}
+ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
+glb_sel_mdl <- mdl
+
+script_df <- rbind(script_df, 
+                   data.frame(chunk_label="predict_newdata", 
+                              chunk_step_major=max(script_df$chunk_step_major)+1, 
+                              chunk_step_minor=0))
+print(script_df)
+```
+
+## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: predict newdata
+```{r predict_newdata, cache=TRUE}
+glb_predct_df[, glb_predct_var_name] <- predict(glb_sel_mdl, newdata=glb_predct_df)
+print(glb_predct_df)
+print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name))
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
