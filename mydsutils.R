@@ -545,21 +545,44 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
-## 05.1	    collect all numeric features
+## 05.1	    collect all non_na_numeric features
+
+	# Check for NAs
+	naknts_vctr <- sapply(names(glb_entity_df[, glb_feats_df$id]), 
+							function(col) sum(is.na(glb_entity_df[, col])))
+	naknts_vctr <- naknts_vctr[naknts_vctr > 0]
+	warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
+
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
+myselect_features <- function() {
+    vars_tbl <- summary(glb_entity_df)
+    numeric_vars <- names(glb_entity_df)[grep("^Min.", vars_tbl[1,])]
+    # Check for NAs
+    naknts_vctr <- sapply(numeric_vars, 
+                          function(col) sum(is.na(glb_entity_df[, col])))
+    naknts_vctr <- naknts_vctr[naknts_vctr > 0]
+    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
+    sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), glb_predct_var)
+    feats_df <- data.frame(id=sel_feats,
+                cor.y=cor(glb_entity_df[, sel_feats], 
+                            y=glb_entity_df[, glb_predct_var])[,1])
+    return(feats_df)
+}
+
 # print(t.test(subset(cars_df, am_fctr == "automatic")$mpg,
 #              subset(cars_df, am_fctr == "manual")$mpg,
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
 mydelete_cor_features <- function() {
+
     repeat {
-        print(corxx_mtrx <- cor(glb_entity_df[, glb_feats_df$id]))
+        print(corxx_mtrx <- cor(glb_entity_df[, setdiff(glb_feats_df$id, names(naknts_vctr))]))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
-        if (max(abs_corxx_mtrx) < 0.7) break
+        if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
         
         row_ix <- ceiling(which.max(abs_corxx_mtrx) / ncol(abs_corxx_mtrx))
         col_ix <- which.max(abs_corxx_mtrx[row_ix, ])
@@ -580,16 +603,17 @@ mydelete_cor_features <- function() {
         print(myplot_scatter(plot_df, glb_predct_var, "value", 
                              facet_colcol_name="variable", smooth=TRUE))    
     
-        if (glb_id_var %in% c(feat_1, feat_2)) drop_feat <- glb_id_var else {
-            if (feat_1 %in% glb_exclude_vars_as_features) drop_feat <- feat_1 else {
-                if (feat_2 %in% glb_exclude_vars_as_features) drop_feat <- feat_2 else {
-                    drop_feat <- ifelse(
-                        abs(glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]) >=
-                        abs(glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]),
-                                        feat_2, feat_1)
-                }
-            }
-        }
+#         if (glb_id_var %in% c(feat_1, feat_2)) drop_feat <- glb_id_var else {
+#   	  if (intersect(glb_id_vars, c(feat_1, feat_2)))
+		if (feat_1 %in% glb_exclude_vars_as_features) drop_feat <- feat_1 else {
+			if (feat_2 %in% glb_exclude_vars_as_features) drop_feat <- feat_2 else {
+				drop_feat <- ifelse(
+					abs(glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]) >=
+					abs(glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]),
+									feat_2, feat_1)
+			}
+		}
+#         }
         warning("Dropping ", drop_feat, " as a feature")
         print(glb_feats_df <- subset(glb_feats_df, id != drop_feat))
     }

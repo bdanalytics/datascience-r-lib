@@ -60,7 +60,6 @@ glb_is_separate_predict_dataset <- FALSE    # or TRUE
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_var <- "<Id var>"                    # or NULL                      
-glb_is_id_var_a_feature <- FALSE            # or TRUE
 glb_exclude_vars_as_features <- NULL
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -224,6 +223,7 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: select features
 ```{r select_features, cache=TRUE}
+print(glb_feats_df <- myselect_features())
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="remove_correlated_features", 
@@ -234,10 +234,6 @@ print(script_df)
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: remove correlated features
 ```{r remove_correlated_features, cache=TRUE}
-print(glb_feats_df <- data.frame(id=setdiff(names(glb_entity_df), glb_predct_var),
-            cor.y=cor(glb_entity_df[, setdiff(names(glb_entity_df), glb_predct_var)], 
-                        y=glb_entity_df[, glb_predct_var])[,1]))
-
 print(glb_feats_df <- mydelete_cor_features())
 
 script_df <- rbind(script_df, 
@@ -253,11 +249,13 @@ glb_models_df <- data.frame()
 
 #   Regression:
 #       Linear:
-ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
-                        fit_df=glb_entity_df, OOB_df=glb_predct_df)
-print(summary(mdl <- ret_lst$model)); 
-print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+
+#       Prep non-numerical vars before runing this
+# ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
+#                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
+# print(summary(mdl <- ret_lst$model)); 
+# print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+#               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 
 ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id,
                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
@@ -292,7 +290,7 @@ print(script_df)
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: predict newdata
 ```{r predict_newdata, cache=TRUE}
 glb_predct_df[, glb_predct_var_name] <- predict(glb_sel_mdl, newdata=glb_predct_df)
-print(glb_predct_df)
+myprint_df(glb_predct_df[, c(glb_id_vars, glb_predct_var, glb_predct_var_name)])
 print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name))
 ```
 
