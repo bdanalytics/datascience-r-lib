@@ -546,19 +546,15 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 #                                                        steps))
 
 ## 05.1	    collect all non_na_numeric features
-
-	# Check for NAs
-	naknts_vctr <- sapply(names(glb_entity_df[, glb_feats_df$id]), 
-							function(col) sum(is.na(glb_entity_df[, col])))
-	naknts_vctr <- naknts_vctr[naknts_vctr > 0]
-	warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
-
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
 myselect_features <- function() {
+
+	# Collect numeric vars
     vars_tbl <- summary(glb_entity_df)
     numeric_vars <- names(glb_entity_df)[grep("^Min.", vars_tbl[1,])]
+    
     # Check for NAs
     naknts_vctr <- sapply(numeric_vars, 
                           function(col) sum(is.na(glb_entity_df[, col])))
@@ -579,7 +575,7 @@ myselect_features <- function() {
 mydelete_cor_features <- function() {
 
     repeat {
-        print(corxx_mtrx <- cor(glb_entity_df[, setdiff(glb_feats_df$id, names(naknts_vctr))]))
+        print(corxx_mtrx <- cor(glb_entity_df[, glb_feats_df$id]))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
@@ -641,6 +637,22 @@ mydelete_cor_features <- function() {
 ## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    run models
+mybuild_models_df_row <- function(indep_vars_vctr, n.fit, 
+                                  R.sq.fit=NULL, R.sq.OOB=NULL, 
+                                  Adj.R.sq.fit=NULL, 
+                                  SSE.fit=NULL, SSE.OOB=NULL)
+{
+    return(data.frame(feats=paste(indep_vars_vctr, collapse=", "),
+        #call.formula=toString(summary(mdl)$call$formula),
+        n.fit=n.fit,
+        R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
+        R.sq.OOB=R.sq.OOB,
+        Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
+        SSE.fit=SSE.fit,
+        SSE.OOB=SSE.OOB)
+    )
+}    
+
 myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
     
     if (length(indep_vars_vctr) == 1)
@@ -665,14 +677,47 @@ myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
 # 	print(adj.R2 <- (s2T - MSE) / s2T)
 #	adj.R2 undefined for OOB ?
                            
-    lcl_models_df <- data.frame(feats=paste(indep_vars_vctr, collapse=", "),
-                                #call.formula=toString(summary(mdl)$call$formula),
-                                n.fit=nrow(fit_df),
-                                R.sq.fit=summary(mdl)$r.squared,
-                                R.sq.OOB=R.sq.OOB,
-                                Adj.R.sq.fit=summary(mdl)$adj.r.squared,
-                                SSE.fit=sum(mdl$residuals ^ 2),
-                                SSE.OOB=SSE.OOB)
+    lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
+                                           R.sq.fit=summary(mdl)$r.squared,
+                                           R.sq.OOB=R.sq.OOB, 
+                                           Adj.R.sq.fit=summary(mdl)$r.squared, 
+                                           SSE.fit=sum(mdl$residuals ^ 2), 
+                                           SSE.OOB=SSE.OOB)                                
+    return(list("model"=mdl, "models_df"=lcl_models_df))
+}
+
+myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
+    
+    if (length(indep_vars_vctr) == 1)
+        if (indep_vars_vctr == ".")
+    	    indep_vars_vctr <- setdiff(names(fit_df), glb_predct_var)
+    
+    mdl <- glm(reformulate(indep_vars_vctr, 
+                            response=glb_predct_var), data=fit_df, 
+               family="binomial")
+    if (!is.null(OOB_df)) {
+    	OOB_df[, glb_predct_var_name] <- (predict(mdl, 
+                        newdata=OOB_df, type="response") >= 0.5) * 1.0
+		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
+							  OOB_df[, glb_predct_var]) ^ 2))
+		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
+							sum((OOB_df[, glb_predct_var] - 
+								#mean(OOB_df[, glb_predct_var])
+								mean(mdl$fitted.values)    
+							) ^ 2)))	
+    } else {SSE.OOB <- NA; R.sq.OOB <- NA}
+    
+#   s2T <- sum(anova(mdl)[[2]]) / sum(anova(mdl)[[1]])
+# 	MSE <- anova(mdl)[[3]][2]
+# 	print(adj.R2 <- (s2T - MSE) / s2T)
+#	adj.R2 undefined for OOB ?
+                           
+    lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
+                                           R.sq.fit=summary(mdl)$r.squared,
+                                           R.sq.OOB=R.sq.OOB, 
+                                           Adj.R.sq.fit=summary(mdl)$r.squared, 
+                                           SSE.fit=sum(mdl$residuals ^ 2), 
+                                           SSE.OOB=SSE.OOB)
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 

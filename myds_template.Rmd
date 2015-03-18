@@ -61,6 +61,7 @@ glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_var <- "<Id var>"                    # or NULL                      
 glb_exclude_vars_as_features <- NULL
+glb_is_classification <- FALSE; glb_is_regression <- !!glb_is_classification
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
 print(script_df)
@@ -257,15 +258,37 @@ glb_models_df <- data.frame()
 # print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
 #               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 
-ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id,
-                        fit_df=glb_entity_df, OOB_df=glb_predct_df)
+if (glb_is_regression)
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id,
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)
+
+#   Classification:
+#       Logit Regression:
+
+#       Need to change this to glm
+#       Prep non-numerical vars before runing this
+# ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
+#                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
+# print(summary(mdl <- ret_lst$model)); 
+# print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+#               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+
+if (glb_is_classification)
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id,
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)
+        
 print(summary(mdl <- ret_lst$model)); 
 print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 glb_sel_mdl <- mdl
 
-print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
-          geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", size=3.5))
+if (glb_is_regression)
+    print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
+          geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", 
+                    size=3.5))
+
+if (glb_is_classification)
+    print("Display plot to evaluate classification models")
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="fit_training.all", 
@@ -276,7 +299,12 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: fit training.all
 ```{r fit_training.all, cache=TRUE}
-ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+if (glb_is_regression)
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+
+if (glb_is_classification)
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+
 print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
 glb_sel_mdl <- mdl
 
@@ -289,9 +317,24 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: predict newdata
 ```{r predict_newdata, cache=TRUE}
-glb_predct_df[, glb_predct_var_name] <- predict(glb_sel_mdl, newdata=glb_predct_df)
+if (glb_is_regression)
+    glb_predct_df[, glb_predct_var_name] <- predict(glb_sel_mdl, 
+                                        newdata=glb_predct_df, type="response")
+
+if (glb_is_classification)
+    glb_predct_df[, glb_predct_var_name] <- (predict(glb_sel_mdl, 
+                        newdata=glb_predct_df, type="response") >= 0.5) * 1.0
+    
 myprint_df(glb_predct_df[, c(glb_id_vars, glb_predct_var, glb_predct_var_name)])
-print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name))
+
+if (glb_is_regression)
+    print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name))
+
+if (glb_is_classification)
+#     print(table(glb_predct_df[, glb_predct_var], 
+#                 glb_predct_df[, glb_predct_var_name]))
+    print(xtabs(reformulate(paste(glb_predct_var, glb_predct_var_name, sep=" + ")),
+                glb_predct_df))
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
