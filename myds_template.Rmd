@@ -59,8 +59,15 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 glb_is_separate_predict_dataset <- FALSE    # or TRUE
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
-glb_id_var <- "<Id var>"                    # or NULL                      
-glb_exclude_vars_as_features <- NULL
+glb_id_var <- "<Id var>"                    # or NULL
+
+# List vars that are missing in glb_entity_df
+glb_exclude_vars_as_features <- NULL                      
+# List chrs converted into factors 
+# glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+#                                       c()
+#                                       )
+
 glb_is_classification <- FALSE; glb_is_regression <- !!glb_is_classification
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -119,8 +126,10 @@ print(script_df)
 #       Build splines   require(splines); bsBasis <- bs(training$age, df=3)
 
 # glb_entity_df <- mutate(glb_entity_df,
-#     <col_name>.NA=is.na(<col_name>) 
-#     <col_name>_fctr=as.factor(<col_name>),
+#     <col_name>.NA=is.na(<col_name>)
+#     <col_name>_fctr=factor(<col_name>, 
+#                 as.factor(union(glb_entity_df$<col_name>, glb_predct_df$<col_name>))), 
+#     <col_name>_fctr_num=grep(<col_name>, levels(<col_name>_fctr)), # This doesn't work
 #     
 #     Date.my=as.Date(strptime(Date, "%m/%d/%y %H:%M")),
 #     Year=year(Date.my),
@@ -129,8 +138,18 @@ print(script_df)
 #     
 #                     )
 # 
+# If levels of a factor are different across glb_entity_df & glb_predct_df; predict.glm fails  
+# Transformations not handled by mutate
+# glb_entity_df$<col_name>_fctr_num <- sapply(1:nrow(glb_entity_df), 
+#     function(row_ix) grep(glb_entity_df[row_ix, "<col_name>"],
+#                           levels(glb_entity_df[row_ix, "<col_name>_fctr"])))
+
 # glb_predct_df <- mutate(glb_predct_df, 
 #                     )
+
+# glb_predct_df$<col_name>_fctr_num <- sapply(1:nrow(glb_predct_df), 
+#     function(row_ix) grep(glb_predct_df[row_ix, "<col_name>"],
+#                           levels(glb_predct_df[row_ix, "<col_name>_fctr"])))
 
 print(summary(glb_entity_df))
 print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
@@ -258,9 +277,31 @@ glb_models_df <- data.frame()
 # print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
 #               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 
-if (glb_is_regression)
+if (glb_is_regression) {
+    # Highest cor.y
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id[1],
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+
+    # Uncorrelated X
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id,
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+    glb_sel_mdl <- mdl
+    
+    # All X that is not missing
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
+                                                             glb_predct_var),
+                                                     glb_exclude_vars_as_features),
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))    
+}    
 
 #   Classification:
 #       Logit Regression:
@@ -273,14 +314,31 @@ if (glb_is_regression)
 # print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
 #               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
 
-if (glb_is_classification)
+if (glb_is_classification) {
+    # Highest cor.y
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id[1],
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)        
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -f.score.OOB, 
+                  glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+
+    # Uncorrelated X
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id,
-                            fit_df=glb_entity_df, OOB_df=glb_predct_df)
-        
-print(summary(mdl <- ret_lst$model)); 
-print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-              glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
-glb_sel_mdl <- mdl
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)        
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -f.score.OOB, 
+                  glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+    glb_sel_mdl <- mdl
+    
+    # All X that is not missing
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
+                                                             glb_predct_var),
+                                                     glb_exclude_vars_as_features),
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)        
+    print(summary(mdl <- ret_lst$model)); 
+    print(orderBy(~ -f.score.OOB, 
+                  glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
+}
 
 if (glb_is_regression)
     print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 

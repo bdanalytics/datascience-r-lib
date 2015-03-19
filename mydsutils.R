@@ -564,6 +564,7 @@ myselect_features <- function() {
     feats_df <- data.frame(id=sel_feats,
                 cor.y=cor(glb_entity_df[, sel_feats], 
                             y=glb_entity_df[, glb_predct_var])[,1])
+	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
 }
 
@@ -640,7 +641,8 @@ mydelete_cor_features <- function() {
 mybuild_models_df_row <- function(indep_vars_vctr, n.fit, 
                                   R.sq.fit=NULL, R.sq.OOB=NULL, 
                                   Adj.R.sq.fit=NULL, 
-                                  SSE.fit=NULL, SSE.OOB=NULL)
+                                  SSE.fit=NULL, SSE.OOB=NULL,
+                                  f.score.OOB=NULL)
 {
     return(data.frame(feats=paste(indep_vars_vctr, collapse=", "),
         #call.formula=toString(summary(mdl)$call$formula),
@@ -649,7 +651,8 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
         R.sq.OOB=R.sq.OOB,
         Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
         SSE.fit=SSE.fit,
-        SSE.OOB=SSE.OOB)
+        SSE.OOB=SSE.OOB,
+        f.score.OOB=ifelse(is.null(f.score.OOB), NA, f.score.OOB))
     )
 }    
 
@@ -704,20 +707,22 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
 							sum((OOB_df[, glb_predct_var] - 
 								#mean(OOB_df[, glb_predct_var])
 								mean(mdl$fitted.values)    
-							) ^ 2)))	
-    } else {SSE.OOB <- NA; R.sq.OOB <- NA}
+							) ^ 2)))
+		OOB_xtab_df <- mycreate_xtab(OOB_df, c(glb_predct_var, glb_predct_var_name))
+		#OOB_f_score <- 2 * precision * recall / (precision + recall)
+		#OOB_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
+		f.score.OOB <- (2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) / 
+						((2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) + 
+						OOB_xtab_df[1,3] + OOB_xtab_df[2,2])
+    } else {SSE.OOB <- NA; R.sq.OOB <- NA; f.score.OOB <- NA}
     
-#   s2T <- sum(anova(mdl)[[2]]) / sum(anova(mdl)[[1]])
-# 	MSE <- anova(mdl)[[3]][2]
-# 	print(adj.R2 <- (s2T - MSE) / s2T)
-#	adj.R2 undefined for OOB ?
-                           
     lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
                                            R.sq.fit=summary(mdl)$r.squared,
                                            R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
                                            SSE.fit=sum(mdl$residuals ^ 2), 
-                                           SSE.OOB=SSE.OOB)
+                                           SSE.OOB=SSE.OOB,
+                                           f.score.OOB=f.score.OOB)
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
