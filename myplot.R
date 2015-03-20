@@ -412,6 +412,8 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
                            stats_df=NULL, predict_df=NULL, i_pkg=NULL, group=NULL) {
 
     #cat("\nentering myplot_scatter:")
+    if (xcol_name == ".rownames")
+        df[, xcol_name] <- rownames(df)
 
     p <- ggplot(df, aes_string(x=xcol_name, y=ycol_name))
 

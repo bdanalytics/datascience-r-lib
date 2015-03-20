@@ -240,6 +240,17 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: extract features
 ```{r extract_features, cache=FALSE}
+# Create new features that help prediction
+# glb_entity_df <- mutate(glb_entity_df,
+#     <new_col_name>=
+#                     )
+
+# glb_predct_df <- mutate(glb_predct_df,
+#     <new_col_name>=
+#                     )
+
+# print(summary(glb_entity_df))
+# print(summary(glb_predct_df))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="select_features", 
@@ -359,8 +370,9 @@ for (var in subset(glb_feats_df, Pr.z < 0.1)$id) {
 
 if (glb_is_regression) {
     plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
-    print(myplot_prediction_regression(glb_entity_df, plot_vars_df$id[1],
-                                           plot_vars_df$id[2]))
+    print(myplot_prediction_regression(glb_entity_df, 
+                ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"), 
+                                       plot_vars_df$id[1]))
 }    
 
 if (glb_is_classification) {
@@ -388,9 +400,13 @@ if (glb_is_classification)
     
 myprint_df(glb_predct_df[, c(glb_id_vars, glb_predct_var, glb_predct_var_name)])
 
-if (glb_is_regression)
+if (glb_is_regression) {
+    print(sprintf("Total SSE: %0.4f", 
+                  sum((glb_predct_df[, glb_predct_var_name] - 
+                        glb_predct_df[, glb_predct_var]) ^ 2)))
     print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name, 
                          smooth=TRUE))
+}                         
 
 if (glb_is_classification)
     print(xtabs(reformulate(paste(glb_predct_var, glb_predct_var_name, sep=" + ")),
@@ -405,8 +421,9 @@ for (var in subset(glb_feats_df, Pr.z < 0.1)$id) {
 # Add choose(, 2) functionality to select feature pairs to plot 
 if (glb_is_regression) {
     plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
-    print(myplot_prediction_regression(glb_predct_df, plot_vars_df$id[1],
-                                           plot_vars_df$id[2]))
+    print(myplot_prediction_regression(glb_predct_df, 
+                ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"),
+                                        plot_vars_df$id[1]))
 }    
 
 if (glb_is_classification) {

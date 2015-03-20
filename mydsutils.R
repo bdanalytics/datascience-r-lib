@@ -562,7 +562,9 @@ myselect_features <- function() {
     naknts_vctr <- sapply(numeric_vars, 
                           function(col) sum(is.na(glb_entity_df[, col])))
     naknts_vctr <- naknts_vctr[naknts_vctr > 0]
-    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
+    if (length(naknts_vctr) > 0)
+	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
+
     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), glb_predct_var)
     feats_df <- data.frame(id=sel_feats,
                 cor.y=cor(glb_entity_df[, sel_feats], 
