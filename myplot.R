@@ -374,6 +374,24 @@ myplot_radar <- function(radar_inp_df) {
     return(gp)
 }   
 
+myplot_prediction_classification <- function(df, feat_x, feat_y) {
+
+    df[, paste0(glb_predct_var, ".fctr")] <- as.factor(df[,glb_predct_var])
+    df[, paste0(glb_predct_var_name, ".err")] <- 
+        (df[,glb_predct_var] != df[,glb_predct_var_name])
+    return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
+            geom_point(aes_string(color=paste0(glb_predct_var, ".fctr"),
+                                  shape=paste0(glb_predct_var_name, ".err")), 
+                       position="jitter") + 
+            facet_wrap(reformulate(paste0(glb_predct_var_name, ".err")))
+          )    
+}
+
+myplot_prediction_regression <- function(df, feat_x, feat_y) {
+    # Add size=abs(glb_predct_var - glb_predct_varname)
+    return(myplot_scatter(df, feat_x, feat_y))
+}
+                         
 myplot_scatter <- function(df, xcol_name, ycol_name,
                            colorcol_name=NULL, jitter=FALSE, smooth=FALSE,
                            facet_rowcol_name=".", facet_colcol_name=".",

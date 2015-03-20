@@ -59,7 +59,7 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 glb_is_separate_predict_dataset <- FALSE    # or TRUE
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
-glb_id_var <- "<Id var>"                    # or NULL
+glb_id_vars <- c("<Id var>")                # or NULL
 
 # List vars that are missing in glb_entity_df
 glb_exclude_vars_as_features <- NULL                      
@@ -127,9 +127,9 @@ print(script_df)
 
 # glb_entity_df <- mutate(glb_entity_df,
 #     <col_name>.NA=is.na(<col_name>)
-#     <col_name>_fctr=factor(<col_name>, 
+#     <col_name>.fctr=factor(<col_name>, 
 #                 as.factor(union(glb_entity_df$<col_name>, glb_predct_df$<col_name>))), 
-#     <col_name>_fctr_num=grep(<col_name>, levels(<col_name>_fctr)), # This doesn't work
+#     <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), # This doesn't work
 #     
 #     Date.my=as.Date(strptime(Date, "%m/%d/%y %H:%M")),
 #     Year=year(Date.my),
@@ -140,16 +140,16 @@ print(script_df)
 # 
 # If levels of a factor are different across glb_entity_df & glb_predct_df; predict.glm fails  
 # Transformations not handled by mutate
-# glb_entity_df$<col_name>_fctr_num <- sapply(1:nrow(glb_entity_df), 
+# glb_entity_df$<col_name>.fctr.num <- sapply(1:nrow(glb_entity_df), 
 #     function(row_ix) grep(glb_entity_df[row_ix, "<col_name>"],
-#                           levels(glb_entity_df[row_ix, "<col_name>_fctr"])))
+#                           levels(glb_entity_df[row_ix, "<col_name>.fctr"])))
 
 # glb_predct_df <- mutate(glb_predct_df, 
 #                     )
 
-# glb_predct_df$<col_name>_fctr_num <- sapply(1:nrow(glb_predct_df), 
+# glb_predct_df$<col_name>.fctr.num <- sapply(1:nrow(glb_predct_df), 
 #     function(row_ix) grep(glb_predct_df[row_ix, "<col_name>"],
-#                           levels(glb_predct_df[row_ix, "<col_name>_fctr"])))
+#                           levels(glb_predct_df[row_ix, "<col_name>.fctr"])))
 
 print(summary(glb_entity_df))
 print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
@@ -346,7 +346,7 @@ if (glb_is_regression)
                     size=3.5))
 
 if (glb_is_classification)
-    print("Display plot to evaluate classification models")
+    print(myplot_hbar(df=glb_models_df, xcol_name="feats", ycol_names="f.score.OOB"))    
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="fit_training.all", 
@@ -357,14 +357,39 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: fit training.all
 ```{r fit_training.all, cache=TRUE}
-if (glb_is_regression)
+if (glb_is_regression) {
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+    print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
+    glb_entity_df[, glb_predct_var_name] <- predict(mdl, newdata=glb_entity_df)    
+}    
 
-if (glb_is_classification)
+if (glb_is_classification) {
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
+    print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
+    glb_entity_df[, glb_predct_var_name] <- (predict(mdl, 
+                        newdata=glb_entity_df, type="response") >= 0.5) * 1.0
+}    
 
-print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
 glb_sel_mdl <- mdl
+print(glb_feats_df <- mymerge_feats_Pr.z())
+
+for (var in subset(glb_feats_df, Pr.z < 0.1)$id) {
+    plot_df <- melt(glb_entity_df, id.vars=var, 
+                    measure.vars=c(glb_predct_var, glb_predct_var_name))
+    print(myplot_scatter(plot_df, var, "value", facet_colcol_name="variable"))    
+}
+
+if (glb_is_regression) {
+    plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
+    print(myplot_prediction_regression(glb_entity_df, plot_vars_df$id[1],
+                                           plot_vars_df$id[2]))
+}    
+
+if (glb_is_classification) {
+    plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
+    print(myplot_prediction_classification(glb_entity_df, plot_vars_df$id[1],
+                                           plot_vars_df$id[2]))
+}    
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="predict_newdata", 
@@ -389,10 +414,27 @@ if (glb_is_regression)
     print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name))
 
 if (glb_is_classification)
-#     print(table(glb_predct_df[, glb_predct_var], 
-#                 glb_predct_df[, glb_predct_var_name]))
     print(xtabs(reformulate(paste(glb_predct_var, glb_predct_var_name, sep=" + ")),
                 glb_predct_df))
+    
+for (var in subset(glb_feats_df, Pr.z < 0.1)$id) {
+    plot_df <- melt(glb_predct_df, id.vars=var, 
+                    measure.vars=c(glb_predct_var, glb_predct_var_name))
+    print(myplot_scatter(plot_df, var, "value", facet_colcol_name="variable"))    
+}
+
+# Add choose(, 2) functionality to select feature pairs to plot 
+if (glb_is_regression) {
+    plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
+    print(myplot_prediction_regression(glb_predct_df, plot_vars_df$id[1],
+                                           plot_vars_df$id[2]))
+}    
+
+if (glb_is_classification) {
+    plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
+    print(myplot_prediction_classification(glb_predct_df, plot_vars_df$id[1],
+                                           plot_vars_df$id[2]))
+}    
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  

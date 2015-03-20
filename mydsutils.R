@@ -741,6 +741,16 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
 ## 09.3     export cv test data for inspection
 
 ## 10.	    build finalized model on all training data
+mymerge_feats_Pr.z <- function() {
+    plot_vars_df <- as.data.frame(summary(glb_sel_mdl)$coefficients)
+    names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
+    # Get rid of (Intercept)
+    plot_vars_df <- orderBy(~Pr.z, plot_vars_df[2:nrow(plot_vars_df),])
+    #print(plot_vars_df <- subset(plot_vars_df, Pr.z < 0.1))
+    plot_vars_df$id <- rownames(plot_vars_df)
+    #print(plot_vars_df)
+    return(orderBy(~Pr.z, merge(glb_feats_df, plot_vars_df[,c("id", "Pr.z")])))
+}
 
 ## 11.	    predict results for new data
 ## 11.1	    run models with data to predict
