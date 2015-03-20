@@ -284,14 +284,21 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: run models
 ```{r run_models, cache=FALSE}
+max_cor_y_x_var <- subset(glb_feats_df, cor.low == 1)[1, "id"]
 
 #   Regression:
 if (glb_is_regression) {
     #   Linear:
 
     # Highest cor.y
-    ret_lst <- myrun_mdl_lm(indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[1, "id"],
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=max_cor_y_x_var,
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)
+
+    # Enhance Highest cor.y model with additions of interaction terms that were 
+    #   dropped due to high correlations
+    ret_lst <- myrun_mdl_lm(indep_vars_vctr=c(max_cor_y_x_var, 
+        paste(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)    
 
     # Low correlated X
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[, "id"],
@@ -304,9 +311,6 @@ if (glb_is_regression) {
                                                      glb_exclude_vars_as_features),
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)
 
-    # Enhance best model with additions of interaction terms that were dropped
-    #   due to high correlations ?
-    #print(summary(mdl <- lm(RS ~ SLG + SLG*OBP, data=glb_entity_df)))
 }    
 
 #   Classification:
@@ -314,8 +318,14 @@ if (glb_is_classification) {
     #   Logit Regression:
     
     # Highest cor.y
-    ret_lst <- myrun_mdl_glm(indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[1, "id"],
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=max_cor_y_x_var,
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)        
+
+    # Enhance Highest cor.y model with additions of interaction terms that were 
+    #   dropped due to high correlations
+    ret_lst <- myrun_mdl_glm(indep_vars_vctr=c(max_cor_y_x_var, 
+        paste(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)    
 
     # Low correlated X
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[, "id"],
@@ -328,9 +338,6 @@ if (glb_is_classification) {
                                                      glb_exclude_vars_as_features),
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)
                             
-    # Enhance best model with additions of interaction terms that were dropped
-    #   due to high correlations ?
-    #print(summary(mdl <- lm(RS ~ SLG + SLG*OBP, data=glb_entity_df)))                                    
 }
 
 if (glb_is_regression)
