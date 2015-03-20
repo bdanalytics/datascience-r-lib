@@ -559,16 +559,18 @@ myselect_features <- function() {
     numeric_vars <- setdiff(numeric_vars, glb_exclude_vars_as_features)
     
     # Check for NAs
-    naknts_vctr <- sapply(numeric_vars, 
-                          function(col) sum(is.na(glb_entity_df[, col])))
-    naknts_vctr <- naknts_vctr[naknts_vctr > 0]
-    if (length(naknts_vctr) > 0)
-	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
-
-    sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), glb_predct_var)
+#     naknts_vctr <- sapply(numeric_vars, 
+#                           function(col) sum(is.na(glb_entity_df[, col])))
+#     naknts_vctr <- naknts_vctr[naknts_vctr > 0]
+#     if (length(naknts_vctr) > 0)
+# 	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
+# 
+#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), glb_predct_var)
+    sel_feats <- setdiff(numeric_vars, glb_predct_var)    
     feats_df <- data.frame(id=sel_feats,
                 cor.y=cor(glb_entity_df[, sel_feats], 
-                            y=glb_entity_df[, glb_predct_var])[,1])
+                            y=glb_entity_df[, glb_predct_var], 
+                            use="pairwise.complete.obs")[,1])
 	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
 }
@@ -582,7 +584,7 @@ mydelete_cor_features <- function() {
 
 	lcl_feats_df <- glb_feats_df
     repeat {
-        print(corxx_mtrx <- cor(glb_entity_df[, lcl_feats_df$id]))
+        print(corxx_mtrx <- cor(glb_entity_df[, lcl_feats_df$id], use="pairwise.complete.obs"))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
@@ -769,7 +771,7 @@ myextract_mdl_feats <- function() {
 
 mymerge_feats_Pr.z <- function() {
     plot_vars_df <- myextract_mdl_feats()
-    return(orderBy(~Pr.z, merge(glb_feats_df, plot_vars_df[,c("id", "Pr.z")])))
+    return(orderBy(~Pr.z, merge(glb_feats_df, plot_vars_df[,c("id", "Pr.z")], all=TRUE)))
 }
 
 ## 11.	    predict results for new data
