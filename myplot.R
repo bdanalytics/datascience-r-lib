@@ -401,7 +401,7 @@ myplot_prediction_regression <- function(df, feat_x, feat_y) {
     print(head(df, 5))    
         
     return(myplot_scatter(df, feat_x, feat_y) + 
-            geom_point(aes_string(size=predct_err_name)) + 
+            geom_point(aes_string(size=predct_err_name), alpha=0.4, show_guide = TRUE) + 
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5))
 }
                          

@@ -688,7 +688,11 @@ myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
                                            R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
                                            SSE.fit=sum(mdl$residuals ^ 2), 
-                                           SSE.OOB=SSE.OOB)                                
+                                           SSE.OOB=SSE.OOB)
+                                           
+    print(summary(glb_mdl <<- mdl));
+    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <<- rbind(glb_models_df, lcl_models_df)))    
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
@@ -726,6 +730,10 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
                                            SSE.fit=sum(mdl$residuals ^ 2), 
                                            SSE.OOB=SSE.OOB,
                                            f.score.OOB=f.score.OOB)
+
+    print(summary(glb_mdl <<- mdl));
+    print(orderBy(~ -f.score.OOB, 
+                  glb_models_df <<- rbind(glb_models_df, lcl_models_df)))                                               
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
@@ -744,7 +752,7 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
 ## 09.3     export cv test data for inspection
 
 ## 10.	    build finalized model on all training data
-mymerge_feats_Pr.z <- function() {
+myextract_mdl_feats <- function() {
     plot_vars_df <- as.data.frame(summary(glb_sel_mdl)$coefficients)
     names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
     # Get rid of (Intercept)
@@ -752,6 +760,11 @@ mymerge_feats_Pr.z <- function() {
     #print(plot_vars_df <- subset(plot_vars_df, Pr.z < 0.1))
     plot_vars_df$id <- rownames(plot_vars_df)
     #print(plot_vars_df)
+    return(plot_vars_df)
+}
+
+mymerge_feats_Pr.z <- function() {
+    plot_vars_df <- myextract_mdl_feats()
     return(orderBy(~Pr.z, merge(glb_feats_df, plot_vars_df[,c("id", "Pr.z")])))
 }
 
