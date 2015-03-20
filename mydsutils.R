@@ -580,8 +580,9 @@ myselect_features <- function() {
 ## 05.5	    remove features / create feature combinations for highly correlated features
 mydelete_cor_features <- function() {
 
+	lcl_feats_df <- glb_feats_df
     repeat {
-        print(corxx_mtrx <- cor(glb_entity_df[, glb_feats_df$id]))
+        print(corxx_mtrx <- cor(glb_entity_df[, lcl_feats_df$id]))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
@@ -594,10 +595,10 @@ mydelete_cor_features <- function() {
         print(myplot_scatter(glb_entity_df, feat_1, feat_2))
         
         print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_1, 
-            glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]))
+            lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]))
     #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
         print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_2, 
-            glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]))
+            lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]))
     #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
     
         plot_df <- melt(glb_entity_df, id.vars=glb_predct_var, measure.vars=c(feat_1, feat_2))
@@ -610,18 +611,19 @@ mydelete_cor_features <- function() {
 		if (feat_1 %in% glb_exclude_vars_as_features) drop_feat <- feat_1 else {
 			if (feat_2 %in% glb_exclude_vars_as_features) drop_feat <- feat_2 else {
 				drop_feat <- ifelse(
-					abs(glb_feats_df[glb_feats_df$id == feat_1, "cor.y"]) >=
-					abs(glb_feats_df[glb_feats_df$id == feat_2, "cor.y"]),
+					abs(lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]) >=
+					abs(lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]),
 									feat_2, feat_1)
 			}
 		}
 #         }
         warning("Dropping ", drop_feat, " as a feature")
-        print(glb_feats_df <- subset(glb_feats_df, id != drop_feat))
+        print(lcl_feats_df <- subset(lcl_feats_df, id != drop_feat))
     }
     
-    # print(glb_feats_df)
-    return(glb_feats_df)
+    lcl_feats_df$cor.low <- 1
+    # print(lcl_feats_df)
+    return(lcl_feats_df[, c("id", "cor.low")])
 }
 
 ## 05.5.1	add back in key features even though they might have been eliminated
