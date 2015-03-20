@@ -555,6 +555,9 @@ myselect_features <- function() {
     vars_tbl <- summary(glb_entity_df)
     numeric_vars <- names(glb_entity_df)[grep("^Min.", vars_tbl[1,])]
     
+    # Exclude user-specified features
+    numeric_vars <- setdiff(numeric_vars, glb_exclude_vars_as_features)
+    
     # Check for NAs
     naknts_vctr <- sapply(numeric_vars, 
                           function(col) sum(is.na(glb_entity_df[, col])))

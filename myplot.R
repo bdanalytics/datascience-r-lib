@@ -388,8 +388,21 @@ myplot_prediction_classification <- function(df, feat_x, feat_y) {
 }
 
 myplot_prediction_regression <- function(df, feat_x, feat_y) {
-    # Add size=abs(glb_predct_var - glb_predct_varname)
-    return(myplot_scatter(df, feat_x, feat_y))
+
+    predct_err_name <- paste0(glb_predct_var_name, ".err")
+    df[, predct_err_name] <- 
+        abs(df[,glb_predct_var] - df[,glb_predct_var_name])
+
+    # Add labels to top 5 prediction errors
+    df <- orderBy(reformulate(c("-", predct_err_name)), df)
+    df$.label <- " "
+    df$.label[1:5] <- sapply(1:5, function(row_ix) 
+        df[row_ix, ".label"] <- paste0(df[row_ix, glb_id_vars], collapse=":"))
+    print(head(df, 5))    
+        
+    return(myplot_scatter(df, feat_x, feat_y) + 
+            geom_point(aes_string(size=predct_err_name)) + 
+            geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5))
 }
                          
 myplot_scatter <- function(df, xcol_name, ycol_name,

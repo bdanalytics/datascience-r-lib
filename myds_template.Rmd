@@ -65,7 +65,11 @@ glb_id_vars <- c("<Id var>")                # or NULL
 glb_exclude_vars_as_features <- NULL                      
 # List chrs converted into factors 
 # glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-#                                       c()
+#                                       c("<col_name>")     # or NULL
+#                                       )
+# List feats that shd be excluded due to known causation by prediction variable
+# glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+#                                       c("<col_name>")     # or NULL
 #                                       )
 
 glb_is_classification <- FALSE; glb_is_regression <- !!glb_is_classification
@@ -75,7 +79,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: import data
-```{r import_data, cache=TRUE}
+```{r import_data, cache=FALSE}
 glb_entity_df <- myimport_data(
     url="<trnng_url>", 
     comment="glb_entity_df", print_diagn=TRUE)
@@ -98,7 +102,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: cleanse data
-```{r cleanse_data, cache=TRUE}
+```{r cleanse_data, cache=FALSE}
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="inspect_explore_data", 
@@ -108,7 +112,7 @@ print(script_df)
 ```
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: inspect/explore data
-```{r inspect_explore_data_1, cache=TRUE}
+```{r inspect_explore_data_1, cache=FALSE}
 #print(str(glb_entity_df))
 #View(glb_entity_df)
 
@@ -205,7 +209,7 @@ print(script_df)
 ```
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: manage missing data
-```{r manage_missing_data_1, cache=TRUE}
+```{r manage_missing_data_1, cache=FALSE}
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -215,7 +219,7 @@ print(script_df)
 ```
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: encode/retype data
-```{r encode_retype_data_1, cache=TRUE}
+```{r encode_retype_data_1, cache=FALSE}
 # map_<col_name>_df <- myimport_data(
 #     url="<map_url>", 
 #     comment="map_<col_name>_df", print_diagn=TRUE)
@@ -232,7 +236,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: extract features
-```{r extract_features, cache=TRUE}
+```{r extract_features, cache=FALSE}
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="select_features", 
@@ -242,7 +246,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: select features
-```{r select_features, cache=TRUE}
+```{r select_features, cache=FALSE}
 print(glb_feats_df <- myselect_features())
 
 script_df <- rbind(script_df, 
@@ -253,7 +257,7 @@ print(script_df)
 ```
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: remove correlated features
-```{r remove_correlated_features, cache=TRUE}
+```{r remove_correlated_features, cache=FALSE}
 print(glb_feats_df <- mydelete_cor_features())
 
 script_df <- rbind(script_df, 
@@ -264,20 +268,13 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: run models
-```{r run_models, cache=TRUE}
+```{r run_models, cache=FALSE}
 glb_models_df <- data.frame()
 
 #   Regression:
-#       Linear:
-
-#       Prep non-numerical vars before runing this
-# ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
-#                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
-# print(summary(mdl <- ret_lst$model)); 
-# print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-#               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
-
 if (glb_is_regression) {
+    #   Linear:
+
     # Highest cor.y
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id[1],
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)
@@ -304,17 +301,9 @@ if (glb_is_regression) {
 }    
 
 #   Classification:
-#       Logit Regression:
-
-#       Need to change this to glm
-#       Prep non-numerical vars before runing this
-# ret_lst <- myrun_mdl_lm(indep_vars_vctr=".", 
-#                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
-# print(summary(mdl <- ret_lst$model)); 
-# print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-#               glb_models_df <- rbind(glb_models_df, ret_lst$models_df)))
-
 if (glb_is_classification) {
+    #   Logit Regression:
+    
     # Highest cor.y
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=glb_feats_df$id[1],
                             fit_df=glb_entity_df, OOB_df=glb_predct_df)        
@@ -356,7 +345,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: fit training.all
-```{r fit_training.all, cache=TRUE}
+```{r fit_training.all, cache=FALSE}
 if (glb_is_regression) {
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=glb_feats_df$id, fit_df=glb_entity_df)
     print(summary(mdl <- ret_lst$model)); print(glb_sel_mdl_df <- ret_lst$models_df)
@@ -399,7 +388,7 @@ print(script_df)
 ```
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: predict newdata
-```{r predict_newdata, cache=TRUE}
+```{r predict_newdata, cache=FALSE}
 if (glb_is_regression)
     glb_predct_df[, glb_predct_var_name] <- predict(glb_sel_mdl, 
                                         newdata=glb_predct_df, type="response")
@@ -439,7 +428,7 @@ if (glb_is_classification) {
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
 The variance by am_fctr appears to be independent. 
-```{r q1, cache=TRUE}
+```{r q1, cache=FALSE}
 # print(t.test(subset(cars_df, am_fctr == "automatic")$mpg, 
 #              subset(cars_df, am_fctr == "manual")$mpg, 
 #              var.equal=FALSE)$conf)
