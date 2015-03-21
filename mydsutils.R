@@ -36,10 +36,16 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, print_diag
     first_record <- read.csv(file_path, header=FALSE, quote="", nrows=1)
     header <- FALSE
 	
-	col_names <- paste(first_record[,])
-	if ((all(make.names(col_names) == col_names)) ||
-		(length(grep('"', first_record[1, 1])) != 0))
-    	header <- TRUE
+	if (length(grep('^"', first_record[1, 1])) != 0) 
+		header <- TRUE else {	
+		col_names <- paste(first_record[,])
+		diffs <- setdiff(make.names(col_names), col_names)
+		if (length(diffs) == 0)
+			header <- TRUE else {
+			if (length(grep("^X", diffs)) == length(diffs))
+				header <- TRUE
+		}	
+    }	
 
 	if (!(header))
 	{
