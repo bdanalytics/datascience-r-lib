@@ -434,13 +434,13 @@ mymap_codes <- function(df, from_col_name, to_col_name,
 		
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
-    if (length(unique(ret_df[, from_col_name])) == nrow(ret_df)) map_summry_df <- ret_df else {
+#    if (length(unique(ret_df[, from_col_name])) == nrow(ret_df)) map_summry_df <- ret_df else {
         require(sqldf)
         sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS _n ")
         sql <- paste(sql, "FROM ret_df GROUP BY", paste(from_col_name, to_col_name, sep=","),
                      "ORDER BY _n DESC", sep=" ")
         map_summry_df <- sqldf(sql)
-    }
+#    }
 
 	myprint_df(map_summry_df)
 	

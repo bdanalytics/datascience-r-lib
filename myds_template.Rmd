@@ -71,7 +71,7 @@ glb_exclude_vars_as_features <- NULL
 #                                       c("<col_name>")     # or NULL
 #                                       )
 
-glb_is_classification <- FALSE; glb_is_regression <- !!glb_is_classification
+glb_is_regression <- TRUE; glb_is_classification <- FALSE
 
 glb_mdl <- glb_sel_mdl <- NULL
 glb_models_df <- data.frame()
@@ -125,11 +125,12 @@ print(script_df)
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
 
-add_new_diag_feats <- function(obs_df) {
+add_new_diag_feats <- function(obs_df, obs_twin_df) {
     obs_df <- mutate(obs_df,
 #         <col_name>.NA=is.na(<col_name>)
+
 #         <col_name>.fctr=factor(<col_name>, 
-#                     as.factor(union(obs_df$<col_name>, glb_predct_df$<col_name>))) 
+#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))) 
 
           # This doesn't work - use sapply instead
 #         <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), 
@@ -152,8 +153,8 @@ add_new_diag_feats <- function(obs_df) {
     return(obs_df)
 }
 
-glb_entity_df <- add_new_diag_feats(glb_entity_df)
-glb_predct_df <- add_new_diag_feats(glb_predct_df)
+glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_predct_df)
+glb_predct_df <- add_new_diag_feats(glb_predct_df, glb_entity_df)
 
 #pairs(subset(glb_entity_df, select=-c(col_symbol)))
 
@@ -218,11 +219,20 @@ print(script_df)
 # map_<col_name>_df <- myimport_data(
 #     url="<map_url>", 
 #     comment="map_<col_name>_df", print_diagn=TRUE)
-# 
+# map_<col_name>_df <- read.csv(paste0(getwd(), "/data/<file_name>.csv"), strip.white=TRUE)
+
 # glb_entity_df <- mymap_codes(glb_entity_df, "<from_col_name>", "<to_col_name>", 
 #     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
 #                           map_tgt_col_name="<to_col_name>")
+# glb_predct_df <- mymap_codes(glb_predct_df, "<from_col_name>", "<to_col_name>", 
+#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
+#                           map_tgt_col_name="<to_col_name>")
     					
+# glb_entity_df$<col_name>.fctr <- factor(glb_entity_df$<col_name>, 
+#                     as.factor(union(glb_entity_df$<col_name>, glb_predct_df$<col_name>)))
+# glb_predct_df$<col_name>.fctr <- factor(glb_predct_df$<col_name>, 
+#                     as.factor(union(glb_entity_df$<col_name>, glb_predct_df$<col_name>)))
+
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="extract_features", 
                               chunk_step_major=max(script_df$chunk_step_major)+1, 
@@ -311,6 +321,10 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
                                                 glb_exclude_vars_as_features),
                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
 
+# User specified
+# ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
+#                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
+
 if (glb_is_regression)
     print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
           geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", 
@@ -359,7 +373,7 @@ glb_analytics_diag_plots <- function(obs_df) {
                         measure.vars=c(glb_predct_var, glb_predct_var_name))
 #         if (var == "<feat_name>") print(myplot_scatter(plot_df, var, "value", 
 #                                              facet_colcol_name="variable") + 
-#                       geom_vline(xintercept=40, linetype="dotted")) else     
+#                       geom_vline(xintercept=<divider_val>, linetype="dotted")) else     
             print(myplot_scatter(plot_df, var, "value", facet_colcol_name="variable"))
     }
     
@@ -367,7 +381,9 @@ glb_analytics_diag_plots <- function(obs_df) {
         plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
         print(myplot_prediction_regression(obs_df, 
                     ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"), 
-                                           plot_vars_df$id[1]))
+                                           plot_vars_df$id[1])
+#               + geom_point(aes_string(color="<col_name>.fctr"))
+              )
     }    
     
     if (glb_is_classification) {
@@ -375,7 +391,7 @@ glb_analytics_diag_plots <- function(obs_df) {
         print(myplot_prediction_classification(obs_df, 
                     ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"),
                                                plot_vars_df$id[1])
-#               + geom_hline(yintercept=40, linetype = "dotted")
+#               + geom_hline(yintercept=<divider_val>, linetype = "dotted")
                 )
     }    
 }
