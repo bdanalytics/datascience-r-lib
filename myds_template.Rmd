@@ -84,17 +84,20 @@ print(script_df)
 ```{r import_data, cache=FALSE}
 glb_entity_df <- myimport_data(
     url="<trnng_url>", 
-    comment="glb_entity_df", print_diagn=TRUE)
+    comment="glb_entity_df", force_header=TRUE, print_diagn=TRUE)
 if (glb_is_separate_predict_dataset) {
     glb_predct_df <- myimport_data(
         url="<prdct_url>", 
-        comment="glb_predct_df", print_diagn=TRUE)
+        comment="glb_predct_df", force_header=TRUE, print_diagn=TRUE)
 } else {
+#     glb_predct_df <- subset(glb_entity_df, <condition>)
     glb_predct_df <- glb_entity_df[sample(1:nrow(glb_entity_df), nrow(glb_entity_df) / 1000),]
     comment(glb_predct_df) <- "glb_predct_df"
     myprint_df(glb_predct_df)
     str(glb_predct_df)
 }         
+# glb_entity_df <- subset(glb_entity_df, !<condition>)
+# print(dim(glb_entity_df))
 
 script_df <- rbind(script_df,
                    data.frame(chunk_label="cleanse_data", 
@@ -131,6 +134,9 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 
 #         <col_name>.fctr=factor(<col_name>, 
 #                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))) 
+#         <col_name>.fctr=relevel(factor(<col_name>, 
+#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))),
+#                                   "<max_n_val>") 
 
           # This doesn't work - use sapply instead
 #         <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), 
@@ -153,8 +159,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
     return(obs_df)
 }
 
-glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_predct_df)
-glb_predct_df <- add_new_diag_feats(glb_predct_df, glb_entity_df)
+# glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_predct_df)
+# glb_predct_df <- add_new_diag_feats(glb_predct_df, glb_entity_df)
 
 #pairs(subset(glb_entity_df, select=-c(col_symbol)))
 
@@ -206,6 +212,10 @@ print(script_df)
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: manage missing data
 ```{r manage_missing_data_1, cache=FALSE}
+# print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+# print(sapply(names(glb_predct_df), function(col) sum(is.na(glb_predct_df[, col]))))
+# glb_entity_df <- na.omit(glb_entity_df)
+# glb_predct_df <- na.omit(glb_predct_df)
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -325,6 +335,10 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
 #                         fit_df=glb_entity_df, OOB_df=glb_predct_df)
 
+# Simplify a model
+# fit_df <- glb_entity_df; glb_mdl <- step(<complex>_mdl)
+
+
 if (glb_is_regression)
     print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
           geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", 
@@ -382,7 +396,8 @@ glb_analytics_diag_plots <- function(obs_df) {
         print(myplot_prediction_regression(obs_df, 
                     ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"), 
                                            plot_vars_df$id[1])
-#               + geom_point(aes_string(color="<col_name>.fctr"))
+#               + facet_wrap(reformulate(plot_vars_df$id[2])) # if [1,2] is a factor                                                         
+#               + geom_point(aes_string(color="<col_name>.fctr")) #  to color the plot
               )
     }    
     

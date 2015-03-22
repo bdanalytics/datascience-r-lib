@@ -6,7 +6,8 @@
 
 ## 01. 		import data
 
-myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, print_diagn=TRUE, ...){
+myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_header=FALSE, 
+							print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
     url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
@@ -34,27 +35,30 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, print_diag
     # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
     #	check if file contains header
     first_record <- read.csv(file_path, header=FALSE, quote="", nrows=1)
-    header <- FALSE
-	
-	if (length(grep('^"', first_record[1, 1])) != 0) 
-		header <- TRUE else {	
-		col_names <- paste(first_record[,])
-		diffs <- setdiff(make.names(col_names), col_names)
-		if (length(diffs) == 0)
-			header <- TRUE else {
-			if (length(grep("^X", diffs)) == length(diffs))
-				header <- TRUE
-		}	
-    }	
 
-	if (!(header))
-	{
-    	warning(file_path, " does not contain header")
-	    print("first 10 records:")
-	    #print(system(paste0("head ", file_path)))
-	    #system(paste0("head ", file_path, " | cat")))
-	    print(readLines(file_path, n=10))
-	}
+	if (!force_header) {
+		header <- FALSE
+	
+		if (length(grep('^"', first_record[1, 1])) != 0) 
+			header <- TRUE else {	
+			col_names <- paste(first_record[,])
+			diffs <- setdiff(make.names(col_names), col_names)
+			if (length(diffs) == 0)
+				header <- TRUE else {
+				if (length(grep("^X", diffs)) == length(diffs))
+					header <- TRUE
+			}	
+		}	
+
+		if (!(header))
+		{
+			warning(file_path, " does not contain header")
+			print("first 10 records:")
+			#print(system(paste0("head ", file_path)))
+			#system(paste0("head ", file_path, " | cat")))
+			print(readLines(file_path, n=10))
+		}
+	} else header <- TRUE
 
     print(sprintf("Reading file %s...", file_path))
     df <- read.csv(file_path, header=header, nrows=nrows, ...)
@@ -99,8 +103,9 @@ myprint_str_df <- function(df) {
     if (ncol(df) <= 20) print(str(df)) else {
         print(str(df[, 1:20]))
 
-		# print 20 middle cols
-		print(str(df[, sort(sample(21:(ncol(df)-20), 20))]))
+		if (ncol(df) > 40)
+			# print 20 middle cols
+			print(str(df[, sort(sample(21:(ncol(df)-20), 20))]))
 
         print(str(df[, (ncol(df) - 20):ncol(df)]))
         warning("[list output truncated]")
@@ -587,6 +592,7 @@ myselect_features <- function() {
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
 mydelete_cor_features <- function() {
+	require(reshape2)
 
 	lcl_feats_df <- glb_feats_df
     repeat {
@@ -771,8 +777,23 @@ myextract_mdl_feats <- function() {
     plot_vars_df <- orderBy(~Pr.z, plot_vars_df[2:nrow(plot_vars_df),])
     #print(plot_vars_df <- subset(plot_vars_df, Pr.z < 0.1))
     plot_vars_df$id <- rownames(plot_vars_df)
-    #print(plot_vars_df)
-    return(plot_vars_df)
+    
+    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(glb_entity_df))
+    
+    dummy_vars_df <- subset(plot_vars_df, !fit.feat)
+    dummy_vars_df <- mutate(dummy_vars_df, 
+    				root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
+    						vld.fit.feat=(root.feat %in% names(glb_entity_df))
+    						)
+    if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
+    	stop("Dummy variables not recognized")
+    
+    vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
+    							data.frame(id=unique(dummy_vars_df$root.feat),
+    	Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
+    
+    #print(orderBy(~Pr.z, vld_plot_vars_df))
+    return(orderBy(~Pr.z, vld_plot_vars_df))
 }
 
 mymerge_feats_Pr.z <- function() {
