@@ -257,6 +257,16 @@ print(script_df)
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: extract features
 ```{r extract_features, cache=FALSE}
 # Create new features that help prediction
+# <col_name>.lag.2 <- lag(zoo(glb_entity_df$<col_name>), -2, na.pad=TRUE)
+# glb_entity_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
+# <col_name>.lag.2 <- lag(zoo(glb_predct_df$<col_name>), -2, na.pad=TRUE)
+# glb_predct_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
+# 
+# glb_predct_df[1, "<col_name>.lag.2"] <- glb_entity_df[nrow(glb_entity_df) - 1, 
+#                                                    "<col_name>"]
+# glb_predct_df[2, "<col_name>.lag.2"] <- glb_entity_df[nrow(glb_entity_df), 
+#                                                    "<col_name>"]
+                                                   
 # glb_entity_df <- mutate(glb_entity_df,
 #     <new_col_name>=
 #                     )
@@ -267,6 +277,11 @@ print(script_df)
 
 # print(summary(glb_entity_df))
 # print(summary(glb_predct_df))
+
+# print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+# print(sapply(names(glb_predct_df), function(col) sum(is.na(glb_predct_df[, col]))))
+
+# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", smooth=TRUE))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="select_features", 
@@ -445,6 +460,8 @@ if (glb_is_regression) {
                         glb_predct_df[, glb_predct_var]) ^ 2) / nrow(glb_predct_df)) ^ 0.5))                        
     print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name, 
                          smooth=TRUE))
+                         
+#     glb_predct_df[, "<Output Pred variable>"] <- func(glb_predct_df[, glb_pred_var_name])                         
 }                         
 
 if (glb_is_classification)

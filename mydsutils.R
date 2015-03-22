@@ -599,6 +599,9 @@ mydelete_cor_features <- function() {
 
 	lcl_feats_df <- glb_feats_df
     repeat {
+    	if (nrow(lcl_feats_df) == 1)
+    		break
+    		
         print(corxx_mtrx <- cor(glb_entity_df[, lcl_feats_df$id], use="pairwise.complete.obs"))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
@@ -619,7 +622,6 @@ mydelete_cor_features <- function() {
     #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
     
         plot_df <- melt(glb_entity_df, id.vars=glb_predct_var, measure.vars=c(feat_1, feat_2))
-    #     print(myplot_scatter(plot_df, glb_predct_var, "value", colorcol_name="variable"))    
         print(myplot_scatter(plot_df, glb_predct_var, "value", 
                              facet_colcol_name="variable", smooth=TRUE))    
     
