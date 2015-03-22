@@ -400,7 +400,7 @@ myplot_prediction_regression <- function(df, feat_x, feat_y) {
     # Add labels to top 5 prediction errors
     df <- orderBy(reformulate(c("-", predct_err_name)), df)
     df$.label <- " "
-    df$.label[1:5] <- sapply(1:5, function(row_ix) 
+    df$.label[1:min(5, nrow(df))] <- sapply(1:min(5, nrow(df)), function(row_ix) 
         df[row_ix, ".label"] <- paste0(df[row_ix, glb_id_vars], collapse=":"))
     print(head(df, 5))    
         

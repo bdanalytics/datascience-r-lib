@@ -195,7 +195,6 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 # print(<col1_name>_na_by_<col2_name>_arr <- 
 #    sort(tapply(glb_entity_df$<col1_name>.NA, glb_entity_df$<col2_name>, mean, na.rm=TRUE)))
 
-
 # Other plots:
 print(myplot_histogram(glb_entity_df, glb_predct_var))
 # print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>"))
@@ -358,7 +357,6 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
 # Simplify a model
 # fit_df <- glb_entity_df; glb_mdl <- step(<complex>_mdl)
 
-
 if (glb_is_regression)
     print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
           geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", 
@@ -386,7 +384,10 @@ if (glb_is_regression) {
     glb_sel_mdl <- glb_mdl    
     glb_entity_df[, glb_predct_var_name] <- predict(glb_sel_mdl, newdata=glb_entity_df)
     print(myplot_scatter(glb_entity_df, glb_predct_var, glb_predct_var_name, 
-                         smooth=TRUE))    
+                         smooth=TRUE))
+    glb_entity_df[, paste0(glb_pred_var_name, ".err")] <- 
+        abs(glb_entity_df[, glb_pred_var_name] - glb_entity_df[, glb_pred_var])
+    print(head(orderBy(reformulate(c("-", paste0(glb_pred_var_name, ".err"))), glb_entity_df)))                             
 }    
 
 if (glb_is_classification) {
