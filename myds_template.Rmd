@@ -385,9 +385,10 @@ if (glb_is_regression) {
     glb_entity_df[, glb_predct_var_name] <- predict(glb_sel_mdl, newdata=glb_entity_df)
     print(myplot_scatter(glb_entity_df, glb_predct_var, glb_predct_var_name, 
                          smooth=TRUE))
-    glb_entity_df[, paste0(glb_pred_var_name, ".err")] <- 
-        abs(glb_entity_df[, glb_pred_var_name] - glb_entity_df[, glb_pred_var])
-    print(head(orderBy(reformulate(c("-", paste0(glb_pred_var_name, ".err"))), glb_entity_df)))                             
+    glb_entity_df[, paste0(glb_predct_var_name, ".err")] <- 
+        abs(glb_entity_df[, glb_predct_var_name] - glb_entity_df[, glb_predct_var])
+    print(head(orderBy(reformulate(c("-", paste0(glb_predct_var_name, ".err"))), 
+                       glb_entity_df)))                             
 }    
 
 if (glb_is_classification) {
