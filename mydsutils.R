@@ -581,7 +581,7 @@ myselect_features <- function() {
     feats_df <- data.frame(id=sel_feats,
                 cor.y=cor(glb_entity_df[, sel_feats], 
                             y=glb_entity_df[, glb_predct_var], 
-                            use="pairwise.complete.obs")[,1])
+                            use="pairwise.complete.obs"))
 	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
 }
@@ -593,6 +593,9 @@ myselect_features <- function() {
 ## 05.5	    remove features / create feature combinations for highly correlated features
 mydelete_cor_features <- function() {
 	require(reshape2)
+
+	if (nrow(glb_feats_df) == 1)
+		return(data.frame(id=glb_feats_df$id, cor.low=1))
 
 	lcl_feats_df <- glb_feats_df
     repeat {
@@ -780,17 +783,18 @@ myextract_mdl_feats <- function() {
     
     plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(glb_entity_df))
     
-    dummy_vars_df <- subset(plot_vars_df, !fit.feat)
-    dummy_vars_df <- mutate(dummy_vars_df, 
-    				root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
-    						vld.fit.feat=(root.feat %in% names(glb_entity_df))
-    						)
-    if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
-    	stop("Dummy variables not recognized")
-    
-    vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
-    							data.frame(id=unique(dummy_vars_df$root.feat),
-    	Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
+    if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
+		dummy_vars_df <- mutate(dummy_vars_df, 
+						root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
+								vld.fit.feat=(root.feat %in% names(glb_entity_df))
+								)
+		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
+			stop("Dummy variables not recognized")
+	
+		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
+									data.frame(id=unique(dummy_vars_df$root.feat),
+			Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
+    } else vld_plot_vars_df <- plot_vars_df	
     
     #print(orderBy(~Pr.z, vld_plot_vars_df))
     return(orderBy(~Pr.z, vld_plot_vars_df))

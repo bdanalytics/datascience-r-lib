@@ -61,8 +61,8 @@ glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_vars <- c("<Id var>")                # or NULL
 
-glb_exclude_vars_as_features <- NULL                      
-# List chrs converted into factors 
+glb_exclude_vars_as_features <- glb_id_vars     # or NULL                      
+# List chrs converted into factors; num/int transformed  
 # glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
 #                                       c("<col_name>")     # or NULL
 #                                       )
@@ -91,7 +91,8 @@ if (glb_is_separate_predict_dataset) {
         comment="glb_predct_df", force_header=TRUE, print_diagn=TRUE)
 } else {
 #     glb_predct_df <- subset(glb_entity_df, <condition>)
-    glb_predct_df <- glb_entity_df[sample(1:nrow(glb_entity_df), nrow(glb_entity_df) / 1000),]
+    glb_predct_df <- glb_entity_df[sample(1:nrow(glb_entity_df),
+                                          max(2, nrow(glb_entity_df) / 1000)),]    
     comment(glb_predct_df) <- "glb_predct_df"
     myprint_df(glb_predct_df)
     str(glb_predct_df)
@@ -145,7 +146,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         Year=year(Date.my),
 #         Month=months(Date.my),
 #         Weekday=weekdays(Date.my)
-        
+
+#         <col_name>.log=log(<col.name>)        
                         )
 
     # If levels of a factor are different across obs_df & glb_predct_df; predict.glm fails  
@@ -171,6 +173,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 # print(subset(glb_entity_df, <col1_name> == max(glb_entity_df$<col1_name>, na.rm=TRUE) & 
 #                         <col2_name> <= mean(glb_entity_df$<col1_name>, na.rm=TRUE)))
 
+# print(glb_entity_df[which.max(glb_entity_df$<col_name>),])
+
 # print(<col_name>_freq_glb_entity_df <- mycreate_tbl_df(glb_entity_df, "<col_name>"))
 # print(which.min(table(glb_entity_df$<col_name>)))
 # print(which.max(table(glb_entity_df$<col_name>)))
@@ -193,7 +197,7 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 
 
 # Other plots:
-# print(myplot_histogram(glb_entity_df, "<col1_name>"))
+print(myplot_histogram(glb_entity_df, glb_predct_var))
 # print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>"))
 # print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
 # print(myplot_line(subset(glb_entity_df, Symbol %in% c("KO", "PG")), 
@@ -201,7 +205,7 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #     geom_vline(xintercept=as.numeric(as.Date("2003-03-01"))) +
 #     geom_vline(xintercept=as.numeric(as.Date("1983-01-01")))        
 #         )
-# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>"))
+# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", smooth=TRUE))
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="manage_missing_data", 
@@ -316,9 +320,10 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=max_cor_y_x_var,
 
 # Enhance Highest cor.y model with additions of interaction terms that were 
 #   dropped due to high correlations
-ret_lst <- myrun_mdl_fn(indep_vars_vctr=c(max_cor_y_x_var, 
-    paste(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
-                        fit_df=glb_entity_df, OOB_df=glb_predct_df)    
+if (nrow(subset(glb_feats_df, is.na(cor.low))) > 0)
+    ret_lst <- myrun_mdl_fn(indep_vars_vctr=c(max_cor_y_x_var, 
+        paste(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
+                            fit_df=glb_entity_df, OOB_df=glb_predct_df)    
 
 # Low correlated X
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[, "id"],
@@ -435,6 +440,9 @@ if (glb_is_regression) {
     print(sprintf("Total SSE: %0.4f", 
                   sum((glb_predct_df[, glb_predct_var_name] - 
                         glb_predct_df[, glb_predct_var]) ^ 2)))
+    print(sprintf("RMSE: %0.4f", 
+                  (sum((glb_predct_df[, glb_predct_var_name] - 
+                        glb_predct_df[, glb_predct_var]) ^ 2) / nrow(glb_predct_df)) ^ 0.5))                        
     print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name, 
                          smooth=TRUE))
 }                         
