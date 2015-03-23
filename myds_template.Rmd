@@ -421,8 +421,16 @@ if (glb_is_regression) {
 if (glb_is_classification) {
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=mdl_feats_df$id, fit_df=glb_entity_df)
     glb_sel_mdl <- glb_mdl        
-    glb_entity_df[, glb_predct_var_name] <- (predict(glb_sel_mdl, 
-                        newdata=glb_entity_df, type="response") >= 0.5) * 1.0
+    glb_entity_df[, paste0(glb_predct_var_name, ".proba")] <- predict(glb_sel_mdl, 
+                        newdata=glb_entity_df, type="response")
+    for (clf_threshold in c(0.4, 0.5, 0.6))
+        print(xtabs(reformulate(paste(glb_predct_var, 
+            paste0("(", glb_predct_var_name, ".proba >= ", 
+                   sprintf("%f", clf_threshold), ")"), 
+                                      sep=" + ")),
+                    glb_entity_df))                        
+    glb_entity_df[, glb_predct_var_name] <- 
+        (glb_entity_df[, paste0(glb_predct_var_name, ".proba")] >= 0.5) * 1.0
     print(xtabs(reformulate(paste(glb_predct_var, glb_predct_var_name, sep=" + ")),
                 glb_entity_df))                        
 }    
