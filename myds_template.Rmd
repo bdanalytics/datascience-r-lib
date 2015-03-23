@@ -57,6 +57,10 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 
 # Analysis control global variables
 glb_is_separate_predict_dataset <- FALSE    # or TRUE
+glb_split_entity_predict_datasets <- TRUE   # or FALSE
+glb_sample_predict_obs <- "sample"          # or "condition"
+glb_sample_size_split <- 0.25               # > 0 & < 1 
+
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_vars <- c("<Id var>")                # or NULL
@@ -84,21 +88,42 @@ print(script_df)
 ```{r import_data, cache=FALSE}
 glb_entity_df <- myimport_data(
     url="<trnng_url>", 
-    comment="glb_entity_df", force_header=TRUE, print_diagn=TRUE)
+    comment="glb_entity_df", force_header=TRUE,
+    print_diagn=(glb_is_separate_predict_dataset | 
+                !glb_split_entity_predict_datasets))
+    
 if (glb_is_separate_predict_dataset) {
     glb_predct_df <- myimport_data(
         url="<prdct_url>", 
         comment="glb_predct_df", force_header=TRUE, print_diagn=TRUE)
 } else {
-#     glb_predct_df <- subset(glb_entity_df, <condition>)
-    glb_predct_df <- glb_entity_df[sample(1:nrow(glb_entity_df),
-                                          max(2, nrow(glb_entity_df) / 1000)),]    
+    if (!glb_split_entity_predict_datasets) {
+        stop("Not implemented yet") 
+        glb_predct_df <- glb_entity_df[sample(1:nrow(glb_entity_df),
+                                          max(2, nrow(glb_entity_df) / 1000)),]                    
+    } else {
+        if (glb_sample_predict_obs == "condition") {
+            stop("Not implemented yet") 
+#     glb_predct_df <- subset(glb_entity_df, <condition>)        
+        } else { 
+            if (glb_sample_predict_obs == "sample") {
+                set.seed(88)
+                split <- sample.split(glb_entity_df[, glb_predct_var], 
+                                      SplitRatio=(1-glb_sample_size_split))
+                glb_predct_df <- glb_entity_df[!split, ] 
+                glb_entity_df <- glb_entity_df[split ,]
+            }
+        }    
+    }
     comment(glb_predct_df) <- "glb_predct_df"
     myprint_df(glb_predct_df)
     str(glb_predct_df)
+
+    if (glb_split_entity_predict_datasets) {
+        myprint_df(glb_entity_df)
+        str(glb_entity_df)        
+    }
 }         
-# glb_entity_df <- subset(glb_entity_df, !<condition>)
-# print(dim(glb_entity_df))
 
 script_df <- rbind(script_df,
                    data.frame(chunk_label="cleanse_data", 
@@ -205,6 +230,7 @@ print(myplot_histogram(glb_entity_df, glb_predct_var))
 #     geom_vline(xintercept=as.numeric(as.Date("1983-01-01")))        
 #         )
 # print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", smooth=TRUE))
+# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", colorcol_name="<Pred.fctr>"))
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="manage_missing_data", 
@@ -219,6 +245,7 @@ print(script_df)
 # print(sapply(names(glb_predct_df), function(col) sum(is.na(glb_predct_df[, col]))))
 # glb_entity_df <- na.omit(glb_entity_df)
 # glb_predct_df <- na.omit(glb_predct_df)
+# df[is.na(df)] <- 0
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -357,17 +384,17 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
 # Simplify a model
 # fit_df <- glb_entity_df; glb_mdl <- step(<complex>_mdl)
 
+plot_models_df <- mutate(glb_models_df, feats.label=substr(feats, 1, 20))
 if (glb_is_regression)
-    print(myplot_scatter(glb_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
-          geom_text(aes(label=feats), data=glb_models_df, color="NavyBlue", 
-                    size=3.5))
+    print(myplot_scatter(plot_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
+          geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
+                    size=3.5, angle=45))
 
-if (glb_is_classification) {
-    plot_models_df <- mutate(glb_models_df, feats.label=substr(feats, 1, 20))
-    print(myplot_hbar(df=plot_models_df, xcol_name="feats.label", 
-                      ycol_names="f.score.OOB"))
-}
-
+if (glb_is_classification)
+    print(myplot_scatter(plot_models_df, "AIC.fit", "f.score.OOB") + 
+          geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
+                    size=3.5, angle=45))
+ 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="fit_training.all", 
                               chunk_step_major=max(script_df$chunk_step_major)+1, 
@@ -463,6 +490,11 @@ if (glb_is_regression) {
     print(myplot_scatter(glb_predct_df, glb_predct_var, glb_predct_var_name, 
                          smooth=TRUE))
                          
+    glb_predct_df[, paste0(glb_predct_var_name, ".err")] <- 
+        abs(glb_predct_df[, glb_predct_var_name] - glb_predct_df[, glb_predct_var])
+    print(head(orderBy(reformulate(c("-", paste0(glb_predct_var_name, ".err"))), 
+                       glb_predct_df)))                                                      
+
 #     glb_predct_df[, "<Output Pred variable>"] <- func(glb_predct_df[, glb_pred_var_name])                         
 }                         
 

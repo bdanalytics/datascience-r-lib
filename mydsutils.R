@@ -668,6 +668,7 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
                                   R.sq.fit=NULL, R.sq.OOB=NULL, 
                                   Adj.R.sq.fit=NULL, 
                                   SSE.fit=NULL, SSE.OOB=NULL,
+                                  AIC.fit=NULL, 
                                   f.score.OOB=NULL)
 {
     return(data.frame(feats=paste(indep_vars_vctr, collapse=", "),
@@ -678,6 +679,7 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
         Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
         SSE.fit=SSE.fit,
         SSE.OOB=SSE.OOB,
+        AIC.fit=ifelse(is.null(AIC.fit), NA, AIC.fit),
         f.score.OOB=ifelse(is.null(f.score.OOB), NA, f.score.OOB))
     )
 }    
@@ -741,6 +743,7 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
 		OOB_xtab_df <- mycreate_xtab(OOB_df, c(glb_predct_var, glb_predct_var_name))
 		#OOB_f_score <- 2 * precision * recall / (precision + recall)
 		#OOB_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
+		OOB_xtab_df[is.na(OOB_xtab_df)] <- 0
 		f.score.OOB <- (2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) / 
 						((2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) + 
 						OOB_xtab_df[1,3] + OOB_xtab_df[2,2])
@@ -752,6 +755,7 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
                                            SSE.fit=sum(mdl$residuals ^ 2), 
                                            SSE.OOB=SSE.OOB,
+                                           AIC.fit=summary(mdl)$aic,
                                            f.score.OOB=f.score.OOB)
 
     print(summary(glb_mdl <<- mdl));
