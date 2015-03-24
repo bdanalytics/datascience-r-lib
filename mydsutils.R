@@ -675,10 +675,10 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
         #call.formula=toString(summary(mdl)$call$formula),
         n.fit=n.fit,
         R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
-        R.sq.OOB=R.sq.OOB,
+        R.sq.OOB=ifelse(is.null(R.sq.OOB), NA, R.sq.OOB), 
         Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
-        SSE.fit=SSE.fit,
-        SSE.OOB=SSE.OOB,
+        SSE.fit=ifelse(is.null(SSE.fit), NA, SSE.fit),
+        SSE.OOB=ifelse(is.null(SSE.OOB), NA, SSE.OOB),
         AIC.fit=ifelse(is.null(AIC.fit), NA, AIC.fit),
         f.score.OOB=ifelse(is.null(f.score.OOB), NA, f.score.OOB))
     )
@@ -721,6 +721,23 @@ myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
+mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold) {
+	obs_df[, glb_predct_var_name] <- (predict(mdl, 
+					newdata=obs_df, type="response") >= proba_threshold) * 1.0
+
+	# This does not work when prediction does not generate certain categories
+	#	Better way would be to create a dummy matrix of 0s with actual outcomes
+	#	& merge in appropriate predicted outcomes cols
+	obs_xtab_df <- mycreate_xtab(obs_df, c(glb_predct_var, glb_predct_var_name))
+	#obs_f_score <- 2 * precision * recall / (precision + recall)
+	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
+	obs_xtab_df[is.na(obs_xtab_df)] <- 0
+
+	f.score.obs <- (2 * obs_xtab_df[2,3]) / 
+					((2 * obs_xtab_df[2,3]) + 
+					obs_xtab_df[1,3] + obs_xtab_df[2,2])
+}
+
 myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
     
     if (length(indep_vars_vctr) == 1)
@@ -731,30 +748,23 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
                             response=glb_predct_var), data=fit_df, 
                family="binomial")
     if (!is.null(OOB_df)) {
-    	OOB_df[, glb_predct_var_name] <- (predict(mdl, 
-                        newdata=OOB_df, type="response") >= 0.5) * 1.0
-		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
-							  OOB_df[, glb_predct_var]) ^ 2))
-		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
-							sum((OOB_df[, glb_predct_var] - 
-								#mean(OOB_df[, glb_predct_var])
-								mean(mdl$fitted.values)    
-							) ^ 2)))
-		OOB_xtab_df <- mycreate_xtab(OOB_df, c(glb_predct_var, glb_predct_var_name))
-		#OOB_f_score <- 2 * precision * recall / (precision + recall)
-		#OOB_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
-		OOB_xtab_df[is.na(OOB_xtab_df)] <- 0
-		f.score.OOB <- (2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) / 
-						((2 * (OOB_xtab_df[1,2] + OOB_xtab_df[2,3])) + 
-						OOB_xtab_df[1,3] + OOB_xtab_df[2,2])
-    } else {SSE.OOB <- NA; R.sq.OOB <- NA; f.score.OOB <- NA}
+		f.score.OOB <- mycompute_classifier_f.score(mdl, OOB_df, 0.5)
+						
+# 		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
+# 							  OOB_df[, glb_predct_var]) ^ 2))
+# 		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
+# 							sum((OOB_df[, glb_predct_var] - 
+# 								#mean(OOB_df[, glb_predct_var])
+# 								mean(mdl$fitted.values)    
+# 							) ^ 2)))
+    } else {f.score.OOB <- NA; SSE.OOB <- NA; R.sq.OOB <- NA}
     
     lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
                                            R.sq.fit=summary(mdl)$r.squared,
-                                           R.sq.OOB=R.sq.OOB, 
+                                           #R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
                                            SSE.fit=sum(mdl$residuals ^ 2), 
-                                           SSE.OOB=SSE.OOB,
+                                           #SSE.OOB=SSE.OOB,
                                            AIC.fit=summary(mdl)$aic,
                                            f.score.OOB=f.score.OOB)
 

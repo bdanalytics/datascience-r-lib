@@ -390,10 +390,13 @@ if (glb_is_regression)
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
                     size=3.5, angle=45))
 
-if (glb_is_classification)
-    print(myplot_scatter(plot_models_df, "AIC.fit", "f.score.OOB") + 
+if (glb_is_classification)  {
+    # Lower AIC is better
+    plot_models_df[, "inv.AIC.fit"] <- 1.0 / plot_models_df[, "AIC.fit"] 
+    print(myplot_scatter(plot_models_df, "inv.AIC.fit", "f.score.OOB") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
                     size=3.5, angle=45))
+}
  
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="fit_training.all", 
@@ -423,14 +426,32 @@ if (glb_is_classification) {
     glb_sel_mdl <- glb_mdl        
     glb_entity_df[, paste0(glb_predct_var_name, ".proba")] <- predict(glb_sel_mdl, 
                         newdata=glb_entity_df, type="response")
-    for (clf_threshold in c(0.4, 0.5, 0.6))
+    for (clf_threshold in c(0.3, 0.5, 0.7))
         print(xtabs(reformulate(paste(glb_predct_var, 
             paste0("(", glb_predct_var_name, ".proba >= ", 
                    sprintf("%f", clf_threshold), ")"), 
                                       sep=" + ")),
                     glb_entity_df))                        
+    require(ROCR)
+    ROCRpred <- prediction(glb_entity_df[, paste0(glb_predct_var_name, ".proba")],
+                           glb_entity_df[, glb_predct_var])
+    ROCRperf <- performance(ROCRpred, "tpr", "fpr")
+    plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
+    
+    # 0 & 1 does not generate outcomes for certain categories
+    thresholds_df <- data.frame(threshold=seq(0.1, 0.9, 0.1))
+    thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
+        mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
+                                     thresholds_df[row_ix, "threshold"]))
+    print(thresholds_df)
+    print(myplot_line(thresholds_df, "threshold", "f.score"))
+    
+    glb_clf_proba_threshold <- thresholds_df[which.max(thresholds_df$f.score), 
+                                             "threshold"]
+    print(sprintf("Classifier Probability Threshold: %0.4f", glb_clf_proba_threshold))
     glb_entity_df[, glb_predct_var_name] <- 
-        (glb_entity_df[, paste0(glb_predct_var_name, ".proba")] >= 0.5) * 1.0
+        (glb_entity_df[, paste0(glb_predct_var_name, ".proba")] >= 
+             glb_clf_proba_threshold) * 1.0
     print(xtabs(reformulate(paste(glb_predct_var, glb_predct_var_name, sep=" + ")),
                 glb_entity_df))                        
 }    
@@ -483,8 +504,9 @@ if (glb_is_regression)
                                         newdata=glb_predct_df, type="response")
 
 if (glb_is_classification)
-    glb_predct_df[, glb_predct_var_name] <- (predict(glb_sel_mdl, 
-                        newdata=glb_predct_df, type="response") >= 0.5) * 1.0
+    glb_predct_df[, glb_predct_var_name] <- 
+        (predict(glb_sel_mdl, newdata=glb_predct_df, type="response") >= 
+            glb_clf_proba_threshold) * 1.0
     
 myprint_df(glb_predct_df[, c(glb_id_vars, glb_predct_var, glb_predct_var_name)])
 
