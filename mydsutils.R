@@ -669,7 +669,7 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
                                   Adj.R.sq.fit=NULL, 
                                   SSE.fit=NULL, SSE.OOB=NULL,
                                   AIC.fit=NULL, 
-                                  f.score.OOB=NULL)
+                                  auc.fit=NULL, auc.OOB=NULL)
 {
     return(data.frame(feats=paste(indep_vars_vctr, collapse=", "),
         #call.formula=toString(summary(mdl)$call$formula),
@@ -680,7 +680,8 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
         SSE.fit=ifelse(is.null(SSE.fit), NA, SSE.fit),
         SSE.OOB=ifelse(is.null(SSE.OOB), NA, SSE.OOB),
         AIC.fit=ifelse(is.null(AIC.fit), NA, AIC.fit),
-        f.score.OOB=ifelse(is.null(f.score.OOB), NA, f.score.OOB))
+        auc.fit=ifelse(is.null(auc.fit), NA, auc.fit),
+        auc.OOB=ifelse(is.null(auc.OOB), NA, auc.OOB))
     )
 }    
 
@@ -738,38 +739,39 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold) {
 					obs_xtab_df[1,3] + obs_xtab_df[2,2])
 }
 
-myrun_mdl_glm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
+myrun_mdl_glm <- function(indep_vars_vctr, fit_df, OOB_df=NULL) {
+    require(ROCR)
     
     if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
     	    indep_vars_vctr <- setdiff(names(fit_df), glb_predct_var)
     
-    mdl <- glm(reformulate(indep_vars_vctr, 
-                            response=glb_predct_var), data=fit_df, 
+    mdl <- glm(reformulate(indep_vars_vctr, response=glb_predct_var), data=fit_df, 
                family="binomial")
+               
+	fit_df[, paste0(glb_predct_var_name, ".proba")] <- 
+		predict(mdl, newdata=fit_df, type="response")
+	ROCRpred <- prediction(fit_df[, paste0(glb_predct_var_name, ".proba")],
+						   fit_df[, glb_predct_var])
+	auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
+               
     if (!is.null(OOB_df)) {
-		f.score.OOB <- mycompute_classifier_f.score(mdl, OOB_df, 0.5)
-						
-# 		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
-# 							  OOB_df[, glb_predct_var]) ^ 2))
-# 		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
-# 							sum((OOB_df[, glb_predct_var] - 
-# 								#mean(OOB_df[, glb_predct_var])
-# 								mean(mdl$fitted.values)    
-# 							) ^ 2)))
-    } else {f.score.OOB <- NA; SSE.OOB <- NA; R.sq.OOB <- NA}
+    	OOB_df[, paste0(glb_predct_var_name, ".proba")] <- 
+    		predict(mdl, newdata=OOB_df, type="response")
+    	ROCRpred <- prediction(OOB_df[, paste0(glb_predct_var_name, ".proba")],
+        	                   OOB_df[, glb_predct_var])
+    	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
+    } else {auc.OOB <- NA}
     
     lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
-                                           R.sq.fit=summary(mdl)$r.squared,
-                                           #R.sq.OOB=R.sq.OOB, 
+                                           R.sq.fit=summary(mdl)$r.squared, #R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
-                                           SSE.fit=sum(mdl$residuals ^ 2), 
-                                           #SSE.OOB=SSE.OOB,
+                                           SSE.fit=sum(mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
                                            AIC.fit=summary(mdl)$aic,
-                                           f.score.OOB=f.score.OOB)
+                                           auc.fit=auc.fit, auc.OOB=auc.OOB)
 
     print(summary(glb_mdl <<- mdl));
-    print(orderBy(~ -f.score.OOB, 
+    print(orderBy(~ -auc.OOB, 
                   glb_models_df <<- rbind(glb_models_df, lcl_models_df)))                                               
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
