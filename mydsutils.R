@@ -560,27 +560,28 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
-myselect_features <- function() {
+myselect_features <- function(lcl_entity_df, lcl_exclude_vars_as_features, lcl_predct_var) {	
+	require(plyr)
 
 	# Collect numeric vars
-    vars_tbl <- summary(glb_entity_df)
-    numeric_vars <- names(glb_entity_df)[grep("^Min.", vars_tbl[1,])]
+    vars_tbl <- summary(lcl_entity_df)
+    numeric_vars <- names(lcl_entity_df)[grep("^Min.", vars_tbl[1,])]
     
     # Exclude user-specified features
-    numeric_vars <- setdiff(numeric_vars, glb_exclude_vars_as_features)
+    numeric_vars <- setdiff(numeric_vars, lcl_exclude_vars_as_features)
     
     # Check for NAs
 #     naknts_vctr <- sapply(numeric_vars, 
-#                           function(col) sum(is.na(glb_entity_df[, col])))
+#                           function(col) sum(is.na(lcl_entity_df[, col])))
 #     naknts_vctr <- naknts_vctr[naknts_vctr > 0]
 #     if (length(naknts_vctr) > 0)
 # 	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
 # 
-#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), glb_predct_var)
-    sel_feats <- setdiff(numeric_vars, glb_predct_var)    
+#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), lcl_predct_var)
+    sel_feats <- setdiff(numeric_vars, lcl_predct_var)    
     feats_df <- data.frame(id=sel_feats,
-                cor.y=cor(glb_entity_df[, sel_feats], 
-                            y=glb_entity_df[, glb_predct_var], 
+                cor.y=cor(lcl_entity_df[, sel_feats], 
+                            y=lcl_entity_df[, lcl_predct_var], 
                             use="pairwise.complete.obs"))
 	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
@@ -591,18 +592,19 @@ myselect_features <- function() {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
-mydelete_cor_features <- function() {
+mydelete_cor_features <- function(lcl_feats_df, lcl_entity_df, lcl_predct_var,
+								 lcl_exclude_vars_as_features) {
 	require(reshape2)
 
-	if (nrow(glb_feats_df) == 1)
-		return(data.frame(id=glb_feats_df$id, cor.low=1))
+	if (nrow(lcl_feats_df) == 1)
+		return(data.frame(id=lcl_feats_df$id, cor.low=1))
 
-	lcl_feats_df <- glb_feats_df
+	lcl_feats_df <- lcl_feats_df
     repeat {
     	if (nrow(lcl_feats_df) == 1)
     		break
     		
-        print(corxx_mtrx <- cor(glb_entity_df[, lcl_feats_df$id], use="pairwise.complete.obs"))
+        print(corxx_mtrx <- cor(lcl_entity_df[, lcl_feats_df$id], use="pairwise.complete.obs"))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
@@ -612,23 +614,23 @@ mydelete_cor_features <- function() {
         feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
         feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
         print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
-        print(myplot_scatter(glb_entity_df, feat_1, feat_2))
+        print(myplot_scatter(lcl_entity_df, feat_1, feat_2))
         
-        print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_1, 
+        print(sprintf("cor(%s, %s)=%0.4f", lcl_predct_var, feat_1, 
             lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]))
-    #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
-        print(sprintf("cor(%s, %s)=%0.4f", glb_predct_var, feat_2, 
+    #     print(myplot_scatter(lcl_entity_df, lcl_predct_var, feat_2))
+        print(sprintf("cor(%s, %s)=%0.4f", lcl_predct_var, feat_2, 
             lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]))
-    #     print(myplot_scatter(glb_entity_df, glb_predct_var, feat_2))
+    #     print(myplot_scatter(lcl_entity_df, lcl_predct_var, feat_2))
     
-        plot_df <- melt(glb_entity_df, id.vars=glb_predct_var, measure.vars=c(feat_1, feat_2))
-        print(myplot_scatter(plot_df, glb_predct_var, "value", 
+        plot_df <- melt(lcl_entity_df, id.vars=lcl_predct_var, measure.vars=c(feat_1, feat_2))
+        print(myplot_scatter(plot_df, lcl_predct_var, "value", 
                              facet_colcol_name="variable", smooth=TRUE))    
     
-#         if (glb_id_var %in% c(feat_1, feat_2)) drop_feat <- glb_id_var else {
-#   	  if (intersect(glb_id_vars, c(feat_1, feat_2)))
-		if (feat_1 %in% glb_exclude_vars_as_features) drop_feat <- feat_1 else {
-			if (feat_2 %in% glb_exclude_vars_as_features) drop_feat <- feat_2 else {
+#         if (lcl_id_var %in% c(feat_1, feat_2)) drop_feat <- lcl_id_var else {
+#   	  if (intersect(lcl_id_vars, c(feat_1, feat_2)))
+		if (feat_1 %in% lcl_exclude_vars_as_features) drop_feat <- feat_1 else {
+			if (feat_2 %in% lcl_exclude_vars_as_features) drop_feat <- feat_2 else {
 				drop_feat <- ifelse(
 					abs(lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]) >=
 					abs(lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]),
@@ -685,21 +687,22 @@ mybuild_models_df_row <- function(indep_vars_vctr, n.fit,
     )
 }    
 
-myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
+myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
+						fit_df, OOB_df=NULL) {
     
     if (length(indep_vars_vctr) == 1)
 	    if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), glb_predct_var)
+    	    indep_vars_vctr <- setdiff(names(fit_df), lcl_predct_var)
     
     mdl <- lm(reformulate(indep_vars_vctr, 
-                            response=glb_predct_var), data=fit_df)
+                            response=lcl_predct_var), data=fit_df)
     if (!is.null(OOB_df)) {
-    	OOB_df[, glb_predct_var_name] <- predict(mdl, newdata=OOB_df)
-		print(SSE.OOB <- sum((OOB_df[, glb_predct_var_name] - 
-							  OOB_df[, glb_predct_var]) ^ 2))
+    	OOB_df[, lcl_predct_var_name] <- predict(mdl, newdata=OOB_df)
+		print(SSE.OOB <- sum((OOB_df[, lcl_predct_var_name] - 
+							  OOB_df[, lcl_predct_var]) ^ 2))
 		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
-							sum((OOB_df[, glb_predct_var] - 
-								#mean(OOB_df[, glb_predct_var])
+							sum((OOB_df[, lcl_predct_var] - 
+								#mean(OOB_df[, lcl_predct_var])
 								mean(mdl$fitted.values)    
 							) ^ 2)))	
     } else {SSE.OOB <- NA; R.sq.OOB <- NA}
@@ -722,14 +725,15 @@ myrun_mdl_lm <- function(indep_vars_vctr, fit_df=NULL, OOB_df=NULL) {
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
-mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold) {
-	obs_df[, glb_predct_var_name] <- (predict(mdl, 
+mycompute_classifier_f.score_old <- function(mdl, obs_df, proba_threshold,
+										lcl_predct_var, lcl_predct_var_name) {
+	obs_df[, lcl_predct_var_name] <- (predict(mdl, 
 					newdata=obs_df, type="response") >= proba_threshold) * 1.0
 
 	# This does not work when prediction does not generate certain categories
 	#	Better way would be to create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-	obs_xtab_df <- mycreate_xtab(obs_df, c(glb_predct_var, glb_predct_var_name))
+	obs_xtab_df <- mycreate_xtab(obs_df, c(lcl_predct_var, lcl_predct_var_name))
 	#obs_f_score <- 2 * precision * recall / (precision + recall)
 	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
@@ -738,28 +742,61 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold) {
 					((2 * obs_xtab_df[2,3]) + 
 					obs_xtab_df[1,3] + obs_xtab_df[2,2])
 }
+mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
+										lcl_predct_var, lcl_predct_var_name) {
+	obs_df[, lcl_predct_var_name] <- (predict(mdl, 
+					newdata=obs_df, type="response") >= proba_threshold) * 1.0
 
-myrun_mdl_glm <- function(indep_vars_vctr, fit_df, OOB_df=NULL) {
+	#	Create a dummy matrix of 0s with actual outcomes
+	#	& merge in appropriate predicted outcomes cols
+	mrg_obs_xtab_df <- orderBy(reformulate(lcl_predct_var), 
+								mycreate_tbl_df(obs_df, lcl_predct_var)[, 1, FALSE])
+	for (val in unique(mrg_obs_xtab_df[, 1]))
+		mrg_obs_xtab_df[, paste(lcl_predct_var_name, val, sep=".")] <- 0
+	#print(mrg_obs_xtab_df)
+	
+	obs_xtab_df <- mycreate_xtab(obs_df, c(lcl_predct_var, lcl_predct_var_name))
+	obs_xtab_df[is.na(obs_xtab_df)] <- 0
+	#print(obs_xtab_df)
+
+	for (col_ix in 2:ncol(obs_xtab_df))
+		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <- 
+			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
+	#print(mrg_obs_xtab_df)			
+
+	# This F-score formula ignores NAs in prediction. 
+	#	FN should be FN + knt(actual == +ve, predicted == NA) ???
+	#	knt(actual == -ve, predicted == NA) may be ignored because that adds to TN which is 
+	#		not used in f.score ???
+	#obs_f_score <- 2 * precision * recall / (precision + recall)
+	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
+	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) / 
+					((2 * mrg_obs_xtab_df[2,3]) + 
+					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
+}
+
+myrun_mdl_glm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
+						  fit_df, OOB_df=NULL) {
     require(ROCR)
     
     if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), glb_predct_var)
+    	    indep_vars_vctr <- setdiff(names(fit_df), lcl_predct_var)
     
-    mdl <- glm(reformulate(indep_vars_vctr, response=glb_predct_var), data=fit_df, 
+    mdl <- glm(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
                family="binomial")
                
-	fit_df[, paste0(glb_predct_var_name, ".proba")] <- 
+	fit_df[, paste0(lcl_predct_var_name, ".proba")] <- 
 		predict(mdl, newdata=fit_df, type="response")
-	ROCRpred <- prediction(fit_df[, paste0(glb_predct_var_name, ".proba")],
-						   fit_df[, glb_predct_var])
+	ROCRpred <- prediction(fit_df[, paste0(lcl_predct_var_name, ".proba")],
+						   fit_df[, lcl_predct_var])
 	auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
                
     if (!is.null(OOB_df)) {
-    	OOB_df[, paste0(glb_predct_var_name, ".proba")] <- 
+    	OOB_df[, paste0(lcl_predct_var_name, ".proba")] <- 
     		predict(mdl, newdata=OOB_df, type="response")
-    	ROCRpred <- prediction(OOB_df[, paste0(glb_predct_var_name, ".proba")],
-        	                   OOB_df[, glb_predct_var])
+    	ROCRpred <- prediction(OOB_df[, paste0(lcl_predct_var_name, ".proba")],
+        	                   OOB_df[, lcl_predct_var])
     	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
     } else {auc.OOB <- NA}
     
@@ -791,20 +828,20 @@ myrun_mdl_glm <- function(indep_vars_vctr, fit_df, OOB_df=NULL) {
 ## 09.3     export cv test data for inspection
 
 ## 10.	    build finalized model on all training data
-myextract_mdl_feats <- function() {
-    plot_vars_df <- as.data.frame(summary(glb_sel_mdl)$coefficients)
+myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
+    plot_vars_df <- as.data.frame(summary(lcl_sel_mdl)$coefficients)
     names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
     # Get rid of (Intercept)
     plot_vars_df <- orderBy(~Pr.z, plot_vars_df[2:nrow(plot_vars_df),])
     #print(plot_vars_df <- subset(plot_vars_df, Pr.z < 0.1))
     plot_vars_df$id <- rownames(plot_vars_df)
     
-    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(glb_entity_df))
+    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(lcl_entity_df))
     
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
 		dummy_vars_df <- mutate(dummy_vars_df, 
 						root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
-								vld.fit.feat=(root.feat %in% names(glb_entity_df))
+								vld.fit.feat=(root.feat %in% names(lcl_entity_df))
 								)
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
@@ -818,9 +855,9 @@ myextract_mdl_feats <- function() {
     return(orderBy(~Pr.z, vld_plot_vars_df))
 }
 
-mymerge_feats_Pr.z <- function() {
-    plot_vars_df <- myextract_mdl_feats()
-    return(orderBy(~Pr.z, merge(glb_feats_df, plot_vars_df[,c("id", "Pr.z")], all=TRUE)))
+mymerge_feats_Pr.z <- function(lcl_feats_df, lcl_sel_mdl, lcl_entity_df) {
+    plot_vars_df <- myextract_mdl_feats(lcl_sel_mdl, lcl_entity_df)
+    return(orderBy(~Pr.z, merge(lcl_feats_df, plot_vars_df[,c("id", "Pr.z")], all=TRUE)))
 }
 
 ## 11.	    predict results for new data
