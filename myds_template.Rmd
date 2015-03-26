@@ -2,12 +2,12 @@
 # Get YAML keywords from myYAML_ref.Rmd
 title: "<Project name>: <Predict var> <regression/classification>"
 author: "bdanalytics"
-pandoc_args: ["+RTS", "-K64M", "-RTS"]
 
 # Choose one:
 output:
     html_document:
         keep_md: yes
+        pandoc_args: ["+RTS", "-K64M", "-RTS"]
 
 # output:
 #   pdf_document:
@@ -58,7 +58,7 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 # Analysis control global variables
 glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
-glb_split_newdata_method <- "sample"          # or "condition"
+glb_split_newdata_method <- "sample"          # "condition" or "sample"
 glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
 glb_split_newdata_size <- 0.25               # > 0 & < 1
 glb_split_sample.seed <- 1000               # or any integer 
@@ -68,10 +68,10 @@ glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_vars <- c("<Id var>")                # or NULL
 
 glb_exclude_vars_as_features <- union(glb_id_vars, ".rnorm")     # or NULL                      
-# List chrs converted into factors; num/int transformed  
-# glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-#                                       c("<col_name>")     # or NULL
-#                                       )
+# List chrs (convert into factors if it's a valid feature); num/int transformed  
+glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                      c("<col_name>")     # or NULL
+                                      )
 # List feats that shd be excluded due to known causation by prediction variable
 # glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
 #                                       c("<col_name>")     # or NULL
@@ -215,6 +215,7 @@ glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
 # print(which.max(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>)[, 2]))
 # print(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>))
 # print(table(is.na(glb_entity_df$<col1_name>), glb_entity_df$<col2_name>))
+# print(table(sign(glb_entity_df$<col1_name>), glb_entity_df$<col2_name>))
 # print(mycreate_xtab(glb_entity_df, <col1_name>))
 # print(mycreate_xtab(glb_entity_df, c(<col1_name>, <col2_name>)))
 # print(<col1_name>_<col2_name>_xtab_glb_entity_df <- 
@@ -256,37 +257,45 @@ print(script_df)
 # glb_newent_df <- na.omit(glb_newent_df)
 # df[is.na(df)] <- 0
 
-# Impute missing data
-if (!glb_is_separate_newent_dataset) {
-    # Combine entity & newent
-    union_df <- rbind(mutate(glb_entity_df, .src = "entity"),
-                      mutate(glb_newent_df, .src = "newent"))
-    union_imputed_df <- union_df[, setdiff(setdiff(names(glb_entity_df), 
-                                                   glb_predct_var), 
-                                           glb_exclude_vars_as_features)]
-    print(summary(union_imputed_df))
-
-    require(mice)
-    set.seed(glb_mice_complete.seed)
-    union_imputed_df <- complete(mice(union_imputed_df))
-    print(summary(union_imputed_df))
-
-    union_df[, names(union_imputed_df)] <- union_imputed_df[, names(union_imputed_df)]
-    print(summary(union_df))
+# Not refactored into mydsutils.R since glb_*_df might be reassigned
+glb_impute_missing_data <- function(entity_df, newent_df) {
+    if (!glb_is_separate_newent_dataset) {
+        # Combine entity & newent
+        union_df <- rbind(mutate(entity_df, .src = "entity"),
+                          mutate(newent_df, .src = "newent"))
+        union_imputed_df <- union_df[, setdiff(setdiff(names(entity_df), 
+                                                       glb_predct_var), 
+                                               glb_exclude_vars_as_features)]
+        print(summary(union_imputed_df))
     
-    # Partition again
-    glb_entity_df <- subset(union_df, .src == "entity", select=-.src)
-    comment(glb_entity_df) <- "glb_entity_df"
-    glb_newent_df <- subset(union_df, .src == "newent", select=-.src)
-    comment(glb_newent_df) <- "glb_newent_df"
+        require(mice)
+        set.seed(glb_mice_complete.seed)
+        union_imputed_df <- complete(mice(union_imputed_df))
+        print(summary(union_imputed_df))
     
-    # Generate summaries
-    print(summary(glb_entity_df))
-    print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
-    print(summary(glb_newent_df))
-    print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
+        union_df[, names(union_imputed_df)] <- union_imputed_df[, names(union_imputed_df)]
+        print(summary(union_df))
+        
+        # Partition again
+        glb_entity_df <<- subset(union_df, .src == "entity", select=-.src)
+        comment(glb_entity_df) <- "entity_df"
+        glb_newent_df <<- subset(union_df, .src == "newent", select=-.src)
+        comment(glb_newent_df) <- "newent_df"
+        
+        # Generate summaries
+        print(summary(entity_df))
+        print(sapply(names(entity_df), function(col) sum(is.na(entity_df[, col]))))
+        print(summary(newent_df))
+        print(sapply(names(newent_df), function(col) sum(is.na(newent_df[, col]))))
+    
+    } else stop("Not implemented yet")
+}
 
-} else stop("Not implemented yet")
+if ((sum(sapply(names(glb_entity_df), 
+                function(col) sum(is.na(glb_entity_df[, col])))) > 0) | 
+    (sum(sapply(names(glb_newent_df), 
+                function(col) sum(is.na(glb_newent_df[, col])))) > 0))
+    glb_impute_missing_data(glb_entity_df, glb_newent_df)
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -433,13 +442,18 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=subset(glb_feats_df,
 glb_sel_mdl <- glb_mdl                        
 
 # All X that is not user excluded
-ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(setdiff(names(glb_entity_df),
-                                                        glb_predct_var),
-                                                glb_exclude_vars_as_features),
+ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
+    union(glb_predct_var, glb_exclude_vars_as_features)),
                         glb_predct_var, glb_predct_var_name,
                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
 
-# User specified
+# User specified - easier to exclude features
+# ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
+#     union(union(glb_predct_var, glb_exclude_vars_as_features), c("<feat1_name>", "<feat2_name>"))),
+#                         glb_predct_var, glb_predct_var_name,
+#                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
+
+# User specified - easier to include features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
 #                         glb_predct_var, glb_predct_var_name,
 #                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
@@ -555,7 +569,7 @@ glb_analytics_diag_plots <- function(obs_df) {
         else print(myplot_prediction_classification(obs_df, 
                     ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"),
                                                plot_vars_df$id[1],
-                    glb_predct_var, glb_predct_var_name)
+                    glb_predct_var, glb_predct_var_name, glb_id_vars)
 #               + geom_hline(yintercept=<divider_val>, linetype = "dotted")
                 )
     }    

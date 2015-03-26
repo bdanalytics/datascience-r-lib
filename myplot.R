@@ -375,7 +375,7 @@ myplot_radar <- function(radar_inp_df) {
 }   
 
 myplot_prediction_classification <- function(df, feat_x, feat_y, 
-                                            lcl_predct_var, lcl_predct_var_name) {
+                                            lcl_predct_var, lcl_predct_var_name, lcl_id_vars) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
@@ -384,10 +384,19 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     df[, paste0(lcl_predct_var_name, ".accurate")] <- 
         (df[,lcl_predct_var] == df[,lcl_predct_var_name])    
         
+    # Attach labels to to prediction errors
+#     df <- mutate(df, ,.label = ifelse(!paste0(lcl_predct_var_name, ".accurate"), 
+#                                         paste(lcl_id_vars, sep=":"), ""))
+    df$.label <- sapply(1:nrow(df), function(row_ix) 
+        ifelse(!df[row_ix, paste0(lcl_predct_var_name, ".accurate")], 
+                paste(df[row_ix, lcl_id_vars], collapse=":"), ""))
+    myprint_df(subset(df, .label != ""))
+            
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
             geom_point(aes_string(color=paste0(lcl_predct_var, ".fctr"),
                                   shape=paste0(lcl_predct_var_name, ".accurate")), 
-                       position="jitter") + 
+                       position="jitter") +
+            geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +                       
             facet_wrap(reformulate(paste0(lcl_predct_var_name, ".accurate")))
           )    
 }
