@@ -66,7 +66,7 @@ glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_vars <- c("<Id var>")                # or NULL
 
-glb_exclude_vars_as_features <- glb_id_vars     # or NULL                      
+glb_exclude_vars_as_features <- union(glb_id_vars, ".rnorm")     # or NULL                      
 # List chrs converted into factors; num/int transformed  
 # glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
 #                                       c("<col_name>")     # or NULL
@@ -76,9 +76,10 @@ glb_exclude_vars_as_features <- glb_id_vars     # or NULL
 #                                       c("<col_name>")     # or NULL
 #                                       )
 
-glb_is_regression <- TRUE; glb_is_classification <- FALSE
+glb_mice_complete.seed <- 144               # or any integer
+glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
-glb_mdl <- glb_sel_mdl <- NULL
+glb_mdl <- glb_sel_mdl <- glb_dmy_mdl <- NULL
 glb_models_df <- data.frame()
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -108,6 +109,8 @@ if (glb_is_separate_newent_dataset) {
 #     glb_newent_df <- subset(glb_entity_df, <condition>)        
         } else { 
             if (glb_split_newdata_method == "sample") {
+                require(caTools)
+                
                 set.seed(glb_split_sample.seed)
                 split <- sample.split(glb_entity_df[, glb_predct_var], 
                                       SplitRatio=(1-glb_split_newdata_size))
@@ -156,6 +159,8 @@ print(script_df)
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
 
 add_new_diag_feats <- function(obs_df, obs_twin_df) {
+    require(plyr)
+    
     obs_df <- mutate(obs_df,
 #         <col_name>.NA=is.na(<col_name>)
 
@@ -174,6 +179,7 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         Weekday=weekdays(Date.my)
 
 #         <col_name>.log=log(<col.name>)        
+        .rnorm=rnorm(1)
                         )
 
     # If levels of a factor are different across obs_df & glb_newent_df; predict.glm fails  
@@ -187,8 +193,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
     return(obs_df)
 }
 
-# glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_newent_df)
-# glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
+glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_newent_df)
+glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
 
 #pairs(subset(glb_entity_df, select=-c(col_symbol)))
 
@@ -207,8 +213,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 # print(which.max(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>)[, 2]))
 # print(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>))
 # print(table(is.na(glb_entity_df$<col1_name>), glb_entity_df$<col2_name>))
-# print(xtabs(~ <col1_name>, glb_entity_df))
-# print(xtabs(~ <col1_name> + <col2_name>, glb_entity_df))
+# print(mycreate_xtab(glb_entity_df, <col1_name>))
+# print(mycreate_xtab(glb_entity_df, c(<col1_name>, <col2_name>)))
 # print(<col1_name>_<col2_name>_xtab_glb_entity_df <- 
 #   mycreate_xtab(glb_entity_df, c("<col1_name>", "<col2_name>")))
 # <col1_name>_<col2_name>_xtab_glb_entity_df[is.na(<col1_name>_<col2_name>_xtab_glb_entity_df)] <- 0
@@ -247,6 +253,38 @@ print(script_df)
 # glb_entity_df <- na.omit(glb_entity_df)
 # glb_newent_df <- na.omit(glb_newent_df)
 # df[is.na(df)] <- 0
+
+# Impute missing data
+if (!glb_is_separate_newent_dataset) {
+    # Combine entity & newent
+    union_df <- rbind(mutate(glb_entity_df, .src = "entity"),
+                      mutate(glb_newent_df, .src = "newent"))
+    union_imputed_df <- union_df[, setdiff(setdiff(names(glb_entity_df), 
+                                                   glb_predct_var), 
+                                           glb_exclude_vars_as_features)]
+    print(summary(union_imputed_df))
+
+    require(mice)
+    set.seed(glb_mice_complete.seed)
+    union_imputed_df <- complete(mice(union_imputed_df))
+    print(summary(union_imputed_df))
+
+    union_df[, names(union_imputed_df)] <- union_imputed_df[, names(union_imputed_df)]
+    print(summary(union_df))
+    
+    # Partition again
+    glb_entity_df <- subset(union_df, .src == "entity", select=-.src)
+    comment(glb_entity_df) <- "glb_entity_df"
+    glb_newent_df <- subset(union_df, .src == "newent", select=-.src)
+    comment(glb_newent_df) <- "glb_newent_df"
+    
+    # Generate summaries
+    print(summary(glb_entity_df))
+    print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+    print(summary(glb_newent_df))
+    print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
+
+} else stop("Not implemented yet")
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -319,7 +357,8 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: select features
 ```{r select_features, cache=FALSE}
-print(glb_feats_df <- myselect_features())
+print(glb_feats_df <- 
+    myselect_features(glb_entity_df, glb_exclude_vars_as_features, glb_predct_var))
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="remove_correlated_features", 
@@ -330,8 +369,10 @@ print(script_df)
 
 ### Step ``r script_df[nrow(script_df), "chunk_step_major"]``.``r script_df[nrow(script_df), "chunk_step_minor"]``: remove correlated features
 ```{r remove_correlated_features, cache=FALSE}
-print(glb_feats_df <- orderBy(~-cor.y, 
-                    merge(glb_feats_df, mydelete_cor_features(), all.x=TRUE)))
+print(glb_feats_df <- orderBy(~-cor.y, merge(glb_feats_df, 
+          mydelete_cor_features(glb_feats_df, glb_entity_df, glb_predct_var, 
+                                glb_exclude_vars_as_features), 
+          all.x=TRUE)))
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="run_models", 
@@ -357,6 +398,10 @@ if (glb_is_classification) {
 }    
     
 # Add dummy model - random variable
+#   Potential Enhancements:
+#       For classifiers, it shd generate proba/outcomes that mimics the freq
+#           distribution of glb_predct_var values; Right now it always generates
+#           0 (most frequent ?)
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=".rnorm",
                         lcl_predct_var=glb_predct_var, 
                         lcl_predct_var_name=glb_predct_var_name,
