@@ -164,13 +164,13 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
     require(plyr)
     
     obs_df <- mutate(obs_df,
-#         <col_name>.NA=is.na(<col_name>)
+#         <col_name>.NA=is.na(<col_name>),
 
 #         <col_name>.fctr=factor(<col_name>, 
-#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))) 
+#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))), 
 #         <col_name>.fctr=relevel(factor(<col_name>, 
 #                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))),
-#                                   "<max_n_val>") 
+#                                   "<max_n_val>"), 
 
           # This doesn't work - use sapply instead
 #         <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), 
@@ -180,7 +180,7 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         Month=months(Date.my),
 #         Weekday=weekdays(Date.my)
 
-#         <col_name>.log=log(<col.name>)        
+#         <col_name>.log=log(<col.name>),        
         .rnorm=rnorm(1)
                         )
 
@@ -484,7 +484,8 @@ print(script_df)
 
 ## Step ``r script_df[nrow(script_df), "chunk_step_major"]``: fit training.all
 ```{r fit_training.all, cache=FALSE}
-print(mdl_feats_df <- myextract_mdl_feats(glb_sel_mdl, glb_entity_df))
+print(mdl_feats_df <- myextract_mdl_feats(lcl_sel_mdl=glb_sel_mdl, 
+                                          lcl_entity_df=glb_entity_df))
 
 if (glb_is_regression) {
     ret_lst <- myrun_mdl_lm(indep_vars_vctr=mdl_feats_df$id,
@@ -629,14 +630,22 @@ if (glb_is_classification) {
     ROCRpred <- prediction(glb_newent_df[, paste0(glb_predct_var_name, ".proba")],
                            glb_newent_df[, glb_predct_var])
     print(sprintf("auc=%0.4f", auc <- as.numeric(performance(ROCRpred, "auc")@y.values)))   
-    print(sprintf("probability threshold=%0.4f", glb_clf_proba_threshold))
     
-    print(mycreate_xtab(glb_newent_df, c(glb_predct_var, glb_predct_var_name)))
+    print(sprintf("probability threshold=%0.4f", glb_clf_proba_threshold))
+    print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
+                                        c(glb_predct_var, glb_predct_var_name)))
     print(sprintf("f.score.sel=%0.4f", 
         mycompute_classifier_f.score(mdl=glb_sel_mdl, obs_df=glb_newent_df, 
                                      proba_threshold=glb_clf_proba_threshold, 
                                      lcl_predct_var=glb_predct_var, 
                                      lcl_predct_var_name=glb_predct_var_name)))
+    print(sprintf("sensitivity=%0.4f", newent_conf_df[2, 3] / 
+                      (newent_conf_df[2, 3] + newent_conf_df[2, 2])))
+    print(sprintf("specificity=%0.4f", newent_conf_df[1, 2] / 
+                      (newent_conf_df[1, 2] + newent_conf_df[1, 3])))
+    print(sprintf("accuracy=%0.4f", (newent_conf_df[1, 2] + newent_conf_df[2, 3]) / 
+                      (newent_conf_df[1, 2] + newent_conf_df[2, 3] + 
+                       newent_conf_df[1, 3] + newent_conf_df[2, 2])))
     
     print(mycreate_xtab(glb_newent_df, c(glb_predct_var, paste0(glb_predct_var, ".preddmy"))))
     print(sprintf("f.score.dmy=%0.4f", 

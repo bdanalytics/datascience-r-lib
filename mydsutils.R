@@ -831,6 +831,7 @@ myrun_mdl_glm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
 
 ## 10.	    build finalized model on all training data
 myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
+
     plot_vars_df <- as.data.frame(summary(lcl_sel_mdl)$coefficients)
     names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
     # Get rid of (Intercept)
@@ -841,10 +842,18 @@ myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
     plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(lcl_entity_df))
     
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
+# 		dummy_vars_df <- mutate(dummy_vars_df, 
+# 						root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
+# 								vld.fit.feat=(root.feat %in% names(lcl_entity_df))
+# 								)
+		dummy_vars_df$root.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
+			paste0(unlist(strsplit(dummy_vars_df[row_ix, "id"], ".fctr", fixed=TRUE))[1], 
+					".fctr"))
+		#print(dummy_vars_df)					
 		dummy_vars_df <- mutate(dummy_vars_df, 
-						root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
 								vld.fit.feat=(root.feat %in% names(lcl_entity_df))
 								)
+		#print(dummy_vars_df)								
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
 	

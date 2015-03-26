@@ -389,7 +389,10 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
 #                                         paste(lcl_id_vars, sep=":"), ""))
     df$.label <- sapply(1:nrow(df), function(row_ix) 
         ifelse(!df[row_ix, paste0(lcl_predct_var_name, ".accurate")], 
-                paste(df[row_ix, lcl_id_vars], collapse=":"), ""))
+                ifelse(length(lcl_id_vars) > 0, 
+                        paste(df[row_ix, lcl_id_vars], collapse=":"),
+                        paste0(".", rownames(df)[row_ix])), 
+                ""))
     myprint_df(subset(df, .label != ""))
             
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
