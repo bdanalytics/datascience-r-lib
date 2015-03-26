@@ -358,8 +358,10 @@ mycreate_xtab <- function(df, xtab_col_names) {
     df[, "_n"] <- 1
     count_df <- summaryBy(reformulate(xtab_col_names, "`_n`"), df, FUN=c(length))
     #count_df <- summaryBy(reformulate(xtab_col_names, "_n"), df, FUN=c(length))
-
     names(count_df) <- gsub("`", "", names(count_df))
+    
+    if (length(xtab_col_names) < 2)
+    	return(count_df)
     
     cast_df <- dcast(count_df, 
     	reformulate(tail(xtab_col_names, 1), head(xtab_col_names, -1)), 

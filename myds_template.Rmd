@@ -59,6 +59,7 @@ source("~/Dropbox/datascience/R/mypetrinet.R")
 glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
 glb_split_newdata_method <- "sample"          # or "condition"
+glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
 glb_split_newdata_size <- 0.25               # > 0 & < 1
 glb_split_sample.seed <- 1000               # or any integer 
 
@@ -103,12 +104,14 @@ if (glb_is_separate_newent_dataset) {
         stop("Not implemented yet") 
         glb_newent_df <- glb_entity_df[sample(1:nrow(glb_entity_df),
                                           max(2, nrow(glb_entity_df) / 1000)),]                    
-    } else {
-        if (glb_split_newdata_method == "condition") {
-            stop("Not implemented yet") 
-#     glb_newent_df <- subset(glb_entity_df, <condition>)        
-        } else { 
-            if (glb_split_newdata_method == "sample") {
+    } else      if (glb_split_newdata_method == "condition") {
+            glb_newent_df <- do.call("subset", 
+                list(glb_entity_df, parse(text=glb_split_newdata_condition)))
+            glb_entity_df <- do.call("subset", 
+                list(glb_entity_df, parse(text=paste0("!(", 
+                                                      glb_split_newdata_condition,
+                                                      ")"))))
+        } else if (glb_split_newdata_method == "sample") {
                 require(caTools)
                 
                 set.seed(glb_split_sample.seed)
@@ -116,9 +119,8 @@ if (glb_is_separate_newent_dataset) {
                                       SplitRatio=(1-glb_split_newdata_size))
                 glb_newent_df <- glb_entity_df[!split, ] 
                 glb_entity_df <- glb_entity_df[split ,]
-            }
-        }    
-    }
+        } else stop("glb_split_newdata_method should be %in% c('condition', 'sample')")   
+
     comment(glb_newent_df) <- "glb_newent_df"
     myprint_df(glb_newent_df)
     str(glb_newent_df)
@@ -499,7 +501,7 @@ if (glb_is_classification) {
     plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
     
     # 0 & 1 does not generate outcomes for certain categories
-    thresholds_df <- data.frame(threshold=seq(0.1, 0.9, 0.1))
+    thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
     thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
         mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
                                      thresholds_df[row_ix, "threshold"], 
@@ -548,8 +550,9 @@ glb_analytics_diag_plots <- function(obs_df) {
     }    
     
     if (glb_is_classification) {
-        plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
-        print(myplot_prediction_classification(obs_df, 
+        if (nrow(plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)) == 0)
+            warning("No coefficients in selected model are statistically significant")
+        else print(myplot_prediction_classification(obs_df, 
                     ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"),
                                                plot_vars_df$id[1],
                     glb_predct_var, glb_predct_var_name)
@@ -557,7 +560,7 @@ glb_analytics_diag_plots <- function(obs_df) {
                 )
     }    
 }
-glb_analytics_diag_plots(glb_entity_df)
+glb_analytics_diag_plots(obs_df=glb_entity_df)
 
 script_df <- rbind(script_df, 
                    data.frame(chunk_label="predict_newdata", 
