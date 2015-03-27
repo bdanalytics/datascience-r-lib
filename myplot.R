@@ -381,7 +381,9 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
         df[, ".rownames"] <- rownames(df)
         
     df[, paste0(lcl_predct_var, ".fctr")] <- as.factor(df[,lcl_predct_var])
-    df[, paste0(lcl_predct_var_name, ".accurate")] <- 
+
+    lcl_predct_accurate_var_name <- paste0(lcl_predct_var_name, ".accurate")
+    df[, lcl_predct_accurate_var_name] <- 
         (df[,lcl_predct_var] == df[,lcl_predct_var_name])    
         
     # Attach labels to to prediction errors
@@ -398,30 +400,30 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
 #                         paste0(".", rownames(df)[row_ix])), 
 #                 ""))
     df$.label <- ""
-    for (row_ix in c(which.min(df[, feat_x]), which.max(df[, feat_x]),
-                     which.min(df[, feat_y]), which.max(df[, feat_y]),
-                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
-                             df[, feat_x] == min(df[, feat_x])),
-                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
-                             df[, feat_x] == max(df[, feat_x])),
-                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
-                             df[, feat_y] == min(df[, feat_y])),
-                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
-                             df[, feat_y] == max(df[, feat_y]))
-                     )) 
-        df[row_ix, ".label"] <- 
-                    ifelse(length(lcl_id_vars) > 0, 
-                            paste(df[row_ix, lcl_id_vars], collapse=":"),
-                            paste0(".", rownames(df)[row_ix]))
+    for (feat in c(feat_x, feat_y)) {
+        if (class(df[, feat]) == "factor")
+            next
+            
+        for (row_ix in c(which.min(df[, feat]), which.max(df[, feat]),
+                         which(!df[, lcl_predct_accurate_var_name] & 
+                                 df[, feat] == min(df[, feat])),
+                         which(!df[, lcl_predct_accurate_var_name] & 
+                                 df[, feat] == max(df[, feat]))
+                         )) 
+            df[row_ix, ".label"] <- 
+                        ifelse(length(lcl_id_vars) > 0, 
+                                paste(df[row_ix, lcl_id_vars], collapse=":"),
+                                paste0(".", rownames(df)[row_ix]))
+    }                            
     
     myprint_df(subset(df, .label != ""))
             
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
             geom_point(aes_string(color=paste0(lcl_predct_var, ".fctr"),
-                                  shape=paste0(lcl_predct_var_name, ".accurate")), 
+                                  shape=lcl_predct_accurate_var_name), 
                        position="jitter") +
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +                       
-            facet_wrap(reformulate(paste0(lcl_predct_var_name, ".accurate")))
+            facet_wrap(reformulate(lcl_predct_accurate_var_name))
           )    
 }
 

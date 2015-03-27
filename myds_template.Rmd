@@ -60,8 +60,8 @@ glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
 glb_split_newdata_method <- "sample"          # "condition" or "sample"
 glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
-glb_split_newdata_size <- 0.25               # > 0 & < 1
-glb_split_sample.seed <- 1000               # or any integer 
+glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
+glb_split_sample.seed <- 3000               # or any integer 
 
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
@@ -81,7 +81,8 @@ glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
 glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
-glb_mdl <- glb_sel_mdl <- glb_dmy_mdl <- NULL
+glb_sel_mdl <- glb_dmy_mdl <- NULL
+glb_models_lst <- list()
 glb_models_df <- data.frame()
 
 script_df <- data.frame(chunk_label="import_data", chunk_step_major=1, chunk_step_minor=0)
@@ -117,7 +118,7 @@ if (glb_is_separate_newent_dataset) {
                 
                 set.seed(glb_split_sample.seed)
                 split <- sample.split(glb_entity_df[, glb_predct_var], 
-                                      SplitRatio=(1-glb_split_newdata_size))
+                                      SplitRatio=(1-glb_split_newdata_size_ratio))
                 glb_newent_df <- glb_entity_df[!split, ] 
                 glb_entity_df <- glb_entity_df[split ,]
         } else stop("glb_split_newdata_method should be %in% c('condition', 'sample')")   
@@ -184,7 +185,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         <col_name>.log=log(<col.name>),        
 #         <col_name>=<table>[as.character(<col2_name>)],
 #         <col_name>=as.numeric(<col2_name>),
-        .rnorm=rnorm(1)
+
+        .rnorm=rnorm(n=nrow(obs_df))
                         )
 
     # If levels of a factor are different across obs_df & glb_newent_df; predict.glm fails  
@@ -430,7 +432,7 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=".rnorm",
                         lcl_predct_var=glb_predct_var, 
                         lcl_predct_var_name=glb_predct_var_name,
                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
-glb_dmy_mdl <- glb_mdl
+glb_dmy_mdl <- ret_lst[["model"]]
 
 # Highest cor.y
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=max_cor_y_x_var,
@@ -452,7 +454,6 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=subset(glb_feats_df,
                                                cor.low == 1)[, "id"],
                         glb_predct_var, glb_predct_var_name,
                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
-glb_sel_mdl <- glb_mdl                        
 
 # All X that is not user excluded
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
@@ -462,9 +463,11 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df),
 
 # User specified - easier to exclude features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
-#     union(union(glb_predct_var, glb_exclude_vars_as_features), c("<feat1_name>", "<feat2_name>"))),
+#     union(union(glb_predct_var, glb_exclude_vars_as_features), 
+#             c("<feat1_name>", "<feat2_name>"))),
 #                         glb_predct_var, glb_predct_var_name,
 #                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
+# glb_sel_mdl <- ret_lst[["model"]]
 
 # User specified - easier to include features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
@@ -495,6 +498,7 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df),
 plot_models_df <- mutate(glb_models_df, feats.label=substr(feats, 1, 20))
 if (glb_is_regression) {
     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, glb_models_df))
+    stop("glb_sel_mdl not selected")
     print(myplot_scatter(plot_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
                     size=3.5, angle=45))
@@ -502,7 +506,10 @@ if (glb_is_regression) {
 
 if (glb_is_classification) {
     # Lower AIC is better
-    print(orderBy(~ -auc.OOB +AIC.fit, glb_models_df))    
+    print(tmp_models_df <- orderBy(~ -auc.OOB +AIC.fit, glb_models_df))
+    glb_sel_mdl <- glb_models_lst[[as.numeric(rownames(tmp_models_df)[1])]]
+    print("Selected model:glb_sel_mdl:")    
+    print(summary(glb_sel_mdl))
     plot_models_df[, "inv.AIC.fit"] <- 1.0 / plot_models_df[, "AIC.fit"] 
     print(myplot_scatter(plot_models_df, "inv.AIC.fit", "auc.OOB") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
@@ -538,7 +545,7 @@ if (glb_is_regression) {
 if (glb_is_classification) {
     ret_lst <- myrun_mdl_glm(indep_vars_vctr=mdl_feats_df$id,
                         glb_predct_var, glb_predct_var_name, fit_df=glb_entity_df)
-    glb_sel_mdl <- glb_mdl        
+    glb_sel_mdl <- ret_lst[["model"]]        
 #     print(glb_models_df[nrow(glb_models_df), ])
     glb_entity_df[, paste0(glb_predct_var_name, ".proba")] <- 
         predict(glb_sel_mdl, newdata=glb_entity_df, type="response")

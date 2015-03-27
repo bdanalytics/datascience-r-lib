@@ -810,7 +810,10 @@ myrun_mdl_glm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
                                            AIC.fit=summary(mdl)$aic,
                                            auc.fit=auc.fit, auc.OOB=auc.OOB)
 
-    print(summary(glb_mdl <<- mdl));
+    print(summary(mdl)); 
+    lcl_models_lst <- glb_models_lst
+    lcl_models_lst[[length(glb_models_lst) + 1]] <- mdl
+    glb_models_lst <<- lcl_models_lst
 #     print(orderBy(~ -auc.OOB, 
                   glb_models_df <<- rbind(glb_models_df, lcl_models_df)
 #          ))
