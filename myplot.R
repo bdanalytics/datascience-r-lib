@@ -387,12 +387,33 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     # Attach labels to to prediction errors
 #     df <- mutate(df, ,.label = ifelse(!paste0(lcl_predct_var_name, ".accurate"), 
 #                                         paste(lcl_id_vars, sep=":"), ""))
-    df$.label <- sapply(1:nrow(df), function(row_ix) 
-        ifelse(!df[row_ix, paste0(lcl_predct_var_name, ".accurate")], 
-                ifelse(length(lcl_id_vars) > 0, 
-                        paste(df[row_ix, lcl_id_vars], collapse=":"),
-                        paste0(".", rownames(df)[row_ix])), 
-                ""))
+#     df$.label <- sapply(1:nrow(df), function(row_ix) 
+#         ifelse(!df[row_ix, paste0(lcl_predct_var_name, ".accurate")] & 
+#                 (df[row_ix, feat_x] == min(df[row_ix, feat_x]) |
+#                  max_of_feat_x |
+#                  min_of_feat_y |
+#                  max_of_feat_y), 
+#                 ifelse(length(lcl_id_vars) > 0, 
+#                         paste(df[row_ix, lcl_id_vars], collapse=":"),
+#                         paste0(".", rownames(df)[row_ix])), 
+#                 ""))
+    df$.label <- ""
+    for (row_ix in c(which.min(df[, feat_x]), which.max(df[, feat_x]),
+                     which.min(df[, feat_y]), which.max(df[, feat_y]),
+                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
+                             df[, feat_x] == min(df[, feat_x])),
+                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
+                             df[, feat_x] == max(df[, feat_x])),
+                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
+                             df[, feat_y] == min(df[, feat_y])),
+                     which(!df[, paste0(lcl_predct_var_name, ".accurate")] & 
+                             df[, feat_y] == max(df[, feat_y]))
+                     )) 
+        df[row_ix, ".label"] <- 
+                    ifelse(length(lcl_id_vars) > 0, 
+                            paste(df[row_ix, lcl_id_vars], collapse=":"),
+                            paste0(".", rownames(df)[row_ix]))
+    
     myprint_df(subset(df, .label != ""))
             
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +

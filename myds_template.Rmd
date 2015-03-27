@@ -77,6 +77,7 @@ glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features,
 #                                       c("<col_name>")     # or NULL
 #                                       )
 
+glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
 glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
@@ -181,6 +182,8 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         Weekday=weekdays(Date.my)
 
 #         <col_name>.log=log(<col.name>),        
+#         <col_name>=<table>[as.character(<col2_name>)],
+#         <col_name>=as.numeric(<col2_name>),
         .rnorm=rnorm(1)
                         )
 
@@ -198,9 +201,10 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_newent_df)
 glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
 
+# Histogram of predictor in glb_entity_df & glb_newent_df
+print(myplot_histogram(glb_entity_df, glb_predct_var))
 #pairs(subset(glb_entity_df, select=-c(col_symbol)))
 
-#   Histogram of predictor in glb_entity_df & glb_newent_df
 # Check for glb_newent_df & glb_entity_df features range mismatches
 
 # Other diagnostics:
@@ -231,7 +235,6 @@ glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
 #    sort(tapply(glb_entity_df$<col1_name>.NA, glb_entity_df$<col2_name>, mean, na.rm=TRUE)))
 
 # Other plots:
-print(myplot_histogram(glb_entity_df, glb_predct_var))
 # print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>"))
 # print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
 # print(myplot_line(subset(glb_entity_df, Symbol %in% c("KO", "PG")), 
@@ -275,11 +278,19 @@ glb_impute_missing_data <- function(entity_df, newent_df) {
     
         union_df[, names(union_imputed_df)] <- union_imputed_df[, names(union_imputed_df)]
         print(summary(union_df))
+#         union_df$.rownames <- rownames(union_df)
+#         union_df <- orderBy(~.rownames, union_df)
+#         
+#         imp_entity_df <- myimport_data(
+#             url="<imputed_trnng_url>", 
+#             comment="imp_entity_df", force_header=TRUE, print_diagn=TRUE)
+#         print(all.equal(subset(union_df, select=-c(.src, .rownames, .rnorm)), 
+#                         imp_entity_df))
         
         # Partition again
-        glb_entity_df <<- subset(union_df, .src == "entity", select=-.src)
+        glb_entity_df <<- subset(union_df, .src == "entity", select=-c(.src, .rownames))
         comment(glb_entity_df) <- "entity_df"
-        glb_newent_df <<- subset(union_df, .src == "newent", select=-.src)
+        glb_newent_df <<- subset(union_df, .src == "newent", select=-c(.src, .rownames))
         comment(glb_newent_df) <- "newent_df"
         
         # Generate summaries
@@ -291,11 +302,13 @@ glb_impute_missing_data <- function(entity_df, newent_df) {
     } else stop("Not implemented yet")
 }
 
-if ((sum(sapply(names(glb_entity_df), 
-                function(col) sum(is.na(glb_entity_df[, col])))) > 0) | 
-    (sum(sapply(names(glb_newent_df), 
-                function(col) sum(is.na(glb_newent_df[, col])))) > 0))
-    glb_impute_missing_data(glb_entity_df, glb_newent_df)
+if (glb_impute_na_data) {
+    if ((sum(sapply(names(glb_entity_df), 
+                    function(col) sum(is.na(glb_entity_df[, col])))) > 0) | 
+        (sum(sapply(names(glb_newent_df), 
+                    function(col) sum(is.na(glb_newent_df[, col])))) > 0))
+        glb_impute_missing_data(glb_entity_df, glb_newent_df)
+}    
 
 script_df <- rbind(script_df, 
     data.frame(chunk_label="encode_retype_data", 
@@ -458,17 +471,38 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df),
 #                         glb_predct_var, glb_predct_var_name,
 #                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
 
+# User specified bivariate models
+# for (feat in setdiff(names(glb_entity_df), 
+#                      union(glb_predct_var, glb_exclude_vars_as_features))) {
+#     ret_lst <- myrun_mdl_fn(indep_vars_vctr=feat,
+#                             glb_predct_var, glb_predct_var_name,
+#                             fit_df=glb_entity_df, OOB_df=glb_newent_df)
+#     if (feat == "<feat_name>")
+#         glb_sel_mdl <- glb_mdl
+# }    
+
+# User specified combinatorial models
+# combn_mtrx <- combn(c("<feat1_name>", "<feat2_name>", "<featn_name>"), <num_feats_to_choose>)
+# for (combn_ix in 1:ncol(combn_mtrx))
+#     #print(indep_vars_vctr <- combn_mtrx[, combn_ix])
+#     ret_lst <- myrun_mdl_fn(indep_vars_vctr=combn_mtrx[, combn_ix],
+#                             glb_predct_var, glb_predct_var_name,
+#                             fit_df=glb_entity_df, OOB_df=glb_newent_df)
+
 # Simplify a model
 # fit_df <- glb_entity_df; glb_mdl <- step(<complex>_mdl)
 
 plot_models_df <- mutate(glb_models_df, feats.label=substr(feats, 1, 20))
-if (glb_is_regression)
+if (glb_is_regression) {
+    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, glb_models_df))
     print(myplot_scatter(plot_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
                     size=3.5, angle=45))
+}    
 
 if (glb_is_classification) {
     # Lower AIC is better
+    print(orderBy(~ -auc.OOB +AIC.fit, glb_models_df))    
     plot_models_df[, "inv.AIC.fit"] <- 1.0 / plot_models_df[, "AIC.fit"] 
     print(myplot_scatter(plot_models_df, "inv.AIC.fit", "auc.OOB") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
@@ -515,7 +549,6 @@ if (glb_is_classification) {
     ROCRperf <- performance(ROCRpred, "tpr", "fpr")
     plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
     
-    # 0 & 1 does not generate outcomes for certain categories
     thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
     thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
         mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
@@ -567,10 +600,13 @@ glb_analytics_diag_plots <- function(obs_df) {
     if (glb_is_classification) {
         if (nrow(plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)) == 0)
             warning("No coefficients in selected model are statistically significant")
-        else print(myplot_prediction_classification(obs_df, 
-                    ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"),
-                                               plot_vars_df$id[1],
-                    glb_predct_var, glb_predct_var_name, glb_id_vars)
+        else print(myplot_prediction_classification(df=obs_df, 
+                feat_x=ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], 
+                              ".rownames"),
+                                               feat_y=plot_vars_df$id[1],
+                    lcl_predct_var=glb_predct_var, 
+                    lcl_predct_var_name=glb_predct_var_name, 
+                    lcl_id_vars=glb_id_vars)
 #               + geom_hline(yintercept=<divider_val>, linetype = "dotted")
                 )
     }    

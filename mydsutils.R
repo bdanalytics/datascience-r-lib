@@ -722,8 +722,9 @@ myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
                                            SSE.OOB=SSE.OOB)
                                            
     print(summary(glb_mdl <<- mdl));
-    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-              glb_models_df <<- rbind(glb_models_df, lcl_models_df)))    
+#     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+              glb_models_df <<- rbind(glb_models_df, lcl_models_df)
+#             ))    
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
@@ -810,8 +811,9 @@ myrun_mdl_glm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
                                            auc.fit=auc.fit, auc.OOB=auc.OOB)
 
     print(summary(glb_mdl <<- mdl));
-    print(orderBy(~ -auc.OOB, 
-                  glb_models_df <<- rbind(glb_models_df, lcl_models_df)))                                               
+#     print(orderBy(~ -auc.OOB, 
+                  glb_models_df <<- rbind(glb_models_df, lcl_models_df)
+#          ))
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
