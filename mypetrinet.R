@@ -526,7 +526,7 @@ ggplot.petrinet <- function(pn) {
 ######################################################################
 token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
                            animate=TRUE,reset=FALSE,
-                           wait=1000000, verbose=TRUE, file="") {
+                           wait=1000000, verbose=TRUE, file="", flip_coord=FALSE) {
     #The rewind option goes back to the initial marking.
     if (reset)     
         pn <- reset.petrinet(pn)
@@ -537,7 +537,7 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
 
     # Check if high.priority.trans is one of the enabled transitions
     if (!missing(high.priority.trans)) {
-        fire.enabled.trans.ix <- grep(high.priority.trans, pn$trans$name)
+        fire.enabled.trans.ix <- grep(paste0("^", high.priority.trans, "$"), pn$trans$name)
         if (length(fire.enabled.trans.ix) == 0) fire.enabled.trans.ix <- 0
     } else fire.enabled.trans.ix <- 0
 
@@ -601,7 +601,10 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
         #!(reset & (stepCounter==1)))
 
         #Plot it.
-        if (animate) {print(ggplot.petrinet(pn))}
+        if (animate) {
+            if (!flip_coord) print(ggplot.petrinet(pn)) else print(ggplot.petrinet(pn) + 
+                                                                    coord_flip()) 
+        }
 
         #Wait
         for (i in 1:wait*timestep) {}
@@ -632,7 +635,7 @@ token.game <- function(pn, high.priority.trans=NULL, steps=1e99,
 #   tokens_m - tokens missing
 #   tokens_r - tokens remaining
 ######################################################################
-replay.petrisim <- function(pn, replay.trans, verbose=TRUE) {
+replay.petrisim <- function(pn, replay.trans, verbose=TRUE, flip_coord=FALSE) {
 #     print(ggplot.petrinet(pn))
 #     par(ask=TRUE) 
 
@@ -672,7 +675,8 @@ replay.petrisim <- function(pn, replay.trans, verbose=TRUE) {
         tokens_c <- tokens_c + sum(replay_pn$Cin[trans, ])
         last <- ifelse((tix == length(replay.trans)), TRUE, FALSE)
         replay_pn <- token.game(replay_pn, steps=1, high.priority.trans=trans,
-                                animate=last, reset=first, wait=100, verbose=verbose)
+                                animate=last, reset=first, wait=100, verbose=verbose,
+                                flip_coord=flip_coord)
         tokens_p <- tokens_p + sum(replay_pn$Cout[trans, ])                        
         first <- FALSE
     }
