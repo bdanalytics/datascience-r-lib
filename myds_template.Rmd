@@ -63,6 +63,8 @@ glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or
 glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
 glb_split_sample.seed <- 3000               # or any integer 
 
+# for random forests (method="rf") & classification, the prediction variable has to be a factor
+# for caret if the factor is based on numbers e.g (0/1 vs. "A"/"B"), caret prediction probabilities crashes
 glb_predct_var <- "<Predict var>"           # or NULL
 glb_predct_var_name <- paste0(glb_predct_var, ".predict")
 glb_id_vars <- c("<Id var>")                # or NULL
@@ -86,23 +88,32 @@ glb_models_lst <- list(); glb_models_fn_lst <- list(); glb_models_df <- data.fra
 
 # Depict process
 glb_analytics_pn <- petrinet(name="glb_analytics_pn",
-                        trans_df=data.frame(id=1:3,
-    name=c("data.new","model.final","data.new.prediction"),
-    x=c(   -5,        -5,           -15),
-    y=c(   -5,         5,             0)
+                        trans_df=data.frame(id=1:6,
+    name=c("data.training.all","data.new",
+           "model.selected","model.final",
+           "data.training.all.prediction","data.new.prediction"),
+    x=c(   -5,-5,-15,-25,-25,-35),
+    y=c(   -5, 5,  0,  0, -5,  5)
                         ),
-                        places_df=data.frame(id=1:3,
-                            name=c("bgn","predict.data.new","end"),
-                            x=c(   -0,   -10,               -20),
-                            y=c(    0,     0,                 0),
-                            M0=c(   1,     0,                 0)
+                        places_df=data.frame(id=1:4,
+    name=c("bgn","fit.data.training.all","predict.data.new","end"),
+    x=c(   -0,   -20,                    -30,               -40),
+    y=c(    0,     0,                      0,                 0),
+    M0=c(   3,     0,                      0,                 0)
                         ),
                         arcs_df=data.frame(
-    begin=c("bgn",        "bgn",    "model.final",    "data.new",        "predict.data.new",
-"data.new.prediction"),
-    end  =c("model.final","data.new","predict.data.new","predict.data.new","data.new.prediction",
-"end")
+    begin=c("bgn","bgn","bgn",        
+            "data.training.all","model.selected","fit.data.training.all",
+            "fit.data.training.all","model.final",    
+            "data.new","predict.data.new",
+            "data.training.all.prediction","data.new.prediction"),
+    end  =c("data.training.all","data.new","model.selected",
+            "fit.data.training.all","fit.data.training.all","model.final",
+            "data.training.all.prediction","predict.data.new",
+            "predict.data.new","data.new.prediction",
+            "end","end")
                         ))
+#print(ggplot.petrinet(glb_analytics_pn))
 print(ggplot.petrinet(glb_analytics_pn) + coord_flip())
 glb_analytics_avl_objs <- NULL
 
@@ -195,6 +206,9 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
 #         <col_name>.fctr=relevel(factor(<col_name>, 
 #                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))),
 #                                   "<ref_val>"), 
+#         <col2_name>.fctr=relevel(factor(ifelse(<col1_name> == <val>, "<oth_val>", "<ref_val>")), 
+#                               as.factor(c("R", "<ref_val>")),
+#                               ref="<ref_val>"),
 
           # This doesn't work - use sapply instead
 #         <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), 
@@ -398,7 +412,7 @@ print(glb_script_df)
 
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
-        "data.new")), flip_coord=TRUE)
+        "data.training.all","data.new")), flip_coord=TRUE)
 glb_script_df <- rbind(glb_script_df, 
                    data.frame(chunk_label="select_features", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
@@ -544,15 +558,18 @@ if (glb_is_classification) {
                     size=3.5, angle=45))
 }
  
+replay.petrisim(pn=glb_analytics_pn, 
+    replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
+        "model.selected")), flip_coord=TRUE)
 glb_script_df <- rbind(glb_script_df, 
-                   data.frame(chunk_label="fit_training.all", 
+                   data.frame(chunk_label="fit.data.training.all", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
 print(glb_script_df)
 ```
 
-## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit training.all
-```{r fit_training.all, cache=FALSE}
+## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit.data.training.all
+```{r fit.data.training.all, cache=FALSE}
 print(mdl_feats_df <- myextract_mdl_feats(lcl_sel_mdl=glb_sel_mdl, 
                                           lcl_entity_df=glb_entity_df))
 ret_lst <- glb_sel_mdl_fn(indep_vars_vctr=mdl_feats_df$id,
@@ -588,9 +605,10 @@ if (glb_is_classification) {
     
     thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
     thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
-        mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
-                                     thresholds_df[row_ix, "threshold"], 
-                                     glb_predct_var, glb_predct_var_name))
+        mycompute_classifier_f.score(mdl=glb_sel_mdl, obs_df=glb_entity_df, 
+                                     proba_threshold=thresholds_df[row_ix, "threshold"], 
+                                     lcl_predct_var=glb_predct_var, 
+                                     lcl_predct_var_name=glb_predct_var_name))
     print(thresholds_df)
     print(myplot_line(thresholds_df, "threshold", "f.score"))
     
@@ -655,7 +673,7 @@ glb_analytics_diag_plots(obs_df=glb_entity_df)
 
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
-        "model.final")), flip_coord=TRUE)
+        "data.training.all.prediction","model.final")), flip_coord=TRUE)
 glb_script_df <- rbind(glb_script_df, 
                    data.frame(chunk_label="predict.data.new", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 

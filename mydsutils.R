@@ -731,28 +731,16 @@ myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
     return(list("model"=mdl, "models_df"=lcl_models_df))
 }
 
-mycompute_classifier_f.score_old <- function(mdl, obs_df, proba_threshold,
-										lcl_predct_var, lcl_predct_var_name) {
-	obs_df[, lcl_predct_var_name] <- (predict(mdl, 
-					newdata=obs_df, type="response") >= proba_threshold) * 1.0
-
-	# This does not work when prediction does not generate certain categories
-	#	Better way would be to create a dummy matrix of 0s with actual outcomes
-	#	& merge in appropriate predicted outcomes cols
-	obs_xtab_df <- mycreate_xtab(obs_df, c(lcl_predct_var, lcl_predct_var_name))
-	#obs_f_score <- 2 * precision * recall / (precision + recall)
-	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
-	obs_xtab_df[is.na(obs_xtab_df)] <- 0
-
-	f.score.obs <- (2 * obs_xtab_df[2,3]) / 
-					((2 * obs_xtab_df[2,3]) + 
-					obs_xtab_df[1,3] + obs_xtab_df[2,2])
-}
 mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 										lcl_predct_var, lcl_predct_var_name) {
 	
-	obs_df[, lcl_predct_var_name] <- (obs_df[, paste0(lcl_predct_var_name, ".proba")] >= 
-										proba_threshold) * 1.0
+	if ((class(obs_df[, lcl_predct_var]) != "factor") | 
+		(length(levels(obs_df[, lcl_predct_var])) != 2))
+		stop("expecting a factor with two levels:", lcl_predct_var)
+	obs_df[, lcl_predct_var_name] <- 
+		factor(levels(obs_df[, lcl_predct_var])[
+			(obs_df[, paste0(lcl_predct_var_name, ".proba")] >= 
+				proba_threshold) * 1 + 1])
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
@@ -886,6 +874,7 @@ myrun_mdl_randomForest <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_v
     					  fit_df, OOB_df=NULL) {
     require(ROCR)
     require(randomForest)
+    require(caret)
     
     if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
@@ -893,8 +882,15 @@ myrun_mdl_randomForest <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_v
     
     mdl <- randomForest(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
                ntree=200, nodesize=25)
+#     mdl <- train(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df,
+#                 method="rf", trControl=trainControl(method="cv"))               
     plot(mdl, ask=FALSE)    # plot model
+
+#     rpart_mdl <- train(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df,
+#                 method="rpart", trControl=trainControl(method="cv"))               
                
+# 	fit_df[, paste0(lcl_predct_var_name, ".proba")] <- 
+# 		predict(mdl, newdata=fit_df, type="prob")[, 2] # Will not work if multinomial ???
 	fit_df[, paste0(lcl_predct_var_name, ".proba")] <- 
 		predict(mdl, newdata=fit_df, type="prob")[, 2] # Will not work if multinomial ???
 	ROCRpred <- prediction(fit_df[, paste0(lcl_predct_var_name, ".proba")],
