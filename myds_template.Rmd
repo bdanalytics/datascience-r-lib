@@ -119,7 +119,7 @@ glb_analytics_avl_objs <- NULL
 
 glb_script_df <- data.frame(chunk_label="import_data", 
                             chunk_step_major=1, chunk_step_minor=0)
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: import data
@@ -170,7 +170,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="cleanse_data", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: cleanse data
@@ -180,7 +180,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="inspect_explore_data", 
                               chunk_step_major=max(glb_script_df$chunk_step_major), 
                               chunk_step_minor=1))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: inspect/explore data
@@ -287,7 +287,7 @@ glb_script_df <- rbind(glb_script_df,
     data.frame(chunk_label="manage_missing_data", 
         chunk_step_major=max(glb_script_df$chunk_step_major), 
         chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: manage missing data
@@ -352,7 +352,7 @@ glb_script_df <- rbind(glb_script_df,
     data.frame(chunk_label="encode_retype_data", 
         chunk_step_major=max(glb_script_df$chunk_step_major), 
         chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: encode/retype data
@@ -378,7 +378,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="extract_features", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: extract features
@@ -417,7 +417,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="select_features", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: select features
@@ -431,7 +431,7 @@ glb_script_df <- rbind(glb_script_df,
     data.frame(chunk_label="remove_correlated_features", 
         chunk_step_major=max(glb_script_df$chunk_step_major),
         chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1))        
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: remove correlated features
@@ -445,7 +445,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="run_models", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: run models
@@ -565,7 +565,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="fit.data.training.all", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit.data.training.all
@@ -621,9 +621,14 @@ if (glb_is_classification) {
 #     print(sprintf("Classifier Probability Threshold: %0.4f per H/w specs",
 #                   glb_clf_proba_threshold))
 
-    glb_entity_df[, glb_predct_var_name] <- 
-        (glb_entity_df[, paste0(glb_predct_var_name, ".proba")] >= 
-             glb_clf_proba_threshold) * 1.0
+    if ((class(glb_entity_df[, glb_predct_var]) != "factor") | 
+    	(length(levels(glb_entity_df[, glb_predct_var])) != 2))
+		stop("expecting a factor with two levels:", glb_predct_var)
+	glb_entity_df[, glb_predct_var_name] <- 
+		factor(levels(glb_entity_df[, glb_predct_var])[
+			(glb_entity_df[, paste0(glb_predct_var_name, ".proba")] >= 
+				glb_clf_proba_threshold) * 1 + 1])
+             
     print(mycreate_xtab(glb_entity_df, c(glb_predct_var, glb_predct_var_name)))
     print(sprintf("f.score=%0.4f", 
         mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
@@ -678,7 +683,7 @@ glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="predict.data.new", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0))
-print(glb_script_df)
+print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: predict data.new
@@ -698,16 +703,25 @@ if (glb_is_classification) {
             predict(glb_sel_mdl, newdata=glb_newent_df, type="response")
     } else  stop("not implemented yet")   
 
-    glb_newent_df[, glb_predct_var_name] <- 
-        (glb_newent_df[, paste0(glb_predct_var_name, ".proba")] >= 
-            glb_clf_proba_threshold) * 1.0
+    if ((class(glb_newent_df[, glb_predct_var]) != "factor") | 
+		(length(levels(glb_newent_df[, glb_predct_var])) != 2))
+		stop("expecting a factor with two levels:", glb_predct_var)
+	glb_newent_df[, glb_predct_var_name] <- 
+		factor(levels(glb_newent_df[, glb_predct_var])[
+			(glb_newent_df[, paste0(glb_predct_var_name, ".proba")] >= 
+				glb_clf_proba_threshold) * 1 + 1])
 
     # Compute dummy model predictions
     glb_newent_df[, paste0(glb_predct_var, ".preddmy.proba")] <- 
         predict(glb_dmy_mdl, newdata=glb_newent_df, type="response")
-    glb_newent_df[, paste0(glb_predct_var, ".preddmy")] <- 
-        (glb_newent_df[, paste0(glb_predct_var, ".preddmy.proba")] >= 
-            glb_clf_proba_threshold) * 1.0
+    if ((class(glb_newent_df[, glb_predct_var]) != "factor") | 
+    	(length(levels(glb_newent_df[, glb_predct_var])) != 2))
+		stop("expecting a factor with two levels:", glb_predct_var)
+	glb_newent_df[, paste0(glb_predct_var, ".preddmy")] <- 
+		factor(levels(glb_newent_df[, glb_predct_var])[
+			(glb_newent_df[, paste0(glb_predct_var, ".preddmy.proba")] >= 
+				glb_clf_proba_threshold) * 1 + 1])
+
 }
     
 myprint_df(glb_newent_df[, c(glb_id_vars, glb_predct_var, glb_predct_var_name)])
