@@ -668,7 +668,7 @@ mydelete_cor_features <- function(lcl_feats_df, lcl_entity_df, lcl_predct_var,
 ## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    run models
-mybuild_models_df_row <- function(mdl_type, indep_vars_vctr, n.fit, 
+mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit, 
                                   R.sq.fit=NULL, R.sq.OOB=NULL, 
                                   Adj.R.sq.fit=NULL, 
                                   SSE.fit=NULL, SSE.OOB=NULL,
@@ -676,7 +676,8 @@ mybuild_models_df_row <- function(mdl_type, indep_vars_vctr, n.fit,
                                   auc.fit=NULL, auc.OOB=NULL)
 {
     return(data.frame(
-    	feats=paste(mdl_type, paste(indep_vars_vctr, collapse=", "), sep=":"),
+    	method=method,
+    	feats=paste(method, paste(indep_vars_vctr, collapse=", "), sep=":"),
         #call.formula=toString(summary(mdl)$call$formula),
         n.fit=n.fit,
         R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
@@ -770,52 +771,72 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
 }
 
-myrun_mdl_glm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
-						  fit_df, OOB_df=NULL) {
+myrun_mdl_classification <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
+						  fit_df, OOB_df=NULL, method="glm") {
+
+### Does not work for multinomials yet
+
     require(ROCR)
+    require(caret)
     
     if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
     	    indep_vars_vctr <- setdiff(names(fit_df), lcl_predct_var)
     
-    mdl <- glm(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
-               family="binomial")
-    plot(mdl, ask=FALSE)           
+    mdl <- train(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df,
+                 method=method, trControl=trainControl(method="cv"))
+	if (mdl$bestTune[1, 1] != "none") 
+		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted")) 
+
+	# Customized plots for each method
+	if (method == "glm") plot(native_mdl <- 
+			glm(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
+				   family="binomial"), ask=FALSE) else
+	if (method == "rpart") {
+		require(rpart)
+	    require(rpart.plot)
+		prp(native_mdl <- 
+			rpart(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
+            	   method="class", control=rpart.control(cp=mdl$bestTune$cp)))
+	} else		                  
+		stop("not implemented yet")		                  
                
 	fit_df[, paste0(lcl_predct_var_name, ".proba")] <- 
-		predict(mdl, newdata=fit_df, type="response")
+		predict(mdl, newdata=fit_df, type="prob")[, 2]		
 	ROCRpred <- prediction(fit_df[, paste0(lcl_predct_var_name, ".proba")],
 						   fit_df[, lcl_predct_var])
 	auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
                
     if (!is.null(OOB_df)) {
     	OOB_df[, paste0(lcl_predct_var_name, ".proba")] <- 
-    		predict(mdl, newdata=OOB_df, type="response")
+    		predict(mdl, newdata=OOB_df, type="prob")[, 2]
     	ROCRpred <- prediction(OOB_df[, paste0(lcl_predct_var_name, ".proba")],
         	                   OOB_df[, lcl_predct_var])
     	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
     } else {auc.OOB <- NA}
     
-    lcl_models_df <- mybuild_models_df_row("glm.binomial", indep_vars_vctr, n.fit=nrow(fit_df),
-                                           R.sq.fit=summary(mdl)$r.squared, #R.sq.OOB=R.sq.OOB, 
-                                           Adj.R.sq.fit=summary(mdl)$r.squared, 
-                                           SSE.fit=sum(mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
-                                           AIC.fit=summary(mdl)$aic,
+    lcl_models_df <- mybuild_models_df_row(method, indep_vars_vctr, n.fit=nrow(fit_df),
+                                           R.sq.fit=native_mdl$r.squared, #R.sq.OOB=R.sq.OOB, 
+                                           Adj.R.sq.fit=native_mdl$r.squared, 
+                                           SSE.fit=sum(native_mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
+                                           AIC.fit=native_mdl$aic,
                                            auc.fit=auc.fit, auc.OOB=auc.OOB)
 
-    print(summary(mdl)); 
+    #print(summary(mdl)); 
     lcl_models_lst <- glb_models_lst
     lcl_models_lst[[length(glb_models_lst) + 1]] <- mdl
     glb_models_lst <<- lcl_models_lst
     
-    lcl_models_fn_lst <- glb_models_fn_lst
-    lcl_models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_glm
-    glb_models_fn_lst <<- lcl_models_lst
+#     lcl_models_fn_lst <- glb_models_fn_lst
+#     lcl_models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_classification
+#     glb_models_fn_lst <<- lcl_models_lst
 
 #     print(orderBy(~ -auc.OOB, 
                   glb_models_df <<- rbind(glb_models_df, lcl_models_df)
 #          ))
-    return(list("model"=mdl, "model_fn"= myrun_mdl_glm, "models_df"=lcl_models_df))
+#     return(list("model"=mdl, "model_fn"= myrun_mdl_classification, "models_df"=lcl_models_df))
+#     print("exiting myrun_mdl_classification")
+    return(list("model"=mdl, "models_df"=lcl_models_df))    
 }
 
 myrun_mdl_rpart <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
@@ -905,7 +926,7 @@ myrun_mdl_randomForest <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_v
     	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
     } else {auc.OOB <- NA}
     
-    lcl_models_df <- mybuild_models_df_row(mdl_type="randomForest",
+    lcl_models_df <- mybuild_models_df_row(method="randomForest",
                                            indep_vars_vctr, 
                                            n.fit=nrow(fit_df),
                             #R.sq.fit=summary(mdl)$r.squared, #R.sq.OOB=R.sq.OOB, 
@@ -919,9 +940,9 @@ myrun_mdl_randomForest <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_v
     lcl_models_lst[[length(glb_models_lst) + 1]] <- mdl
     glb_models_lst <<- lcl_models_lst
     
-    lcl_models_fn_lst <- glb_models_fn_lst
-    lcl_models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_rpart
-    glb_models_fn_lst <<- lcl_models_lst
+#     lcl_models_fn_lst <- glb_models_fn_lst
+#     lcl_models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_rpart
+#     glb_models_fn_lst <<- lcl_models_lst
         
 #     print(orderBy(~ -auc.OOB, 
                   glb_models_df <<- rbind(glb_models_df, lcl_models_df)
@@ -966,6 +987,12 @@ myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
 		#print(plot_vars_df)    
+    } else if (any(class(lcl_sel_mdl) %in% "train")) {
+    	# mdl is caret::train
+		plot_vars_df <- varImp(lcl_sel_mdl)$importance
+		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
+		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
+		#print(plot_vars_df)    
     } else stop("not implemented yet")
     
     plot_vars_df$id <- rownames(plot_vars_df)    
@@ -987,9 +1014,11 @@ myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
 	
-		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
+#		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
+		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")], 		
 									data.frame(id=unique(dummy_vars_df$root.feat),
-			Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
+# 			Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
+			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, min, na.rm=TRUE)))				
     } else vld_plot_vars_df <- plot_vars_df	
     
     #print(orderBy(~ -importance, vld_plot_vars_df))

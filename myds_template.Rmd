@@ -83,8 +83,9 @@ glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
 glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
-glb_sel_mdl <- glb_dmy_mdl <- NULL; glb_sel_mdl_fn <- NULL
-glb_models_lst <- list(); glb_models_fn_lst <- list(); glb_models_df <- data.frame()
+glb_sel_mdl <- glb_dmy_mdl <- NULL; #glb_sel_mdl_fn <- NULL
+glb_models_lst <- list(); #glb_models_fn_lst <- list(); 
+glb_models_df <- data.frame()
 
 # Depict process
 glb_analytics_pn <- petrinet(name="glb_analytics_pn",
@@ -459,10 +460,7 @@ if (glb_is_regression) {
 }    
 
 #   Classification:
-if (glb_is_classification) {
-    #   Logit Regression:
-    myrun_mdl_fn <- myrun_mdl_glm
-}    
+if (glb_is_classification) myrun_mdl_fn <- myrun_mdl_classification 
     
 # Add dummy model - random variable
 #   Potential Enhancements:
@@ -472,14 +470,16 @@ if (glb_is_classification) {
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=".rnorm",
                         lcl_predct_var=glb_predct_var, 
                         lcl_predct_var_name=glb_predct_var_name,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        method="glm")
 glb_dmy_mdl <- ret_lst[["model"]]
 
 # Highest cor.y
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=max_cor_y_x_var,
                         lcl_predct_var=glb_predct_var, 
                         lcl_predct_var_name=glb_predct_var_name,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        method="glm")
 
 # Enhance Highest cor.y model with additions of interaction terms that were 
 #   dropped due to high correlations
@@ -488,19 +488,22 @@ if (nrow(subset(glb_feats_df, is.na(cor.low))) > 0)
         paste(max_cor_y_x_var, 
               subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
                         glb_predct_var, glb_predct_var_name,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df)    
+                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        method="glm")    
 
 # Low correlated X
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=subset(glb_feats_df, 
                                                cor.low == 1)[, "id"],
                         glb_predct_var, glb_predct_var_name,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        method="glm")
 
 # All X that is not user excluded
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
     union(glb_predct_var, glb_exclude_vars_as_features)),
                         glb_predct_var, glb_predct_var_name,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        method="glm")
 
 # User specified - easier to exclude features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df), 
@@ -508,7 +511,8 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df),
 #             c("<feat1_name>", "<feat2_name>"))),
 #                         glb_predct_var, glb_predct_var_name,
 #                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
-# glb_sel_mdl <- ret_lst[["model"]]; glb_sel_mdl_fn <- ret_lst[["model_fn"]]
+# glb_<save>_mdl <- ret_lst[["model"]]; #glb_<save>_mdl_fn <- ret_lst[["model_fn"]]
+# glb_sel_mdl <- ret_lst[["model"]]; #glb_sel_mdl_fn <- ret_lst[["model_fn"]]
 
 # User specified - easier to include features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
@@ -572,9 +576,10 @@ print(tail(glb_script_df, 2))
 ```{r fit.data.training.all, cache=FALSE}
 print(mdl_feats_df <- myextract_mdl_feats(lcl_sel_mdl=glb_sel_mdl, 
                                           lcl_entity_df=glb_entity_df))
-ret_lst <- glb_sel_mdl_fn(indep_vars_vctr=mdl_feats_df$id,
-                         glb_predct_var, glb_predct_var_name, fit_df=glb_entity_df)
-glb_sel_mdl <- ret_lst[["model"]]; glb_sel_mdl_fn <- ret_lst[["model_fn"]]        
+ret_lst <- myrun_mdl_fn(indep_vars_vctr=mdl_feats_df$id,
+                         glb_predct_var, glb_predct_var_name, fit_df=glb_entity_df,
+                         method=glb_sel_mdl$method)
+glb_sel_mdl <- ret_lst[["model"]]; #glb_sel_mdl_fn <- ret_lst[["model_fn"]]        
 # print(glb_models_df[nrow(glb_models_df), ])
 
 if (glb_is_regression) {
@@ -588,7 +593,10 @@ if (glb_is_regression) {
 }    
 
 if (glb_is_classification) {
-            if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
+            if (any(class(glb_sel_mdl) %in% c("train"))) {
+        glb_entity_df[, paste0(glb_predct_var_name, ".proba")] <- 
+            predict(glb_sel_mdl, newdata=glb_entity_df, type="prob")[, 2]
+    } else  if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
         glb_entity_df[, paste0(glb_predct_var_name, ".proba")] <- 
             predict(glb_sel_mdl, newdata=glb_entity_df, type="prob")[, 2]
     } else  if (class(glb_sel_mdl) == "glm") {
@@ -646,7 +654,8 @@ glb_analytics_diag_plots <- function(obs_df) {
 #         if (var == "<feat_name>") print(myplot_scatter(plot_df, var, "value", 
 #                                              facet_colcol_name="variable") + 
 #                       geom_vline(xintercept=<divider_val>, linetype="dotted")) else     
-            print(myplot_scatter(plot_df, var, "value", facet_colcol_name="variable"))
+            print(myplot_scatter(plot_df, var, "value", 
+                                 facet_colcol_name="variable", jitter=TRUE))
     }
     
     if (glb_is_regression) {
@@ -694,7 +703,10 @@ if (glb_is_regression)
 
 if (glb_is_classification) {
     # Compute selected model predictions
-            if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
+            if (any(class(glb_sel_mdl) %in% c("train"))) {
+        glb_newent_df[, paste0(glb_predct_var_name, ".proba")] <- 
+            predict(glb_sel_mdl, newdata=glb_newent_df, type="prob")[, 2]
+    } else  if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
         glb_newent_df[, paste0(glb_predct_var_name, ".proba")] <- 
             predict(glb_sel_mdl, newdata=glb_newent_df, type="prob")[, 2]
     } else  if (class(glb_sel_mdl) == "glm") {
@@ -713,7 +725,7 @@ if (glb_is_classification) {
 
     # Compute dummy model predictions
     glb_newent_df[, paste0(glb_predct_var, ".preddmy.proba")] <- 
-        predict(glb_dmy_mdl, newdata=glb_newent_df, type="response")
+        predict(glb_dmy_mdl, newdata=glb_newent_df, type="prob")[, 2]
     if ((class(glb_newent_df[, glb_predct_var]) != "factor") | 
     	(length(levels(glb_newent_df[, glb_predct_var])) != 2))
 		stop("expecting a factor with two levels:", glb_predct_var)
