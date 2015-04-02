@@ -83,9 +83,8 @@ glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
 glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
-glb_sel_mdl <- glb_dmy_mdl <- NULL; #glb_sel_mdl_fn <- NULL
-glb_models_lst <- list(); #glb_models_fn_lst <- list(); 
-glb_models_df <- data.frame()
+glb_sel_mdl <- glb_dmy_mdl <- NULL; 
+glb_models_lst <- list(); glb_models_df <- data.frame()
 
 # Depict process
 glb_analytics_pn <- petrinet(name="glb_analytics_pn",
@@ -511,8 +510,8 @@ ret_lst <- myrun_mdl_fn(indep_vars_vctr=setdiff(names(glb_entity_df),
 #             c("<feat1_name>", "<feat2_name>"))),
 #                         glb_predct_var, glb_predct_var_name,
 #                         fit_df=glb_entity_df, OOB_df=glb_newent_df)
-# glb_<save>_mdl <- ret_lst[["model"]]; #glb_<save>_mdl_fn <- ret_lst[["model_fn"]]
-# glb_sel_mdl <- ret_lst[["model"]]; #glb_sel_mdl_fn <- ret_lst[["model_fn"]]
+# glb_<save>_mdl <- ret_lst[["model"]]
+# glb_sel_mdl <- ret_lst[["model"]]
 
 # User specified - easier to include features
 # ret_lst <- myrun_mdl_fn(indep_vars_vctr=c("<feat1_name>", "<feat2_name>"),
@@ -558,6 +557,11 @@ if (glb_is_classification) {
     print(summary(glb_sel_mdl))
     plot_models_df[, "inv.AIC.fit"] <- 1.0 / plot_models_df[, "AIC.fit"] 
     print(myplot_scatter(plot_models_df, "inv.AIC.fit", "auc.OOB") + 
+          geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
+                    size=3.5, angle=45))
+
+    print(myplot_scatter(plot_models_df, "accuracy.fit", "auc.OOB", 
+                         colorcol_name="method") + 
           geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
                     size=3.5, angle=45))
 }
