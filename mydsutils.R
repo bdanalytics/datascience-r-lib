@@ -427,11 +427,43 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 #                                                        steps))
 
 ## 02.3	    encode/retype data (convert types; map codes)
+mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
+    if (length(unique(mapd_df[, from_col_name])) == nrow(mapd_df)) map_summry_df <- mapd_df else {
+        require(sqldf)
+        
+        # _n does not work with ggplot
+        sql <- "SELECT "
+        sql <- paste0(sql, "\"", from_col_name, "\", ")
+        sql <- paste0(sql, "\"", to_col_name, "\" ")        
+      	sql <- paste0(sql, ", SUM(1) AS \".n\" ")        
+#     	sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS \".n\" ")
+        sql <- paste0(sql, "FROM mapd_df GROUP BY ")
+        sql <- paste0(sql, "\"", from_col_name, "\", ")
+        sql <- paste0(sql, "\"", to_col_name, "\" ")        
+        sql <- paste0(sql, "ORDER BY \".n\" DESC")
+#         sql <- paste(sql, "FROM mapd_df GROUP BY", paste(from_col_name, to_col_name, sep=","),
+#                      "ORDER BY _n DESC", sep=" ")
+        map_summry_df <- sqldf(sql)
+    }
+
+	myprint_df(map_summry_df)
+	
+	# Works only for 1:1 mapping; 
+	#	Use fill aesthetic to display n:m mappings ?
+	#		Create a variable that contains n:m ratio for each value of to_col_name ?
+	
+	print(ggplot(map_summry_df, aes_string(x=to_col_name, y=".n", 
+                                       fill=paste0("factor(", from_col_name, ")"))) + 
+                 geom_bar(stat="identity") + coord_flip())
+# 	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
+}
+
 # mymap <- function(df, from_col_name, to_col_name, map_func) {
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
 mymap_codes <- function(df, from_col_name, to_col_name, 
-						map_df, map_join_col_name=from_col_name, map_tgt_col_name=to_col_name) {
+						map_df, map_join_col_name=from_col_name, 
+								map_tgt_col_name=to_col_name) {
 						
 # 	if (length(intersect(names(df), names(map_df))) > 0)						
 # 		warning("potential column join conflicts: ", intersect(names(df), names(map_df)))						
@@ -441,21 +473,7 @@ mymap_codes <- function(df, from_col_name, to_col_name,
 		
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
-#    if (length(unique(ret_df[, from_col_name])) == nrow(ret_df)) map_summry_df <- ret_df else {
-        require(sqldf)
-        sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS _n ")
-        sql <- paste(sql, "FROM ret_df GROUP BY", paste(from_col_name, to_col_name, sep=","),
-                     "ORDER BY _n DESC", sep=" ")
-        map_summry_df <- sqldf(sql)
-#    }
-
-	myprint_df(map_summry_df)
-	
-	# Works only for 1:1 mapping; 
-	#	Use fill aesthetic to display n:m mappings ?
-	#		Create a variable that contains n:m ratio for each value of to_col_name ?
-	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
-
+	mycheck_map_results(ret_df, from_col_name, to_col_name)
     return(ret_df)
 }
 
@@ -562,28 +580,28 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
-myselect_features <- function(lcl_entity_df, lcl_exclude_vars_as_features, lcl_predct_var) {	
+myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {	
 	require(plyr)
 
 	# Collect numeric vars
-    vars_tbl <- summary(lcl_entity_df)
-    numeric_vars <- names(lcl_entity_df)[grep("^Min.", vars_tbl[1,])]
+    vars_tbl <- summary( entity_df)
+    numeric_vars <- names( entity_df)[grep("^Min.", vars_tbl[1,])]
     
     # Exclude user-specified features
-    numeric_vars <- setdiff(numeric_vars, lcl_exclude_vars_as_features)
+    numeric_vars <- setdiff(numeric_vars,  exclude_vars_as_features)
     
     # Check for NAs
 #     naknts_vctr <- sapply(numeric_vars, 
-#                           function(col) sum(is.na(lcl_entity_df[, col])))
+#                           function(col) sum(is.na( entity_df[, col])))
 #     naknts_vctr <- naknts_vctr[naknts_vctr > 0]
 #     if (length(naknts_vctr) > 0)
 # 	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
 # 
-#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), lcl_predct_var)
-    sel_feats <- setdiff(numeric_vars, lcl_predct_var)    
+#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), rsp_var)
+    sel_feats <- setdiff(numeric_vars, rsp_var)    
     feats_df <- data.frame(id=sel_feats,
-                cor.y=cor(lcl_entity_df[, sel_feats], 
-                            y=as.numeric(lcl_entity_df[, lcl_predct_var]), 
+                cor.y=cor( entity_df[, sel_feats], 
+                            y=as.numeric( entity_df[, rsp_var]), 
                             use="pairwise.complete.obs"))
 	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
@@ -594,19 +612,19 @@ myselect_features <- function(lcl_entity_df, lcl_exclude_vars_as_features, lcl_p
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    remove features / create feature combinations for highly correlated features
-mydelete_cor_features <- function(lcl_feats_df, lcl_entity_df, lcl_predct_var,
-								 lcl_exclude_vars_as_features) {
+mydelete_cor_features <- function( feats_df,  entity_df, rsp_var,
+								  exclude_vars_as_features) {
 	require(reshape2)
 
-	if (nrow(lcl_feats_df) == 1)
-		return(data.frame(id=lcl_feats_df$id, cor.low=1))
+	if (nrow( feats_df) == 1)
+		return(data.frame(id= feats_df$id, cor.low=1))
 
-	lcl_feats_df <- lcl_feats_df
+	 feats_df <-  feats_df
     repeat {
-    	if (nrow(lcl_feats_df) == 1)
+    	if (nrow( feats_df) == 1)
     		break
     		
-        print(corxx_mtrx <- cor(lcl_entity_df[, lcl_feats_df$id], use="pairwise.complete.obs"))
+        print(corxx_mtrx <- cor( entity_df[,  feats_df$id], use="pairwise.complete.obs"))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
@@ -616,37 +634,37 @@ mydelete_cor_features <- function(lcl_feats_df, lcl_entity_df, lcl_predct_var,
         feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
         feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
         print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
-        print(myplot_scatter(lcl_entity_df, feat_1, feat_2))
+        print(myplot_scatter( entity_df, feat_1, feat_2))
         
-        print(sprintf("cor(%s, %s)=%0.4f", lcl_predct_var, feat_1, 
-            lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]))
-    #     print(myplot_scatter(lcl_entity_df, lcl_predct_var, feat_2))
-        print(sprintf("cor(%s, %s)=%0.4f", lcl_predct_var, feat_2, 
-            lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]))
-    #     print(myplot_scatter(lcl_entity_df, lcl_predct_var, feat_2))
+        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_1, 
+             feats_df[ feats_df$id == feat_1, "cor.y"]))
+    #     print(myplot_scatter( entity_df, rsp_var, feat_2))
+        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_2, 
+             feats_df[ feats_df$id == feat_2, "cor.y"]))
+    #     print(myplot_scatter( entity_df, rsp_var, feat_2))
     
-        plot_df <- melt(lcl_entity_df, id.vars=lcl_predct_var, measure.vars=c(feat_1, feat_2))
-        print(myplot_scatter(plot_df, lcl_predct_var, "value", 
+        plot_df <- melt( entity_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
+        print(myplot_scatter(plot_df, rsp_var, "value", 
                              facet_colcol_name="variable", smooth=TRUE))    
     
-#         if (lcl_id_var %in% c(feat_1, feat_2)) drop_feat <- lcl_id_var else {
-#   	  if (intersect(lcl_id_vars, c(feat_1, feat_2)))
-		if (feat_1 %in% lcl_exclude_vars_as_features) drop_feat <- feat_1 else {
-			if (feat_2 %in% lcl_exclude_vars_as_features) drop_feat <- feat_2 else {
+#         if ( id_var %in% c(feat_1, feat_2)) drop_feat <-  id_var else {
+#   	  if (intersect( id_vars, c(feat_1, feat_2)))
+		if (feat_1 %in%  exclude_vars_as_features) drop_feat <- feat_1 else {
+			if (feat_2 %in%  exclude_vars_as_features) drop_feat <- feat_2 else {
 				drop_feat <- ifelse(
-					abs(lcl_feats_df[lcl_feats_df$id == feat_1, "cor.y"]) >=
-					abs(lcl_feats_df[lcl_feats_df$id == feat_2, "cor.y"]),
+					abs( feats_df[ feats_df$id == feat_1, "cor.y"]) >=
+					abs( feats_df[ feats_df$id == feat_2, "cor.y"]),
 									feat_2, feat_1)
 			}
 		}
 #         }
         warning("Dropping ", drop_feat, " as a feature")
-        print(lcl_feats_df <- subset(lcl_feats_df, id != drop_feat))
+        print( feats_df <- subset( feats_df, id != drop_feat))
     }
     
-    lcl_feats_df$cor.low <- 1
-    # print(lcl_feats_df)
-    return(lcl_feats_df[, c("id", "cor.low")])
+     feats_df$cor.low <- 1
+    # print( feats_df)
+    return( feats_df[, c("id", "cor.low")])
 }
 
 ## 05.5.1	add back in key features even though they might have been eliminated
@@ -679,7 +697,8 @@ mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit,
 {
     return(data.frame(
     	method=method,
-    	feats=paste(method, paste(indep_vars_vctr, collapse=", "), sep=":"),
+    	#feats=paste(method, paste(indep_vars_vctr, collapse=", "), sep=":"),
+    	feats=paste(indep_vars_vctr, collapse=", "),    	
         #call.formula=toString(summary(mdl)$call$formula),
         n.fit=n.fit,
         R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
@@ -695,24 +714,24 @@ mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit,
     ))
 }    
 
-myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
+myrun_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
 						fit_df, OOB_df=NULL) {
     
     if (length(indep_vars_vctr) == 1)
 	    if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), lcl_predct_var)
+    	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
     
     mdl <- lm(reformulate(indep_vars_vctr, 
-                            response=lcl_predct_var), data=fit_df)
+                            response=rsp_var), data=fit_df)
 	plot(mdl, ask=FALSE)
 	                            
     if (!is.null(OOB_df)) {
-    	OOB_df[, lcl_predct_var_name] <- predict(mdl, newdata=OOB_df)
-		print(SSE.OOB <- sum((OOB_df[, lcl_predct_var_name] - 
-							  OOB_df[, lcl_predct_var]) ^ 2))
+    	OOB_df[, rsp_var_out] <- predict(mdl, newdata=OOB_df)
+		print(SSE.OOB <- sum((OOB_df[, rsp_var_out] - 
+							  OOB_df[, rsp_var]) ^ 2))
 		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
-							sum((OOB_df[, lcl_predct_var] - 
-								#mean(OOB_df[, lcl_predct_var])
+							sum((OOB_df[, rsp_var] - 
+								#mean(OOB_df[, rsp_var])
 								mean(mdl$fitted.values)    
 							) ^ 2)))	
     } else {SSE.OOB <- NA; R.sq.OOB <- NA}
@@ -722,7 +741,7 @@ myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
 # 	print(adj.R2 <- (s2T - MSE) / s2T)
 #	adj.R2 undefined for OOB ?
                            
-    lcl_models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
+     models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
                                            R.sq.fit=summary(mdl)$r.squared,
                                            R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=summary(mdl)$r.squared, 
@@ -731,31 +750,31 @@ myrun_mdl_lm <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name,
                                            
     print(summary(glb_mdl <<- mdl));
 #     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
-              glb_models_df <<- rbind(glb_models_df, lcl_models_df)
+              glb_models_df <<- rbind(glb_models_df,  models_df)
 #             ))    
-    return(list("model"=mdl, "models_df"=lcl_models_df))
+    return(list("model"=mdl, "models_df"= models_df))
 }
 
 mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
-										lcl_predct_var, lcl_predct_var_name) {
+										rsp_var, rsp_var_out) {
 	
-	if ((class(obs_df[, lcl_predct_var]) != "factor") | 
-		(length(levels(obs_df[, lcl_predct_var])) != 2))
-		stop("expecting a factor with two levels:", lcl_predct_var)
-	obs_df[, lcl_predct_var_name] <- 
-		factor(levels(obs_df[, lcl_predct_var])[
-			(obs_df[, paste0(lcl_predct_var_name, ".proba")] >= 
+	if ((class(obs_df[, rsp_var]) != "factor") | 
+		(length(levels(obs_df[, rsp_var])) != 2))
+		stop("expecting a factor with two levels:", rsp_var)
+	obs_df[, rsp_var_out] <- 
+		factor(levels(obs_df[, rsp_var])[
+			(obs_df[, paste0(rsp_var_out, ".proba")] >= 
 				proba_threshold) * 1 + 1])
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-	mrg_obs_xtab_df <- orderBy(reformulate(lcl_predct_var), 
-								mycreate_tbl_df(obs_df, lcl_predct_var)[, 1, FALSE])
+	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var), 
+								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
 	for (val in unique(mrg_obs_xtab_df[, 1]))
-		mrg_obs_xtab_df[, paste(lcl_predct_var_name, val, sep=".")] <- 0
+		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
 	#print(mrg_obs_xtab_df)
 	
-	obs_xtab_df <- mycreate_xtab(obs_df, c(lcl_predct_var, lcl_predct_var_name))
+	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 	#print(obs_xtab_df)
 
@@ -775,58 +794,94 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
 }
 
-myrun_mdl_classification <- function(indep_vars_vctr, lcl_predct_var, lcl_predct_var_name, 
-						  fit_df, OOB_df=NULL, method="glm") {
+myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
+						  fit_df, OOB_df=NULL, method="glm",  tune_models_df=NULL) {
 
 ### Does not work for multinomials yet
 
     require(ROCR)
     require(caret)
     
+#     print(indep_vars_vctr)
+#     print(method)
+    
     if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), lcl_predct_var)
+    	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
+    	    
+   tuneGrid <- NULL 	    
+   if (!is.null( tune_models_df)) {
+   		tune_params_df <- getModelInfo(method)[[method]]$parameters
+   		if (length((tune_params_vctr <- intersect( tune_models_df$parameter, 
+   											tune_params_df$parameter))) > 0) {
+   			args_lst <- NULL
+   			for (param_ix in 1:length(tune_params_vctr))								
+	 			args_lst[[param_ix]] <- seq(
+ 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"], 
+ 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"], 
+ 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
+
+			names(args_lst) <- tune_params_vctr
+			#print(args_lst)
+		   	#print(tuneGrid <- do.call("expand.grid", args_lst))	
+		    tuneGrid <- do.call("expand.grid", args_lst)
+		   			
+# 		 	args_lst[[2]] <- seq(2, 4, 1)
+# 			names(args_lst) <- c(tune_params_vctr, "mtry")
+# 			print(args_lst)
+# 		   	print(tuneGrid <- do.call("expand.grid", args_lst))	
+# 		   			
+# 		   	print(tuneGrid <- do.call("expand.grid", 
+# 		   		list("cp"=seq(0.01, 0.05, 0.02),
+#  					 "mtry"=seq(2, 5, 1))))
+# 		   	print(tuneGrid <- expand.grid("cp"=seq(0.01, 0.05, 0.02),
+# 		   								"mtry"=seq(2, 5, 1)))
+		}
+   } 	    
     
-    mdl <- train(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df,
-                 method=method, trControl=trainControl(method="cv"))
+#     print(tuneGrid)
+    mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+                 method=method, trControl=trainControl(method="cv", number=10), 
+                 tuneGrid=tuneGrid)
+
 	if (mdl$bestTune[1, 1] != "none") 
 		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted")) 
 
 	# Customized plots for each method
 	if (method == "glm") plot(native_mdl <- 
-			glm(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
+			glm(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
 				   family="binomial"), ask=FALSE) else
 	if (method == "rpart") {
 		require(rpart)
 	    require(rpart.plot)
 		prp(native_mdl <- 
-			rpart(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
+			rpart(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
             	   method="class", control=rpart.control(cp=mdl$bestTune$cp)))
 	} else		                  
 	if (method == "rf") {
 		require(rpart)
 		require(randomForest)
 		plot(native_mdl <- 
-			randomForest(reformulate(indep_vars_vctr, response=lcl_predct_var), data=fit_df, 
+			randomForest(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
             	   control=rpart.control(mtry=mdl$bestTune$mtry)))
 	} else		                  
 		stop("not implemented yet")		                  
                
-	fit_df[, paste0(lcl_predct_var_name, ".proba")] <- 
+	fit_df[, paste0(rsp_var_out, ".proba")] <- 
 		predict(mdl, newdata=fit_df, type="prob")[, 2]		
-	ROCRpred <- prediction(fit_df[, paste0(lcl_predct_var_name, ".proba")],
-						   fit_df[, lcl_predct_var])
+	ROCRpred <- prediction(fit_df[, paste0(rsp_var_out, ".proba")],
+						   fit_df[, rsp_var])
 	auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
                
     if (!is.null(OOB_df)) {
-    	OOB_df[, paste0(lcl_predct_var_name, ".proba")] <- 
+    	OOB_df[, paste0(rsp_var_out, ".proba")] <- 
     		predict(mdl, newdata=OOB_df, type="prob")[, 2]
-    	ROCRpred <- prediction(OOB_df[, paste0(lcl_predct_var_name, ".proba")],
-        	                   OOB_df[, lcl_predct_var])
+    	ROCRpred <- prediction(OOB_df[, paste0(rsp_var_out, ".proba")],
+        	                   OOB_df[, rsp_var])
     	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
     } else {auc.OOB <- NA}
     
-    lcl_models_df <- mybuild_models_df_row(method, indep_vars_vctr, n.fit=nrow(fit_df),
+     models_df <- mybuild_models_df_row(method, indep_vars_vctr, n.fit=nrow(fit_df),
                                            R.sq.fit=native_mdl$r.squared, #R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=native_mdl$r.squared, 
                                            SSE.fit=sum(native_mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
@@ -842,20 +897,20 @@ myrun_mdl_classification <- function(indep_vars_vctr, lcl_predct_var, lcl_predct
                 mdl$finalModel$tuneValue
 
     print(mdl$finalModel); 
-    lcl_models_lst <- glb_models_lst
-    lcl_models_lst[[length(glb_models_lst) + 1]] <- mdl
-    glb_models_lst <<- lcl_models_lst
+     models_lst <- glb_models_lst
+     models_lst[[length(glb_models_lst) + 1]] <- mdl
+    glb_models_lst <<-  models_lst
     
-#     lcl_models_fn_lst <- glb_models_fn_lst
-#     lcl_models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_classification
-#     glb_models_fn_lst <<- lcl_models_lst
+#      models_fn_lst <- glb_models_fn_lst
+#      models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_classification
+#     glb_models_fn_lst <<-  models_lst
 
 #     print(orderBy(~ -auc.OOB, 
-                  glb_models_df <<- rbind(glb_models_df, lcl_models_df)
+                  glb_models_df <<- rbind(glb_models_df,  models_df)
 #          ))
-#     return(list("model"=mdl, "model_fn"= myrun_mdl_classification, "models_df"=lcl_models_df))
+#     return(list("model"=mdl, "model_fn"= myrun_mdl_classification, "models_df"= models_df))
 #     print("exiting myrun_mdl_classification")
-    return(list("model"=mdl, "models_df"=lcl_models_df))    
+    return(list("model"=mdl, "models_df"= models_df))    
 }
 
 ## 08.1	    fit on simple shuffled sample
@@ -873,69 +928,63 @@ myrun_mdl_classification <- function(indep_vars_vctr, lcl_predct_var, lcl_predct
 ## 09.3     export cv test data for inspection
 
 ## 10.	    build finalized model on all training data
-myextract_mdl_feats <- function(lcl_sel_mdl, lcl_entity_df) {
+myextract_mdl_feats <- function( sel_mdl,  entity_df) {
 
-			if ("coefficients" %in% names(lcl_sel_mdl)) {
+			if ("coefficients" %in% names( sel_mdl)) {
 		# mdl is lm OR glm.binomial	
 		stop("not implemented yet")
-		plot_vars_df <- as.data.frame(summary(lcl_sel_mdl)$coefficients)
+		plot_vars_df <- as.data.frame(summary( sel_mdl)$coefficients)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
 		# Get rid of (Intercept)
 		plot_vars_df <- orderBy(~Pr.z, plot_vars_df[2:nrow(plot_vars_df),])
 		#print(plot_vars_df <- subset(plot_vars_df, Pr.z < 0.1))
-    } else if ("variable.importance" %in% names(lcl_sel_mdl)) {
+    } else if ("variable.importance" %in% names( sel_mdl)) {
     	# mdl is rpart.class
-		plot_vars_df <- as.data.frame(lcl_sel_mdl$variable.importance)
+		plot_vars_df <- as.data.frame( sel_mdl$variable.importance)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
 		#print(plot_vars_df)    
-    } else if ("importance" %in% names(lcl_sel_mdl)) {
+    } else if ("importance" %in% names( sel_mdl)) {
     	# mdl is randomForest
-		plot_vars_df <- as.data.frame(lcl_sel_mdl$importance)
+		plot_vars_df <- as.data.frame( sel_mdl$importance)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
 		#print(plot_vars_df)    
-    } else if (any(class(lcl_sel_mdl) %in% "train")) {
+    } else if (any(class( sel_mdl) %in% "train")) {
     	# mdl is caret::train
-		plot_vars_df <- varImp(lcl_sel_mdl)$importance
+		plot_vars_df <- varImp( sel_mdl)$importance
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
 		#print(plot_vars_df)    
     } else stop("not implemented yet")
     
     plot_vars_df$id <- rownames(plot_vars_df)    
-    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(lcl_entity_df))
+    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names( entity_df))
     
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
-# 		dummy_vars_df <- mutate(dummy_vars_df, 
-# 						root.feat=paste0(unlist(strsplit(id, ".fctr", fixed=TRUE))[1], ".fctr"),
-# 								vld.fit.feat=(root.feat %in% names(lcl_entity_df))
-# 								)
 		dummy_vars_df$root.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
 			paste0(unlist(strsplit(dummy_vars_df[row_ix, "id"], ".fctr", fixed=TRUE))[1], 
 					".fctr"))
 		#print(dummy_vars_df)					
 		dummy_vars_df <- mutate(dummy_vars_df, 
-								vld.fit.feat=(root.feat %in% names(lcl_entity_df))
+								vld.fit.feat=(root.feat %in% names( entity_df))
 								)
 		#print(dummy_vars_df)								
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
 	
-#		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "Pr.z")], 
 		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")], 		
 									data.frame(id=unique(dummy_vars_df$root.feat),
-# 			Pr.z=tapply(dummy_vars_df$Pr.z, dummy_vars_df$root.feat, min, na.rm=TRUE)))	
-			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, min, na.rm=TRUE)))				
+			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, max, na.rm=TRUE)))				
     } else vld_plot_vars_df <- plot_vars_df	
     
     #print(orderBy(~ -importance, vld_plot_vars_df))
     return(orderBy(~ -importance, vld_plot_vars_df))
 }
 
-mymerge_feats_importance <- function(lcl_feats_df, lcl_sel_mdl, lcl_entity_df) {
-    plot_vars_df <- myextract_mdl_feats(lcl_sel_mdl, lcl_entity_df)
-    return(orderBy(~ -importance, merge(lcl_feats_df, plot_vars_df[,c("id", "importance")], all=TRUE)))
+mymerge_feats_importance <- function( feats_df,  sel_mdl,  entity_df) {
+    plot_vars_df <- myextract_mdl_feats( sel_mdl,  entity_df)
+    return(orderBy(~ -importance, merge( feats_df, plot_vars_df[,c("id", "importance")], all=TRUE)))
 }
 
 ## 11.	    predict results for new data

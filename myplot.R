@@ -266,70 +266,61 @@ myplot_plotly <- function(ggplot_obj) {
 }
 
 myplot_prediction_classification <- function(df, feat_x, feat_y, 
-                                            lcl_predct_var, lcl_predct_var_name, lcl_id_vars) {
+                                            rsp_var, rsp_var_out,  id_vars) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
         
-    df[, paste0(lcl_predct_var, ".fctr")] <- as.factor(df[,lcl_predct_var])
+    if (is.factor(df[, rsp_var])) color_var <- rsp_var else {   
+        color_var <- paste0(rsp_var, ".fctr")    
+        df[, color_var] <- as.factor(df[,rsp_var])
+    }
 
-    lcl_predct_accurate_var_name <- paste0(lcl_predct_var_name, ".accurate")
-    df[, lcl_predct_accurate_var_name] <- 
-        (df[,lcl_predct_var] == df[,lcl_predct_var_name])    
+     predct_accurate_var_name <- paste0(rsp_var_out, ".accurate")
+    df[,  predct_accurate_var_name] <- 
+        (df[,rsp_var] == df[,rsp_var_out])    
         
     # Attach labels to to prediction errors
-#     df <- mutate(df, ,.label = ifelse(!paste0(lcl_predct_var_name, ".accurate"), 
-#                                         paste(lcl_id_vars, sep=":"), ""))
-#     df$.label <- sapply(1:nrow(df), function(row_ix) 
-#         ifelse(!df[row_ix, paste0(lcl_predct_var_name, ".accurate")] & 
-#                 (df[row_ix, feat_x] == min(df[row_ix, feat_x]) |
-#                  max_of_feat_x |
-#                  min_of_feat_y |
-#                  max_of_feat_y), 
-#                 ifelse(length(lcl_id_vars) > 0, 
-#                         paste(df[row_ix, lcl_id_vars], collapse=":"),
-#                         paste0(".", rownames(df)[row_ix])), 
-#                 ""))
     df$.label <- ""
     for (feat in c(feat_x, feat_y)) {
         if (class(df[, feat]) == "factor")
             next
             
         for (row_ix in c(which.min(df[, feat]), which.max(df[, feat]),
-                         which(!df[, lcl_predct_accurate_var_name] & 
+                         which(!df[,  predct_accurate_var_name] & 
                                  df[, feat] == min(df[, feat])),
-                         which(!df[, lcl_predct_accurate_var_name] & 
+                         which(!df[,  predct_accurate_var_name] & 
                                  df[, feat] == max(df[, feat]))
                          )) 
             df[row_ix, ".label"] <- 
-                        ifelse(length(lcl_id_vars) > 0, 
-                                paste(df[row_ix, lcl_id_vars], collapse=":"),
+                        ifelse(length( id_vars) > 0, 
+                                paste(df[row_ix,  id_vars], collapse=":"),
                                 paste0(".", rownames(df)[row_ix]))
     }                            
     
     myprint_df(subset(df, .label != ""))
             
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
-            geom_point(aes_string(color=paste0(lcl_predct_var, ".fctr"),
-                                  shape=lcl_predct_accurate_var_name), 
+            geom_point(aes_string(color=color_var,
+                                  shape= predct_accurate_var_name), 
                        position="jitter") +
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +                       
-            facet_wrap(reformulate(lcl_predct_accurate_var_name))
+            facet_wrap(reformulate( predct_accurate_var_name))
           )    
 }
 
 myplot_prediction_regression <- function(df, feat_x, feat_y,
-                                        lcl_predct_var, lcl_predct_var_name) {
+                                        rsp_var, rsp_var_out) {
 
-    predct_err_name <- paste0(lcl_predct_var_name, ".err")
+    predct_err_name <- paste0(rsp_var_out, ".err")
     df[, predct_err_name] <- 
-        abs(df[,lcl_predct_var] - df[,lcl_predct_var_name])
+        abs(df[,rsp_var] - df[,rsp_var_out])
 
     # Add labels to top 5 prediction errors
     df <- orderBy(reformulate(c("-", predct_err_name)), df)
     df$.label <- " "
     df$.label[1:min(5, nrow(df))] <- sapply(1:min(5, nrow(df)), function(row_ix) 
-        df[row_ix, ".label"] <- paste0(df[row_ix, lcl_id_vars], collapse=":"))
+        df[row_ix, ".label"] <- paste0(df[row_ix,  id_vars], collapse=":"))
     print(head(df, 5))    
         
     return(myplot_scatter(df, feat_x, feat_y) + 
