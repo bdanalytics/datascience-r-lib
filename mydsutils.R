@@ -21,14 +21,16 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_head
     url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
     download_filename_ext <- url_split[length(url_split)]
     if (download_filename_ext == "zip") {
-        if (is.null(filename))
-            stop("Please specify which file(filename=) should be imported from ",
-                 download_filepath)
+        if (is.null(filename)) {
+#           stop("Please specify which file(filename=) should be imported from ",
+#                  download_filepath)
+			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
+        }         
 
         file_path <- paste("./data", filename, sep="/")
         if (!file.exists(file_path)) {
     		print(sprintf("Unzipping file %s...", file_path))
-            unzip(file_path)
+            unzip(download_filepath, filename)
         }
     } else file_path <- download_filepath
 
@@ -687,6 +689,8 @@ mydelete_cor_features <- function( feats_df,  entity_df, rsp_var,
 
 ## 08.	    run models
 mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit, 
+							     	inv.elapsedtime.everything,
+     								inv.elapsedtime.final,
                                   R.sq.fit=NULL, R.sq.OOB=NULL, 
                                   Adj.R.sq.fit=NULL, 
                                   SSE.fit=NULL, SSE.OOB=NULL,
@@ -701,6 +705,8 @@ mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit,
     	feats=paste(indep_vars_vctr, collapse=", "),    	
         #call.formula=toString(summary(mdl)$call$formula),
         n.fit=n.fit,
+		inv.elapsedtime.everything=inv.elapsedtime.everything,
+     	inv.elapsedtime.final=inv.elapsedtime.final,
         R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
         R.sq.OOB=ifelse(is.null(R.sq.OOB), NA, R.sq.OOB), 
         Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
@@ -795,7 +801,8 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 }
 
 myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
-						  fit_df, OOB_df=NULL, method="glm",  tune_models_df=NULL) {
+						  fit_df, OOB_df=NULL, method="glm",  tune_models_df=NULL, 
+						  n_cv_folds=NULL) {
 
 ### Does not work for multinomials yet
 
@@ -804,28 +811,29 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
     
 #     print(indep_vars_vctr)
 #     print(method)
-    
-    if (length(indep_vars_vctr) == 1)
+	
+	is.binomial <- (length(unique(fit_df[, rsp_var])) == 2)    
+	if (length(indep_vars_vctr) == 1)
         if (indep_vars_vctr == ".")
     	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
     	    
    tuneGrid <- NULL 	    
-   if (!is.null( tune_models_df)) {
-   		tune_params_df <- getModelInfo(method)[[method]]$parameters
-   		if (length((tune_params_vctr <- intersect( tune_models_df$parameter, 
-   											tune_params_df$parameter))) > 0) {
-   			args_lst <- NULL
-   			for (param_ix in 1:length(tune_params_vctr))								
-	 			args_lst[[param_ix]] <- seq(
- 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"], 
- 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"], 
- 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
+   if (!is.null(tune_models_df)) {
+		tune_params_df <- getModelInfo(method)[[method]]$parameters
+		if (length((tune_params_vctr <- intersect( tune_models_df$parameter, 
+											tune_params_df$parameter))) > 0) {
+			args_lst <- NULL
+			for (param_ix in 1:length(tune_params_vctr))								
+				args_lst[[param_ix]] <- seq(
+	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"], 
+	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"], 
+	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
 
 			names(args_lst) <- tune_params_vctr
 			#print(args_lst)
-		   	#print(tuneGrid <- do.call("expand.grid", args_lst))	
-		    tuneGrid <- do.call("expand.grid", args_lst)
-		   			
+			#print(tuneGrid <- do.call("expand.grid", args_lst))	
+			tuneGrid <- do.call("expand.grid", args_lst)
+				
 # 		 	args_lst[[2]] <- seq(2, 4, 1)
 # 			names(args_lst) <- c(tune_params_vctr, "mtry")
 # 			print(args_lst)
@@ -837,11 +845,14 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
 # 		   	print(tuneGrid <- expand.grid("cp"=seq(0.01, 0.05, 0.02),
 # 		   								"mtry"=seq(2, 5, 1)))
 		}
-   } 	    
-    
+   } 	        
 #     print(tuneGrid)
+	
+	if (is.null(n_cv_folds)) n_cv_folds <- 3
+
     mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-                 method=method, trControl=trainControl(method="cv", number=10), 
+                 method=method, 
+                 trControl=trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE), 
                  tuneGrid=tuneGrid)
 
 	if (mdl$bestTune[1, 1] != "none") 
@@ -866,22 +877,26 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
             	   control=rpart.control(mtry=mdl$bestTune$mtry)))
 	} else		                  
 		stop("not implemented yet")		                  
+
+	if (is.binomial) {               
+		fit_df[, paste0(rsp_var_out, ".proba")] <- 
+			predict(mdl, newdata=fit_df, type="prob")[, 2]		
+		ROCRpred <- prediction(fit_df[, paste0(rsp_var_out, ".proba")],
+							   fit_df[, rsp_var])
+		auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
+	} else auc.fit <- NULL
                
-	fit_df[, paste0(rsp_var_out, ".proba")] <- 
-		predict(mdl, newdata=fit_df, type="prob")[, 2]		
-	ROCRpred <- prediction(fit_df[, paste0(rsp_var_out, ".proba")],
-						   fit_df[, rsp_var])
-	auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
-               
-    if (!is.null(OOB_df)) {
+    if (!is.null(OOB_df) & is.binomial) {
     	OOB_df[, paste0(rsp_var_out, ".proba")] <- 
     		predict(mdl, newdata=OOB_df, type="prob")[, 2]
     	ROCRpred <- prediction(OOB_df[, paste0(rsp_var_out, ".proba")],
         	                   OOB_df[, rsp_var])
     	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
-    } else {auc.OOB <- NA}
+    } else {auc.OOB <- NULL}
     
      models_df <- mybuild_models_df_row(method, indep_vars_vctr, n.fit=nrow(fit_df),
+     	inv.elapsedtime.everything=1.0 / mdl$times$everything["elapsed"],
+     	inv.elapsedtime.final     =1.0 / mdl$times$final["elapsed"],
                                            R.sq.fit=native_mdl$r.squared, #R.sq.OOB=R.sq.OOB, 
                                            Adj.R.sq.fit=native_mdl$r.squared, 
                                            SSE.fit=sum(native_mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
@@ -894,11 +909,10 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
     							 mdl$finalModel$tuneValue[1, 1], 
     							"AccuracySD"]
     							    	)
-                mdl$finalModel$tuneValue
 
-    print(mdl$finalModel); 
-     models_lst <- glb_models_lst
-     models_lst[[length(glb_models_lst) + 1]] <- mdl
+    print(mdl$finalModel)
+    models_lst <- glb_models_lst
+    models_lst[[length(glb_models_lst) + 1]] <- mdl
     glb_models_lst <<-  models_lst
     
 #      models_fn_lst <- glb_models_fn_lst
