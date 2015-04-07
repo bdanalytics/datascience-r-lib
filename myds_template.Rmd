@@ -147,6 +147,20 @@ glb_loss_mtrx <- NULL # or
 #                           6,4,2,0,1,
 #                           8,6,4,2,0
 #                           ), byrow=TRUE, nrow=5) 
+glb_loss_smmry <- NULL # or 
+#     function(data, lev=NULL, model=NULL) {
+#     
+#     confusion_df <- mycompute_confusion_df(data, "obs", "pred")    
+#     confusion_mtrx <- as.matrix(confusion_df[, -1])
+#     confusion_mtrx <- cbind(confusion_mtrx, 
+#                               matrix(rep(0, 
+#         (nrow(confusion_mtrx) - ncol(confusion_mtrx)) * nrow(confusion_mtrx)), 
+#                                      byrow=TRUE, nrow=nrow(confusion_mtrx)))
+#     metric <- sum(confusion_mtrx * glb_loss_mtrx) / nrow(data)
+#     names(metric) <- "loss.error"
+#     return(metric)
+# }
+
 glb_tune_models_df <- 
    rbind(
 #     data.frame(parameter="cp", min=0.01, max=0.5, by=0.01), 
@@ -677,13 +691,17 @@ for (method in glb_models_method_vctr) {
 
     set.seed(200)
     ret_lst <- myrun_mdl_fn(indep_vars_vctr=indep_vars_vctr,
-                             rsp_var=glb_rsp_var, 
-                             rsp_var_out=glb_rsp_var_out,
+                            rsp_var=glb_rsp_var, 
+                            rsp_var_out=glb_rsp_var_out,
                             fit_df=glb_entity_df, 
                             OOB_df=glb_newent_df,
                             method=method, 
                             tune_models_df=glb_tune_models_df,
-                            n_cv_folds=glb_n_cv_folds)
+                            n_cv_folds=glb_n_cv_folds,
+                            loss_mtrx=glb_loss_mtrx,
+                            summaryFunction=glb_loss_smmry,
+                            metric="loss.error",
+                            maximize=FALSE)
 #     glb_<id>_mdl <- ret_lst[["model"]]
 }
 

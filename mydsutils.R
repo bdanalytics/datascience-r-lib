@@ -761,6 +761,31 @@ myrun_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out,
     return(list("model"=mdl, "models_df"= models_df))
 }
 
+mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
+
+	#	Create a dummy matrix of 0s with actual outcomes
+	#	& merge in appropriate predicted outcomes cols
+	mrg_obs_xtab_df <- orderBy(reformulate(actual_var), 
+								mycreate_tbl_df(obs_df, actual_var)[, 1, FALSE])
+	for (val in unique(mrg_obs_xtab_df[, 1]))
+		mrg_obs_xtab_df[, paste(predct_var, val, sep=".")] <- 0
+	#print(mrg_obs_xtab_df)
+	
+	obs_xtab_df <- mycreate_xtab(obs_df, c(actual_var, predct_var))
+	obs_xtab_df[is.na(obs_xtab_df)] <- 0
+	#print(obs_xtab_df)
+
+	for (col_ix in 2:ncol(obs_xtab_df))
+		mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[, 
+			-which(names(mrg_obs_xtab_df) == names(obs_xtab_df)[col_ix])],
+								 obs_xtab_df[, c(1, col_ix)], all.x=TRUE)
+								 
+	mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
+	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0								 
+	#print(mrg_obs_xtab_df)			
+	return(mrg_obs_xtab_df)			
+}
+
 mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 										rsp_var, rsp_var_out) {
 	
@@ -774,20 +799,21 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var), 
-								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
-	for (val in unique(mrg_obs_xtab_df[, 1]))
-		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
+# 	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var), 
+# 								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
+# 	for (val in unique(mrg_obs_xtab_df[, 1]))
+# 		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
+# 	#print(mrg_obs_xtab_df)
+# 	
+# 	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
+# 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
+# 	#print(obs_xtab_df)
+# 
+# 	for (col_ix in 2:ncol(obs_xtab_df))
+# 		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <- 
+# 			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
+	mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)			
 	#print(mrg_obs_xtab_df)
-	
-	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
-	obs_xtab_df[is.na(obs_xtab_df)] <- 0
-	#print(obs_xtab_df)
-
-	for (col_ix in 2:ncol(obs_xtab_df))
-		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <- 
-			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
-	#print(mrg_obs_xtab_df)			
 
 	# This F-score formula ignores NAs in prediction. 
 	#	FN should be FN + knt(actual == +ve, predicted == NA) ???
@@ -801,8 +827,9 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 }
 
 myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
-						  fit_df, OOB_df=NULL, method="glm",  tune_models_df=NULL, 
-						  n_cv_folds=NULL) {
+						  fit_df, OOB_df=NULL, method="glm",  
+						  tune_models_df=NULL, n_cv_folds=NULL, 
+						  loss_mtrx=NULL, summaryFunction=NULL, metric=NULL, maximize=NULL) {
 
 ### Does not work for multinomials yet
 
@@ -830,30 +857,31 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
 
 			names(args_lst) <- tune_params_vctr
-			#print(args_lst)
-			#print(tuneGrid <- do.call("expand.grid", args_lst))	
-			tuneGrid <- do.call("expand.grid", args_lst)
-				
-# 		 	args_lst[[2]] <- seq(2, 4, 1)
-# 			names(args_lst) <- c(tune_params_vctr, "mtry")
-# 			print(args_lst)
-# 		   	print(tuneGrid <- do.call("expand.grid", args_lst))	
-# 		   			
-# 		   	print(tuneGrid <- do.call("expand.grid", 
-# 		   		list("cp"=seq(0.01, 0.05, 0.02),
-#  					 "mtry"=seq(2, 5, 1))))
-# 		   	print(tuneGrid <- expand.grid("cp"=seq(0.01, 0.05, 0.02),
-# 		   								"mtry"=seq(2, 5, 1)))
+			tuneGrid <- do.call("expand.grid", args_lst)				
 		}
    } 	        
 #     print(tuneGrid)
 	
 	if (is.null(n_cv_folds)) n_cv_folds <- 3
 
-    mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-                 method=method, 
-                 trControl=trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE), 
-                 tuneGrid=tuneGrid)
+	if (is.null(summaryFunction)) {
+		myControl <- trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE)
+	} else {
+		myControl <- trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE,
+									summaryFunction=summaryFunction)
+	}								
+		
+	if (is.null(metric)) {	
+	    mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+    	             method=method, 
+        	         trControl=myControl, 
+            	     tuneGrid=tuneGrid)
+    } else {
+    	mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+    	             method=method, 
+        	         trControl=myControl, 
+            	     tuneGrid=tuneGrid, metric=metric, maximize=maximize)
+    }        	     
 
 	if (mdl$bestTune[1, 1] != "none") 
 		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted")) 
