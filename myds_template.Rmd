@@ -134,7 +134,7 @@ glb_exclude_vars_as_features <- union(union(glb_exclude_vars_as_features,
 glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
 
-glb_sel_mdl <- glb_dmy_mdl <- NULL; 
+glb_fin_mdl <- glb_sel_mdl <- glb_dmy_mdl <- NULL; 
 # Classification
 #glb_models_method_vctr <- c("glm", "rpart", "rf")   # Binomials
 glb_models_method_vctr <- c("rpart", "rf")          # Multinomials
@@ -720,10 +720,23 @@ if (glb_is_regression) {
 
 if (glb_is_classification) {
     # Lower AIC is better
-    print(tmp_models_df <- orderBy(~ -auc.OOB -accuracy.fit +accuracySD.fit, glb_models_df))
-    print("Selected model:glb_sel_mdl:")    
-    glb_sel_mdl <- glb_models_lst[[as.numeric(rownames(tmp_models_df)[1])]]
-    print(summary(glb_sel_mdl))
+    sel_frmla <- formula(paste("~ ", paste0("-auc.OOB", "-accuracy.fit", "+accuracySD.fit")))
+    print(tmp_models_df <- orderBy(sel_frmla, glb_models_df))    
+#     print(tmp_models_sav_df <- orderBy(~ -auc.OOB -accuracy.fit +accuracySD.fit, glb_models_df))
+    print("Best model using metrics:")
+#     print(sprintf("Best model using metrics:", sel_frmla))
+    print(summary(bst_mdl <- glb_models_lst[[as.numeric(rownames(tmp_models_df)[1])]]))
+
+    if (!is.null(glb_sel_mdl)) { # Model is user selected
+        print("User selected model: ")
+        print(summary(glb_sel_mdl))
+    } else glb_sel_mdl <- bst_mdl
+   
+#     glb_sel_mdl <- glb_models_lst[[as.numeric(rownames(tmp_models_df)[1])]]
+#     print(summary(glb_sel_mdl))
+#     print("Selected model:glb_sel_mdl:")    
+#     glb_sel_mdl <- glb_models_lst[[as.numeric(rownames(tmp_models_df)[1])]]
+#     print(summary(glb_sel_mdl))    
     
     plot_models_df[, "inv.AIC.fit"] <- 1.0 / plot_models_df[, "AIC.fit"] 
     if (any(!is.na(plot_models_df$inv.AIC.fit)) | any(!is.na(plot_models_df$auc.OOB))) {
@@ -776,13 +789,17 @@ print(tail(glb_script_df, 2))
 print(mdl_feats_df <- myextract_mdl_feats( sel_mdl=glb_sel_mdl, 
                                            entity_df=glb_entity_df))
 ret_lst <- myrun_mdl_fn(indep_vars_vctr=mdl_feats_df$id,
-                         rsp_var=glb_rsp_var, 
-                         rsp_var_out=glb_rsp_var_out, 
+                        rsp_var=glb_rsp_var, 
+                        rsp_var_out=glb_rsp_var_out, 
                         fit_df=glb_entity_df,
                         method=glb_sel_mdl$method,
-                         tune_models_df=glb_tune_models_df)
-glb_sel_mdl <- ret_lst[["model"]]; #glb_sel_mdl_fn <- ret_lst[["model_fn"]]        
-# print(glb_models_df[nrow(glb_models_df), ])
+                        tune_models_df=glb_tune_models_df,
+                        n_cv_folds=2, # glb_n_cv_folds,
+                        loss_mtrx=glb_loss_mtrx,
+                        summaryFunction=glb_sel_mdl$control$summaryFunction,
+                        metric=glb_sel_mdl$metric,
+                        maximize=glb_sel_mdl$maximize)
+glb_fin_mdl <- ret_lst[["model"]]; 
 
 glb_script_df <- rbind(glb_script_df, 
                    data.frame(chunk_label="fit.data.training.all", 
@@ -794,7 +811,7 @@ print(tail(glb_script_df, 2))
 
 ```{r fit.data.training.all_1, cache=FALSE}
 if (glb_is_regression) {
-    glb_entity_df[, glb_rsp_var_out] <- predict(glb_sel_mdl, newdata=glb_entity_df)
+    glb_entity_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_entity_df)
     print(myplot_scatter(glb_entity_df, glb_rsp_var, glb_rsp_var_out, 
                          smooth=TRUE))
     glb_entity_df[, paste0(glb_rsp_var_out, ".err")] <- 
@@ -804,16 +821,16 @@ if (glb_is_regression) {
 }    
 
 if (glb_is_classification & glb_is_binomial) {
-            if (any(class(glb_sel_mdl) %in% c("train"))) {
+            if (any(class(glb_fin_mdl) %in% c("train"))) {
         glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_entity_df, type="prob")[, 2]
-    } else  if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
+            predict(glb_fin_mdl, newdata=glb_entity_df, type="prob")[, 2]
+    } else  if (any(class(glb_fin_mdl) %in% c("rpart", "randomForest"))) {
         glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_entity_df, type="prob")[, 2]
-    } else  if (class(glb_sel_mdl) == "glm") {
+            predict(glb_fin_mdl, newdata=glb_entity_df, type="prob")[, 2]
+    } else  if (class(glb_fin_mdl) == "glm") {
         stop("not implemented yet")
         glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_entity_df, type="response")
+            predict(glb_fin_mdl, newdata=glb_entity_df, type="response")
     } else  stop("not implemented yet")   
 
     require(ROCR)
@@ -824,7 +841,7 @@ if (glb_is_classification & glb_is_binomial) {
     
     thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
     thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
-        mycompute_classifier_f.score(mdl=glb_sel_mdl, obs_df=glb_entity_df, 
+        mycompute_classifier_f.score(mdl=glb_fin_mdl, obs_df=glb_entity_df, 
                                      proba_threshold=thresholds_df[row_ix, "threshold"], 
                                       rsp_var=glb_rsp_var, 
                                       rsp_var_out=glb_rsp_var_out))
@@ -852,16 +869,16 @@ if (glb_is_classification & glb_is_binomial) {
              
     print(mycreate_xtab(glb_entity_df, c(glb_rsp_var, glb_rsp_var_out)))
     print(sprintf("f.score=%0.4f", 
-        mycompute_classifier_f.score(glb_sel_mdl, glb_entity_df, 
+        mycompute_classifier_f.score(glb_fin_mdl, glb_entity_df, 
                                      glb_clf_proba_threshold, 
                                      glb_rsp_var, glb_rsp_var_out)))    
 }    
 
 if (glb_is_classification & !glb_is_binomial) {
-    glb_entity_df[, glb_rsp_var_out] <- predict(glb_sel_mdl, newdata=glb_entity_df, type="raw")
+    glb_entity_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_entity_df, type="raw")
 }    
 
-print(glb_feats_df <- mymerge_feats_importance(glb_feats_df, glb_sel_mdl, glb_entity_df))
+print(glb_feats_df <- mymerge_feats_importance(glb_feats_df, glb_fin_mdl, glb_entity_df))
 
 # Most of this code is used again in predict.data.new chunk
 glb_analytics_diag_plots <- function(obs_df) {
@@ -916,21 +933,21 @@ print(tail(glb_script_df, 2))
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: predict data.new
 ```{r predict.data.new, cache=FALSE}
 if (glb_is_regression)
-    glb_newent_df[, glb_rsp_var_out] <- predict(glb_sel_mdl, 
+    glb_newent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, 
                                         newdata=glb_newent_df, type="response")
 
 if (glb_is_classification & glb_is_binomial) {
     # Compute selected model predictions
-            if (any(class(glb_sel_mdl) %in% c("train"))) {
+            if (any(class(glb_fin_mdl) %in% c("train"))) {
         glb_newent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_newent_df, type="prob")[, 2]
-    } else  if (any(class(glb_sel_mdl) %in% c("rpart", "randomForest"))) {
+            predict(glb_fin_mdl, newdata=glb_newent_df, type="prob")[, 2]
+    } else  if (any(class(glb_fin_mdl) %in% c("rpart", "randomForest"))) {
         glb_newent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_newent_df, type="prob")[, 2]
-    } else  if (class(glb_sel_mdl) == "glm") {
+            predict(glb_fin_mdl, newdata=glb_newent_df, type="prob")[, 2]
+    } else  if (class(glb_fin_mdl) == "glm") {
         stop("not implemented yet")
         glb_newent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_sel_mdl, newdata=glb_newent_df, type="response")
+            predict(glb_fin_mdl, newdata=glb_newent_df, type="response")
     } else  stop("not implemented yet")   
 
     if ((class(glb_newent_df[, glb_rsp_var]) != "factor") | 
@@ -973,12 +990,12 @@ if (glb_is_classification & !glb_is_binomial) {
     glb_newent_df[, paste0(glb_rsp_var, ".predictdmy")] <- 
         predict(glb_dmy_mdl, newdata=glb_newent_df, type="raw")
 
-    # Compute selected_nolm model predictions
+    # Compute selected_no_loss_matrix model predictions
     glb_newent_df[, paste0(glb_rsp_var, ".predictnlm")] <- 
-        predict(glb_sel_mdl, newdata=glb_newent_df, type="raw")
+        predict(glb_sel_nlm_mdl, newdata=glb_newent_df, type="raw")
 
-    # Compute selected model predictions
-	glb_newent_df[, glb_rsp_var_out] <- predict(glb_sel_mdl, newdata=glb_newent_df, type="raw")
+    # Compute final model predictions
+	glb_newent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_newent_df, type="raw")
 }
     
 myprint_df(glb_newent_df[, c(glb_id_vars, glb_rsp_var, glb_rsp_var_out)])
@@ -1010,7 +1027,7 @@ if (glb_is_classification & glb_is_binomial) {
     print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
                                         c(glb_rsp_var, glb_rsp_var_out)))
     print(sprintf("f.score.sel=%0.4f", 
-        mycompute_classifier_f.score(mdl=glb_sel_mdl, obs_df=glb_newent_df, 
+        mycompute_classifier_f.score(mdl=glb_fin_mdl, obs_df=glb_newent_df, 
                                      proba_threshold=glb_clf_proba_threshold, 
                                       rsp_var=glb_rsp_var, 
                                       rsp_var_out=glb_rsp_var_out)))
@@ -1035,7 +1052,7 @@ if (glb_is_classification & !glb_is_binomial) {
         print(sprintf("prediction model type: %s", mdl_type))
         print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
             c(glb_rsp_var, 
-              ifelse(mdl_type == "sel", glb_rsp_var_out, 
+              ifelse(mdl_type == "fin", glb_rsp_var_out, 
                      paste0(glb_rsp_var, ".predict", mdl_type)))))
         newent_conf_df[is.na(newent_conf_df)] <- 0    
         newent_conf_mtrx <- as.matrix(newent_conf_df[, -1])
@@ -1049,7 +1066,7 @@ if (glb_is_classification & !glb_is_binomial) {
     }
     
     predict_qlty_df <- data.frame()
-    for (type in c("bsl", "mfo", "dmy", "nlm", "sel"))
+    for (type in c("bsl", "mfo", "dmy", "nlm", "fin"))
         predict_qlty_df <- rbind(predict_qlty_df, mycompute_prediction_quality(type))
     print(predict_qlty_df)
     
@@ -1058,7 +1075,7 @@ if (glb_is_classification & !glb_is_binomial) {
                          colorcol_name="mdl_type"))
 }    
     
-glb_analytics_diag_plots(glb_newent_df)
+glb_analytics_diag_plots(obs_df=glb_newent_df)
 
 tmp_replay_lst <- replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
@@ -1076,18 +1093,19 @@ The variance by am_fctr appears to be independent.
 We reject the null hypothesis i.e. we have evidence to conclude that am_fctr impacts mpg (95% confidence). Manual transmission is better for miles per gallon versus automatic transmission.
 
 ```{r print_sessionInfo, echo=FALSE}
-rownames(glb_script_df) <- seq(1, nrow(glb_script_df))
-glb_script_df$elapsed_diff <- sapply(seq(1, nrow(glb_script_df)), 
+lcl_script_df <- glb_script_df
+rownames(lcl_script_df) <- seq(1, nrow(lcl_script_df))
+lcl_script_df$elapsed_diff <- sapply(seq(1, nrow(lcl_script_df)), 
                                       function(step) ifelse(step <= 1, 0,
-        glb_script_df[step, "elapsed"] - glb_script_df[step - 1, "elapsed"]))
-print(glb_script_df[order(glb_script_df$elapsed_diff, decreasing=TRUE),])
+        lcl_script_df[step, "elapsed"] - lcl_script_df[step - 1, "elapsed"]))
+print(lcl_script_df[order(lcl_script_df$elapsed_diff, decreasing=TRUE),])
 print(sprintf("Total Elapsed Time: %s secs", 
-              format(glb_script_df[nrow(glb_script_df), "elapsed"], big.mark=',')))
-tmp_script_df <- subset(glb_script_df, chunk_step_minor == 0)[, 
+              format(lcl_script_df[nrow(lcl_script_df), "elapsed"], big.mark=',')))
+tmp_script_df <- subset(lcl_script_df, chunk_step_minor == 0)[, 
                                             c("chunk_label", "chunk_step_major")]
 names(tmp_script_df)[1] <- "chunk_label_major"
 #print(tmp_script_df)
-plot_script_df <- merge(glb_script_df, tmp_script_df, all.x=TRUE)
+plot_script_df <- merge(lcl_script_df, tmp_script_df, all.x=TRUE)
 plot_script_df$chunk_step_major_desc <- max(plot_script_df$chunk_step_major) - 
                                             plot_script_df$chunk_step_major
 print(ggplot(plot_script_df, aes(x=reorder(chunk_label_major, chunk_step_major_desc), 

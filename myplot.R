@@ -286,11 +286,12 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
         if (class(df[, feat]) == "factor")
             next
             
-        for (row_ix in c(which.min(df[, feat]), which.max(df[, feat]),
-                         which(!df[,  predct_accurate_var_name] & 
-                                 df[, feat] == min(df[, feat])),
-                         which(!df[,  predct_accurate_var_name] & 
-                                 df[, feat] == max(df[, feat]))
+        for (row_ix in c(head(which.min(df[, feat])), 
+                         head(which.max(df[, feat])),
+                         head(which(!df[,  predct_accurate_var_name] & 
+                                 df[, feat] == min(df[, feat]))),
+                         head(which(!df[,  predct_accurate_var_name] & 
+                                 df[, feat] == max(df[, feat])))
                          )) 
             df[row_ix, ".label"] <- 
                         ifelse(length( id_vars) > 0, 
@@ -302,8 +303,11 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
             
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
             geom_point(aes_string(color=color_var,
-                                  shape= predct_accurate_var_name), 
-                       position="jitter") +
+#    shape=paste0("factor(as.numeric(", predct_accurate_var_name, ") + 3)")), 
+#    shape=paste0("relevel(factor(as.numeric(", predct_accurate_var_name, ") + 3), ref=1)")),     
+                                    shape=predct_accurate_var_name),     
+                           position="jitter") +
+            scale_shape_manual(values=c(4,3)) + guides(shape=FALSE) +              
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +                       
             facet_wrap(reformulate( predct_accurate_var_name))
           )    
