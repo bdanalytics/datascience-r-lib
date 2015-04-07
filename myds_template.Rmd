@@ -140,6 +140,13 @@ glb_sel_mdl <- glb_dmy_mdl <- NULL;
 glb_models_method_vctr <- c("rpart", "rf")          # Multinomials
 
 glb_models_lst <- list(); glb_models_df <- data.frame()
+glb_loss_mtrx <- NULL # or
+#                  matrix(c(0,1,2,3,4,
+#                           2,0,1,2,3,
+#                           4,2,0,1,2,
+#                           6,4,2,0,1,
+#                           8,6,4,2,0
+#                           ), byrow=TRUE, nrow=5) 
 glb_tune_models_df <- 
    rbind(
 #     data.frame(parameter="cp", min=0.01, max=0.5, by=0.01), 
@@ -148,7 +155,10 @@ glb_tune_models_df <-
 # or NULL
 glb_n_cv_folds <- 3 # or NULL
 
-glb_clf_proba_threshold <- 0.5 # NULL
+glb_clf_proba_threshold <- NULL # 0.5
+
+# Baseline prediction model feature(s)
+glb_bsl_mdl_var <- c("<col_name>") # or NULL
 
 # Depict process
 glb_analytics_pn <- petrinet(name="glb_analytics_pn",
@@ -333,6 +343,9 @@ glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
 
 # Histogram of predictor in glb_entity_df & glb_newent_df
 print(myplot_histogram(glb_entity_df, glb_rsp_var_raw))
+if (glb_is_classification)
+    print(table(glb_entity_df[, glb_rsp_var_raw]) / nrow(glb_entity_df))
+
 print(myplot_histogram(glb_newent_df, glb_rsp_var_raw))
 
 # Check for duplicates in glb_id_vars
@@ -911,24 +924,43 @@ if (glb_is_classification & glb_is_binomial) {
 				glb_clf_proba_threshold) * 1 + 1])
 
     # Compute dummy model predictions
-    glb_newent_df[, paste0(glb_rsp_var, ".preddmy.proba")] <- 
+    glb_newent_df[, paste0(glb_rsp_var, ".predictdmy.proba")] <- 
         predict(glb_dmy_mdl, newdata=glb_newent_df, type="prob")[, 2]
     if ((class(glb_newent_df[, glb_rsp_var]) != "factor") | 
     	(length(levels(glb_newent_df[, glb_rsp_var])) != 2))
 		stop("expecting a factor with two levels:", glb_rsp_var)
-	glb_newent_df[, paste0(glb_rsp_var, ".preddmy")] <- 
+	glb_newent_df[, paste0(glb_rsp_var, ".predictdmy")] <- 
 		factor(levels(glb_newent_df[, glb_rsp_var])[
-			(glb_newent_df[, paste0(glb_rsp_var, ".preddmy.proba")] >= 
+			(glb_newent_df[, paste0(glb_rsp_var, ".predictdmy.proba")] >= 
 				glb_clf_proba_threshold) * 1 + 1])
 }
 
 if (glb_is_classification & !glb_is_binomial) {
+    # Compute baseline predictions
+    if (!is.null(glb_bsl_mdl_var)) {
+        if (is.null(glb_map_rsp_raw_to_var)) {
+        glb_newent_df[, paste0(glb_rsp_var, ".predictbsl")] <- 
+                   glb_newent_df[, glb_bsl_mdl_var]
+        } else {
+        glb_newent_df[, paste0(glb_rsp_var, ".predictbsl")] <- 
+                   glb_map_rsp_raw_to_var(glb_newent_df[, glb_bsl_mdl_var])
+        }
+    }    
+
+    # Compute most frequent outcome predictions
+    glb_newent_df[, paste0(glb_rsp_var, ".predictmfo")] <- 
+        as.factor(names(sort(table(glb_entity_df[, glb_rsp_var]), decreasing=TRUE))[1])
+
+    # Compute dummy model predictions - different from most frequent outcome - shd be from runif
+    glb_newent_df[, paste0(glb_rsp_var, ".predictdmy")] <- 
+        predict(glb_dmy_mdl, newdata=glb_newent_df, type="raw")
+
+    # Compute selected_nolm model predictions
+    glb_newent_df[, paste0(glb_rsp_var, ".predictnlm")] <- 
+        predict(glb_sel_mdl, newdata=glb_newent_df, type="raw")
+
     # Compute selected model predictions
 	glb_newent_df[, glb_rsp_var_out] <- predict(glb_sel_mdl, newdata=glb_newent_df, type="raw")
-
-    # Compute dummy model predictions
-	glb_newent_df[, paste0(glb_rsp_var, ".preddmy")] <- 
-        predict(glb_dmy_mdl, newdata=glb_newent_df, type="raw")
 }
     
 myprint_df(glb_newent_df[, c(glb_id_vars, glb_rsp_var, glb_rsp_var_out)])
@@ -972,26 +1004,40 @@ if (glb_is_classification & glb_is_binomial) {
                       (newent_conf_df[1, 2] + newent_conf_df[2, 3] + 
                        newent_conf_df[1, 3] + newent_conf_df[2, 2])))
     
-    print(mycreate_xtab(glb_newent_df, c(glb_rsp_var, paste0(glb_rsp_var, ".preddmy"))))
+    print(mycreate_xtab(glb_newent_df, c(glb_rsp_var, paste0(glb_rsp_var, ".predictdmy"))))
     print(sprintf("f.score.dmy=%0.4f", 
         mycompute_classifier_f.score(mdl=glb_dmy_mdl, obs_df=glb_newent_df, 
                                      proba_threshold=glb_clf_proba_threshold, 
                                       rsp_var=glb_rsp_var, 
-                                      rsp_var_out=paste0(glb_rsp_var, ".preddmy"))))
+                                      rsp_var_out=paste0(glb_rsp_var, ".predictdmy"))))
 }    
     
 if (glb_is_classification & !glb_is_binomial) {
-    print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
-                                        c(glb_rsp_var, glb_rsp_var_out)))
-    newent_conf_df[is.na(newent_conf_df)] <- 0
-    newent_conf_mtrx <- as.matrix(newent_conf_df[, -1])
-    print(sprintf("accuracy.sel=%0.4f", sum(diag(newent_conf_mtrx)) * 1.0 / sum(newent_conf_mtrx)))
+    mycompute_prediction_quality <- function(mdl_type) {    
+        print(sprintf("prediction model type: %s", mdl_type))
+        print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
+            c(glb_rsp_var, 
+              ifelse(mdl_type == "sel", glb_rsp_var_out, 
+                     paste0(glb_rsp_var, ".predict", mdl_type)))))
+        newent_conf_df[is.na(newent_conf_df)] <- 0    
+        newent_conf_mtrx <- as.matrix(newent_conf_df[, -1])
+        newent_conf_mtrx <- cbind(newent_conf_mtrx, 
+            matrix(rep(0, 
+                (nrow(newent_conf_mtrx) - ncol(newent_conf_mtrx)) * nrow(newent_conf_mtrx)), 
+                    byrow=TRUE, nrow=nrow(newent_conf_mtrx)))
+        return(data.frame(mdl_type=mdl_type, 
+            accuracy=sum(diag(newent_conf_mtrx)) * 1.0 / sum(newent_conf_mtrx),    
+            loss.error=sum(newent_conf_mtrx * glb_loss_mtrx) / nrow(glb_newent_df)))
+    }
     
-    print(newent_conf_df <- mycreate_xtab(glb_newent_df, 
-                                        c(glb_rsp_var, paste0(glb_rsp_var, ".preddmy"))))
-    newent_conf_df[is.na(newent_conf_df)] <- 0    
-    newent_conf_mtrx <- as.matrix(newent_conf_df[, -1])
-    print(sprintf("accuracy.dmy=%0.4f", sum(diag(newent_conf_mtrx)) * 1.0 / sum(newent_conf_mtrx)))    
+    predict_qlty_df <- data.frame()
+    for (type in c("bsl", "mfo", "dmy", "nlm", "sel"))
+        predict_qlty_df <- rbind(predict_qlty_df, mycompute_prediction_quality(type))
+    print(predict_qlty_df)
+    
+    predict_qlty_df$inv.loss.error <- 1.0 / predict_qlty_df$loss.error
+    print(myplot_scatter(predict_qlty_df, "accuracy", "inv.loss.error", 
+                         colorcol_name="mdl_type"))
 }    
     
 glb_analytics_diag_plots(glb_newent_df)
