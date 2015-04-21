@@ -14,6 +14,61 @@ suppressPackageStartupMessages(require(doBy))
 #    					  , labels=c("mean", "median")
 #    					  )
 
+myplot_bar <- function(df, xcol_name, ycol_names, colorcol_name=NULL, facet_spec=NULL, 
+                        xlabel_formatter=NULL) {
+    require(ggplot2)
+    
+    if (xcol_name == ".rownames")
+        df[, xcol_name] <- rownames(df)
+    
+    # This is not always required; need to make this feature an argument
+    # Summarize data by xcol_name to get the proper display order 
+#     if (length(unique(df[, xcol_name])) != dim(df)[1]) {
+#         require(sqldf)
+#         sql <- paste0("SELECT ", xcol_name, ", ")
+#         sum_sub_clauses <- sapply(ycol_names, 
+#                                   function (col) { paste0(" SUM(", col, ") AS ",
+#                                                           col) })
+#         sum_clause <- paste(sum_sub_clauses, collapse=",")
+#         sql <- paste(sql, sum_clause, "FROM df GROUP BY", xcol_name, sep=" ")
+#         warning("Aggregating input dataframe:", sql)
+#         df <- sqldf(sql)
+#     }
+    
+    if (length(ycol_names) == 1) {
+        df <- df[order(df[, ycol_names], decreasing=TRUE), ]
+#         df$xcol <- df[, xcol_name]
+#         df$ycol <- df[, ycol_names]
+        g <- ggplot(df, aes_string(x=paste0("reorder(", xcol_name, ", ", ycol_names, ")"), 
+                                   y=ycol_names))
+        if (is.null(colorcol_name)) g <- g + geom_bar(fill="blue", stat="identity") else
+                            g <- g + geom_bar(aes_string(fill=colorcol_name), stat="identity")
+        g <- g + xlab(xcol_name) + ylab(ycol_names)
+    } else {
+        require(reshape)
+        mltd_df <- melt(df, id=xcol_name, measure=ycol_names)
+        #g <- ggplot(mltd_df, aes_string(x=xcol_name, y="value", fill="variable"))
+        names(mltd_df)[1] <- "xcol_name"
+        g <- ggplot(mltd_df, aes(x=reorder(xcol_name, value), y=value, fill=variable))        
+        g <- g + geom_bar(stat="identity") + xlab(xcol_name)
+    }
+    
+    if (!is.null(facet_spec) & (length(ycol_names) > 1)) {
+        stop("Facet with multiple y cols not supported")
+    }
+    
+    if (!(is.null(xlabel_formatter))) {
+        g <- g + scale_x_discrete(labels=xlabel_formatter)
+    }
+
+    return(g)
+}
+#myplot_hbar(head(mysort_df(interval_activity_df, "steps.mean", desc=TRUE)), 
+#            "interval", "steps.mean", xlabel_formatter=myformat_time_MS)
+#myplot_hbar(health_event_grp_df, "event_grp", c("FATALITIES", "INJURIES"))
+#myplot_hbar(health_event_grp_df, "event_grp", c("FATALITIES", "INJURIES"), 
+#			facet_spec="whatever")
+
 myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     if ((length(ycol_names) > 1) & (!missing(xcol_name)))
         stop("Multiple feats not implemented with x variable.", 
@@ -85,57 +140,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     g
 }
 
-myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL) {
-    require(ggplot2)
-    
-    if (xcol_name == ".rownames")
-        df[, xcol_name] <- rownames(df)
-    
-    # Summarize data by xcol_name to get the proper display order 
-    if (length(unique(df[, xcol_name])) != dim(df)[1]) {
-        require(sqldf)
-        sql <- paste0("SELECT ", xcol_name, ", ")
-        sum_sub_clauses <- sapply(ycol_names, 
-                                  function (col) { paste0(" SUM(", col, ") AS ",
-                                                          col) })
-        sum_clause <- paste(sum_sub_clauses, collapse=",")
-        sql <- paste(sql, sum_clause, "FROM df GROUP BY", xcol_name, sep=" ")
-        warning("Aggregating input dataframe:", sql)
-        df <- sqldf(sql)
-    }
-    
-    if (length(ycol_names) == 1) {
-        df <- df[order(df[, ycol_names], decreasing=TRUE), ]
-        df$xcol <- df[, xcol_name]
-        df$ycol <- df[, ycol_names]
-        g <- ggplot(df, aes(x=reorder(xcol, ycol), y=ycol))
-        #g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
-        g <- g + geom_bar(stat="identity", colour="blue") + 
-                 xlab(xcol_name) + ylab(ycol_names)
-    } else {
-        require(reshape)
-        mltd_df <- melt(df, id=xcol_name, measure=ycol_names)
-        #g <- ggplot(mltd_df, aes_string(x=xcol_name, y="value", fill="variable"))
-        names(mltd_df)[1] <- "xcol_name"
-        g <- ggplot(mltd_df, aes(x=reorder(xcol_name, value), y=value, fill=variable))        
-        g <- g + geom_bar(stat="identity") + xlab(xcol_name)
-    }
-    
-    if (!is.null(facet_spec) & (length(ycol_names) > 1)) {
-        stop("Facet with multiple y cols not supported")
-    }
-    
-    if (!(is.null(xlabel_formatter))) {
-        g <- g + scale_x_discrete(labels=xlabel_formatter)
-    }
-
-    g + coord_flip()
-}
-#myplot_hbar(head(mysort_df(interval_activity_df, "steps.mean", desc=TRUE)), 
-#            "interval", "steps.mean", xlabel_formatter=myformat_time_MS)
-#myplot_hbar(health_event_grp_df, "event_grp", c("FATALITIES", "INJURIES"))
-#myplot_hbar(health_event_grp_df, "event_grp", c("FATALITIES", "INJURIES"), 
-#			facet_spec="whatever")
+myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL) 
+    return(myplot_bar(df, xcol_name, ycol_names, xlabel_formatter, facet_spec) + coord_flip())
 
 myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL, 
                              show_stats=TRUE, facet_frmla=NULL) {
@@ -309,7 +315,8 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
                            position="jitter") +
             scale_shape_manual(values=c(4,3)) + guides(shape=FALSE) +              
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +                       
-            facet_wrap(reformulate( predct_accurate_var_name))
+            facet_wrap(reformulate( predct_accurate_var_name)) + 
+            scale_color_brewer(type="qual", palette="Set1")
           )    
 }
 
@@ -335,31 +342,30 @@ myplot_prediction_regression <- function(df, feat_x, feat_y,
 ##########################################
 ##Radar Plot Code
 ##########################################
-myplot_radar <- function(radar_inp_df) {
+myplot_radar <- function(radar_inp_df, instance_var=names(radar_inp_df)[1], facet_var=NULL) {
 
-    ##Assumes df is in the form:
+    ##Reorganizes radar_inp_df in the form:
     # instance plot_var1 plot_var2 plot_var3 plot_var4 facet
     # inst_lbl  -0.038   1.438      -0.571      0.832  facet_val
     ##where instance is the individual instance identifier
     ##facet is the facet variable
     ##and the variables from plot_var1..4 are used for grouping
     ##and thus should be individual lines on the radar plot
-
+    
     radarFix <- function(df) {
         ##assuming the passed in data frame 
         ##includes only columns listed above
         
-        df$instance <- as.factor(df$instance)
-        
         ##find increment
         theta <- seq(from=0, to=2*pi, by=(2*pi)/(ncol(df)-2))
         theta <- theta + pi/2
+
         ##create graph data frame
-        graphData= data.frame(instance="", x=0,y=0)
+        graphData= data.frame(.instance="", x=0,y=0)
         graphData=graphData[-1,]
         
-        for(i in levels(df$instance)) {
-            instanceData <- df[df$instance == i,]
+        for(i in as.character(df$.instance)) {
+            instanceData <- df[df$.instance == i,]
             x0 <- y0 <- r <- 0.5
             
             for(j in c(2:(ncol(df)-1))) {
@@ -367,35 +373,36 @@ myplot_radar <- function(radar_inp_df) {
                 #instanceData[,j]= instanceData[,j] #+ 3
                 
                 graphData <- rbind(graphData, 
-                    data.frame(instance=i,
+                    data.frame(.instance=i,
                                 theta=theta[j-1],
                                 x=r * instanceData[,j] * cos(theta[j-1]) + x0,
                                 y=r * instanceData[,j] * sin(theta[j-1]) + y0,
-                                label=ifelse((instanceData[,j] == max(df[,j])), 
+                                label=ifelse((instanceData[,j] == max(df[,j], na.rm=TRUE)), 
                                                 names(instanceData)[j],
                                                 ""),
-                                label_max=ifelse((instanceData[,j] == max(df[,j])), 
+                                label_max=ifelse((instanceData[,j] == max(df[,j], na.rm=TRUE)), 
                                                 format(instanceData[,j], digits=6),
                                                 NA),
-                                label_min=ifelse((instanceData[,j] == max(df[,j])), 
-                                                format(min(df[,j]), digits=6),
+                                label_min=ifelse((instanceData[,j] == max(df[,j], na.rm=TRUE)), 
+                                                format(min(df[,j], na.rm=TRUE), digits=6),
                                                 NA),                               
                                 label_angle=ifelse(((180*theta[j-1]/pi)-90) < 90,
                                                    ((180*theta[j-1]/pi)-90),
                                                    ((180*theta[j-1]/pi)-270))
                                 ))
             }
-            ##completes the connection
-            graphData <- rbind(graphData, 
-                    data.frame(instance=i,
-                                theta=theta[1],
-                                x=r * instanceData[,2] * cos(theta[1]) + x0,
-                                y=r * instanceData[,2] * sin(theta[1]) + y0,
-                                label="",
-                                label_max=NA, label_min=NA,                              
-                                label_angle=0
-                                ))
             
+            ##completes the connection only if prev. attr was not NA
+            if (!is.na(instanceData[, ncol(df)-1]))
+                graphData <- rbind(graphData, 
+                        data.frame(.instance=i,
+                                    theta=theta[1],
+                                    x=r * instanceData[,2] * cos(theta[1]) + x0,
+                                    y=r * instanceData[,2] * sin(theta[1]) + y0,
+                                    label="",
+                                    label_max=NA, label_min=NA,                              
+                                    label_angle=0
+                                    ))            
         }
         
         # Fix this hack !
@@ -408,22 +415,63 @@ myplot_radar <- function(radar_inp_df) {
 
     # to debug radarFix
     #radarData <- radarFix(df=subset(radar_inp_df, facet=<sample>))
-    instance_varname <- names(radar_inp_df)[1]
-    names(radar_inp_df)[1] <- "instance"
-    names(radar_inp_df)[length(names(radar_inp_df))] <- "facet"
-
-    radar_scld_df <- cbind(radar_inp_df[, "instance", FALSE],
-                data.frame(scale(radar_inp_df[, seq(2, ncol(radar_inp_df)-1)], 
-                   scale=TRUE, center=FALSE)),
-                radar_inp_df[, "facet", FALSE])
-
-    radarData <- ddply(radar_scld_df, .(facet), radarFix)
-    radarDataRange <- ddply(radar_inp_df, .(facet), radarFix)
-    radarData$label_range <- paste0("[", radarDataRange$label_min, ", ", radarDataRange$label_max, "]")
     
-    gp <- ggplot(radarData, aes(x=x, y=y, group=instance)) +
-            geom_path(alpha=0.5, aes(color=instance)) +
-            geom_point(alpha=0.2) + 
+    radar_inp_df$.instance <- as.factor(radar_inp_df[, instance_var])
+    radar_inp_df$.facet <- ifelse(is.null(facet_var), as.factor(0), 
+                                    as.factor(radar_inp_df[, facet_var]))
+
+    # Keep only numeric or logical columns
+    dfcols_df <- data.frame(type=sapply(radar_inp_df, class))
+    keep_cols <- rownames(dfcols_df)[dfcols_df[, "type"] %in%
+                                         c("integer", "numeric", "logical")]
+    keep_cols <- setdiff(keep_cols, ".facet")                                         
+    radar_inp_df <- radar_inp_df[, union(keep_cols, c(".instance", ".facet"))]
+
+    # Get rid of any cols that have all 0s or NAs or Infs
+    na_knts <- sapply(names(radar_inp_df[ ,keep_cols]), 
+                        function(col) sum(is.na(radar_inp_df[, col])))
+    na_knts <- na_knts[na_knts == nrow(radar_inp_df)]
+    if (length(na_knts) > 0) {
+        warning("Not plotting columns with all NAs: ", paste0(names(na_knts), collapse=","))
+        keep_cols <- setdiff(keep_cols, names(na_knts))
+    }
+    
+    all_zeros <- sapply(names(radar_inp_df[ ,keep_cols]), 
+                        function(col) sum(radar_inp_df[, col], na.rm=TRUE))
+    all_zeros <- all_zeros[all_zeros == 0]
+    if (length(all_zeros) > 0) {
+        warning("Not plotting columns with all 0s: ", paste0(names(all_zeros), collapse=","))
+        keep_cols <- setdiff(keep_cols, names(all_zeros))
+    }
+
+    all_Infs <- sapply(names(radar_inp_df[ ,keep_cols]), 
+                        function(col) sum(radar_inp_df[, col], na.rm=TRUE))
+    all_Infs <- all_Infs[all_Infs == Inf]
+    if (length(all_Infs) > 0) {
+        warning("Not plotting columns with all Infs: ", paste0(names(all_Infs), collapse=","))
+        keep_cols <- setdiff(keep_cols, names(all_Infs))
+    }
+    
+    # Change remaining Infs to NAs
+    radar_inp_df[radar_inp_df == Inf] <- NA
+
+    # scale the data                                         
+    radar_scld_df <- cbind(radar_inp_df[, ".instance", FALSE],
+                data.frame(scale(radar_inp_df[, keep_cols, FALSE], scale=TRUE, center=FALSE)),
+                            radar_inp_df[, ".facet", FALSE])
+
+    radarData <- ddply(radar_scld_df, .(.facet), radarFix)
+    
+    radar_tmp_df <- cbind(radar_inp_df[, ".instance", FALSE],
+                            radar_inp_df[, keep_cols, FALSE],
+                            radar_inp_df[, ".facet", FALSE])    
+    radarDataRange <- ddply(radar_tmp_df, .(.facet), radarFix)
+    radarData$label_range <- paste0("[", radarDataRange$label_min, ", ", 
+                                         radarDataRange$label_max, "]")
+    
+    gp <- ggplot(radarData, aes(x=x, y=y, group=.instance)) +
+            geom_path(alpha=0.5, aes(color=.instance)) +
+            geom_point(aes(shape=.instance), alpha=0.2) + 
             geom_text(aes(x=x*1.05, y=y*1.05, 
                           label=label_range, angle=label_angle), size=3.5,
                       data=subset(radarData, !is.na(label_max))) +    
@@ -435,8 +483,11 @@ myplot_radar <- function(radar_inp_df) {
                     axis.title.y = element_blank()) + 
             theme(axis.ticks.x = element_blank(), axis.text.x=element_blank(), 
                     axis.title.x = element_blank()) + 
-            facet_wrap(~facet, scales="free") + 
-            scale_color_discrete(name=instance_varname)
+            #scale_color_discrete(name=.instance)
+            scale_color_brewer(type="qual", palette="Set1")
+            
+    if (length(unique(radarData$.facet)) > 1)
+        gp + facet_wrap(~.facet, scales="free")
 
     return(gp)
 }   
@@ -454,7 +505,8 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
     p <- ggplot(df, aes_string(x=xcol_name, y=ycol_name))
 
     if (!missing(colorcol_name) & mycheck_validarg(colorcol_name))
-        p <- p + geom_point() + aes_string(color=colorcol_name)
+        p <- p + geom_point() + aes_string(color=colorcol_name) + 
+                scale_color_brewer(type="qual", palette="Set1")
     else
         p <- p + geom_point(color="grey")
 

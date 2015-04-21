@@ -6,7 +6,7 @@
 
 ## 01. 		import data
 
-myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_header=FALSE, 
+myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_header=FALSE,
 							print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
@@ -25,7 +25,7 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_head
 #           stop("Please specify which file(filename=) should be imported from ",
 #                  download_filepath)
 			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
-        }         
+        }
 
         file_path <- paste("./data", filename, sep="/")
         if (!file.exists(file_path)) {
@@ -40,17 +40,17 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_head
 
 	if (!force_header) {
 		header <- FALSE
-	
-		if (length(grep('^"', first_record[1, 1])) != 0) 
-			header <- TRUE else {	
+
+		if (length(grep('^"', first_record[1, 1])) != 0)
+			header <- TRUE else {
 			col_names <- paste(first_record[,])
 			diffs <- setdiff(make.names(col_names), col_names)
 			if (length(diffs) == 0)
 				header <- TRUE else {
 				if (length(grep("^X", diffs)) == length(diffs))
 					header <- TRUE
-			}	
-		}	
+			}
+		}
 
 		if (!(header))
 		{
@@ -284,24 +284,24 @@ mycompute_median <- function(vector) {
     if (is.factor(vector))
         return(factor(levels(vector)[median(as.numeric(vector), na.rm=TRUE)], levels(vector)))
 #     if (class(vector) == "Date")
-#     	return(as.Date(median(vector, na.rm=TRUE), origin="1970-01-01"))   
-    
+#     	return(as.Date(median(vector, na.rm=TRUE), origin="1970-01-01"))
+
     return(median(vector, na.rm=TRUE))
 }
 
 mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 	if (class(df) != "data.frame")
 		stop("df argument is not a data.frame: it is ", class(df))
-		
+
 	ret_df <- data.frame()
-	
+
 	# gather numeric vars
     num_lst <- sapply(names(df), function(col) if (is.numeric(df[, col])) return(col))
     num_vctr <- unlist(num_lst[!sapply(num_lst, is.null)])
     if (length(num_vctr) > 0)
-	    ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df, 
+	    ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df,
     							FUN=median, keep.names=keep.names)
-    
+
     # summaryBy does not compute stats for factor or Date class variables
     non_num_lst <- sapply(names(df), function(col) if (!is.numeric(df[, col])) return(col))
     non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
@@ -316,30 +316,30 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
         	if (byvars_lst == factor(0)) {
         		ret_df <- as.data.frame(mycompute_median(df[, var]))
         	} else {
-				ret_df <- as.data.frame(tapply(df[, var], df[, byvars_lst], 
+				ret_df <- as.data.frame(tapply(df[, var], df[, byvars_lst],
 											FUN=mycompute_median))
-			}								
+			}
         	names(ret_df) <- new_name
-        }	
+        }
         else {
         	if (byvars_lst == factor(0)) {
         		ret_df[, new_name] <- mycompute_median(df[, var])
         	} else {
-        		ret_df[, new_name] <- tapply(df[, var], df[, byvars_lst], 
+        		ret_df[, new_name] <- tapply(df[, var], df[, byvars_lst],
         								FUN=mycompute_median)
-        	}							
-        }								
+        	}
+        }
 
-		# tapply strips class info        								
+		# tapply strips class info
         if (class(df[, var]) == "Date")
         	ret_df[, new_name] <- as.Date(ret_df[, new_name], origin="1970-01-01")
     }
-    
+
     if (nrow(ret_df) == 1) rownames(ret_df) <- "median"
-    
+
     return(ret_df)
 }
-# medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df, 
+# medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df,
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
@@ -349,43 +349,43 @@ mycreate_tbl_df <- function(df, tbl_col_name) {
 	names(ret_df) <- ".freq"
 	ret_df[, tbl_col_name] <- rownames(ret_df)
 	rownames(ret_df) <- 1:nrow(ret_df)
-	
+
 	return(ret_df[, c(tbl_col_name, ".freq")])
 }
 
 mycreate_xtab <- function(df, xtab_col_names) {
     require(doBy)
     require(reshape2)
-    
+
     df[, "_n"] <- 1
     count_df <- summaryBy(reformulate(xtab_col_names, "`_n`"), df, FUN=c(length))
     #count_df <- summaryBy(reformulate(xtab_col_names, "_n"), df, FUN=c(length))
     names(count_df) <- gsub("`", "", names(count_df))
-    
+
     if (length(xtab_col_names) < 2)
     	return(count_df)
-    
-    cast_df <- dcast(count_df, 
-    	reformulate(tail(xtab_col_names, 1), head(xtab_col_names, -1)), 
+
+    cast_df <- dcast(count_df,
+    	reformulate(tail(xtab_col_names, 1), head(xtab_col_names, -1)),
     	value.var="_n.length")
-    
+
     for (col_ix in length(xtab_col_names):ncol(cast_df))
-    	names(cast_df)[col_ix] <- 
+    	names(cast_df)[col_ix] <-
     	paste(tail(xtab_col_names, 1), names(cast_df)[col_ix], sep=".")
-    	
+
     return(cast_df)
-    
+
 #     print(xtabs(~ Month_fctr + Arrest, entity_df))
-# 
+#
 # 	print(prblm_3_2_xtb <- xtabs(~ Month + Arrest, entity_df))
 # 	print(prblm_3_2_df <- data.frame(dimnames(prblm_3_2_xtb)[[1]],
 #                                  prblm_3_2_xtb[, 1],
 #                                  prblm_3_2_xtb[, 2]))
-# 	names(prblm_3_2_df) <- c(names(dimnames(prblm_3_3_xtb))[1], 
+# 	names(prblm_3_2_df) <- c(names(dimnames(prblm_3_3_xtb))[1],
 #     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][1], sep="."),
 #     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][2], sep="."))
 # 	print(prblm_3_2_df)
-# 
+#
 # 	print(prblm_3_3_tbl <- table(entity_df$Year, entity_df$Arrest))
 # 	print(prblm_3_3_df <- data.frame(Year=dimnames(prblm_3_3_tbl)[[1]],
 #                                  Arrest_FALSE=prblm_3_3_tbl[, 1],
@@ -432,16 +432,16 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
     if (length(unique(mapd_df[, from_col_name])) == nrow(mapd_df)) map_summry_df <- mapd_df else {
         require(sqldf)
-        
+
         # _n does not work with ggplot
         sql <- "SELECT "
         sql <- paste0(sql, "\"", from_col_name, "\", ")
-        sql <- paste0(sql, "\"", to_col_name, "\" ")        
-      	sql <- paste0(sql, ", SUM(1) AS \".n\" ")        
+        sql <- paste0(sql, "\"", to_col_name, "\" ")
+      	sql <- paste0(sql, ", SUM(1) AS \".n\" ")
 #     	sql <- paste0("SELECT ", paste(from_col_name, to_col_name, sep=","), ", SUM(1) AS \".n\" ")
         sql <- paste0(sql, "FROM mapd_df GROUP BY ")
         sql <- paste0(sql, "\"", from_col_name, "\", ")
-        sql <- paste0(sql, "\"", to_col_name, "\" ")        
+        sql <- paste0(sql, "\"", to_col_name, "\" ")
         sql <- paste0(sql, "ORDER BY \".n\" DESC")
 #         sql <- paste(sql, "FROM mapd_df GROUP BY", paste(from_col_name, to_col_name, sep=","),
 #                      "ORDER BY _n DESC", sep=" ")
@@ -449,13 +449,13 @@ mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
     }
 
 	myprint_df(map_summry_df)
-	
-	# Works only for 1:1 mapping; 
+
+	# Works only for 1:1 mapping;
 	#	Use fill aesthetic to display n:m mappings ?
 	#		Create a variable that contains n:m ratio for each value of to_col_name ?
-	
-	print(ggplot(map_summry_df, aes_string(x=to_col_name, y=".n", 
-                                       fill=paste0("factor(", from_col_name, ")"))) + 
+
+	print(ggplot(map_summry_df, aes_string(x=to_col_name, y=".n",
+                                       fill=paste0("factor(", from_col_name, ")"))) +
                  geom_bar(stat="identity") + coord_flip())
 # 	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
 }
@@ -463,16 +463,16 @@ mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
 # mymap <- function(df, from_col_name, to_col_name, map_func) {
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
-mymap_codes <- function(df, from_col_name, to_col_name, 
-						map_df, map_join_col_name=from_col_name, 
+mymap_codes <- function(df, from_col_name, to_col_name,
+						map_df, map_join_col_name=from_col_name,
 								map_tgt_col_name=to_col_name) {
-						
-# 	if (length(intersect(names(df), names(map_df))) > 0)						
-# 		warning("potential column join conflicts: ", intersect(names(df), names(map_df)))						
-		
-	ret_df <- merge(df, map_df[, c(map_join_col_name, map_tgt_col_name)], 
+
+# 	if (length(intersect(names(df), names(map_df))) > 0)
+# 		warning("potential column join conflicts: ", intersect(names(df), names(map_df)))
+
+	ret_df <- merge(df, map_df[, c(map_join_col_name, map_tgt_col_name)],
                     by.x=from_col_name, by.y=map_join_col_name, all.x=TRUE)
-		
+
 #     df[, to_col_name] <- sapply(df[, from_col_name], map_func)
 
 	mycheck_map_results(ret_df, from_col_name, to_col_name)
@@ -510,53 +510,53 @@ mycreate_date2daytype <- function (df, date_col_name) {
 ## 04.2     stratified shuffle sample
 mypartition_data <- function(more_stratify_vars=NULL) {
     print(" "); print(sprintf("nrow(entity_df): %s", format(nrow(entity_df), big.mark=',')))
-    if (missing(more_stratify_vars)) { 
-        print(table(entity_df[, response_varname])) 
+    if (missing(more_stratify_vars)) {
+        print(table(entity_df[, response_varname]))
         keep_cols <- response_varname
     } else {
-        entity_tbl <- table(entity_df[, response_varname], 
+        entity_tbl <- table(entity_df[, response_varname],
                             entity_df[, more_stratify_vars])
         print(entity_tbl)
         keep_cols <- c(response_varname, more_stratify_vars)
-    }    
-    
-    inTrainValidate <- createDataPartition(y=entity_df[, response_varname], 
+    }
+
+    inTrainValidate <- createDataPartition(y=entity_df[, response_varname],
                                            p=0.8, list=FALSE)
     train_validate_df <- entity_df[inTrainValidate, keep_cols]
-    
+
     inTest <- setdiff(seq(1:nrow(entity_df)), inTrainValidate)
-    inTest <- matrix(inTest, nrow=length(inTest), 
-                     dimnames=dimnames(inTrainValidate)) 
+    inTest <- matrix(inTest, nrow=length(inTest),
+                     dimnames=dimnames(inTrainValidate))
     test_df <- entity_df[inTest, keep_cols]
-    
-    inTrain <- createDataPartition(y=train_validate_df[, response_varname], 
+
+    inTrain <- createDataPartition(y=train_validate_df[, response_varname],
                                    p=0.8, list=FALSE)
     train_df <- train_validate_df[inTrain, keep_cols]
-    
+
     inValidate <- setdiff(seq(1:nrow(train_validate_df)), inTrain)
-    inValidate <- matrix(inValidate, nrow=length(inValidate), 
-                     dimnames=dimnames(inTrain))     
+    inValidate <- matrix(inValidate, nrow=length(inValidate),
+                     dimnames=dimnames(inTrain))
     validate_df <- train_validate_df[inValidate, keep_cols]
-    
+
     chk_nrow <- nrow(train_df) + nrow(validate_df) + nrow(test_df)
     if (nrow(entity_df) != chk_nrow)
-        stop("entity_df not partitioned properly; nrow(entity_df): ", 
+        stop("entity_df not partitioned properly; nrow(entity_df): ",
              format(nrow(train_df), big.mark=','),
-             " nrow of train+validate+test_df:", 
+             " nrow of train+validate+test_df:",
              format(chk_nrow, big.mark=','))
-    
+
     print(" "); print(sprintf("nrow(train_df): %s", format(nrow(train_df), big.mark=',')))
-    print(suppressWarnings(formatC(table(train_df$classe, 
+    print(suppressWarnings(formatC(table(train_df$classe,
         train_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
 
     print(" "); print(sprintf("nrow(validate_df): %s", format(nrow(validate_df), big.mark=',')))
-    print(suppressWarnings(formatC(table(validate_df$classe, 
+    print(suppressWarnings(formatC(table(validate_df$classe,
         validate_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
 
     print(" "); print(sprintf("nrow(test_df): %s", format(nrow(test_df), big.mark=',')))
-    print(suppressWarnings(formatC(table(test_df$classe, 
+    print(suppressWarnings(formatC(table(test_df$classe,
         test_df[, more_stratify_vars]) / entity_tbl, digits=3, format='f')))
-    
+
     return(list(inTrain=inTrain, inValidate=inValidate, inTest=inTest))
 }
 # mypartition_data_lst <- mypartition_data(more_stratify_vars="user_name")
@@ -582,29 +582,28 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
-myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {	
+myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 	require(plyr)
 
 	# Collect numeric vars
     vars_tbl <- summary( entity_df)
     numeric_vars <- names( entity_df)[grep("^Min.", vars_tbl[1,])]
-    
-    # Exclude user-specified features
-    numeric_vars <- setdiff(numeric_vars,  exclude_vars_as_features)
-    
-    # Check for NAs
-#     naknts_vctr <- sapply(numeric_vars, 
-#                           function(col) sum(is.na( entity_df[, col])))
-#     naknts_vctr <- naknts_vctr[naknts_vctr > 0]
-#     if (length(naknts_vctr) > 0)
-# 	    warning("Ignoring features due to NAs:", paste(names(naknts_vctr), collapse=", "))
-# 
-#     sel_feats <- setdiff(setdiff(numeric_vars, names(naknts_vctr)), rsp_var)
-    sel_feats <- setdiff(numeric_vars, rsp_var)    
+
+	# Collect factor vars
+	class_vctr <- sapply(names(entity_df), function(col_name) class(entity_df[, col_name]))
+	factor_vars <- names(class_vctr[class_vctr == "factor"])
+
+    # Exclude rsp_var & user-specified features
+    #   keep user-specified excl. features since their cor.y is useful later
+    sel_feats <- setdiff(union(numeric_vars, factor_vars),
+#    						union(rsp_var, exclude_vars_as_features))
+	                        rsp_var)
+
     feats_df <- data.frame(id=sel_feats,
-                cor.y=cor( entity_df[, sel_feats], 
-                            y=as.numeric( entity_df[, rsp_var]), 
+                cor.y=cor(data.matrix(entity_df[, sel_feats]),
+                            y=as.numeric( entity_df[, rsp_var]),
                             use="pairwise.complete.obs"))
+    feats_df <- mutate(feats_df, exclude.as.feat = ifelse(id %in% exclude_vars_as_features, 1, 0))
 	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
 }
@@ -613,60 +612,64 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 #              subset(cars_df, am_fctr == "manual")$mpg,
 #              var.equal=FALSE)$conf)
 
-## 05.5	    remove features / create feature combinations for highly correlated features
-mydelete_cor_features <- function( feats_df,  entity_df, rsp_var,
-								  exclude_vars_as_features) {
+## 05.5	    id features / create feature combinations for highly correlated features
+myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
 	require(reshape2)
 
-	if (nrow( feats_df) == 1)
-		return(data.frame(id= feats_df$id, cor.low=1))
+	if (nrow(feats_df) == 1)
+		return(data.frame(id=feats_df$id, cor.low=1))
 
-	 feats_df <-  feats_df
+	#chk_feats <- setdiff(feats_df$id, exclude_vars_as_features)
+	chk_feats <- subset(feats_df, exclude.as.feat == 0)$id
     repeat {
-    	if (nrow( feats_df) == 1)
+    	if (length(chk_feats) == 1)
     		break
-    		
-        print(corxx_mtrx <- cor( entity_df[,  feats_df$id], use="pairwise.complete.obs"))
+
+        print(corxx_mtrx <- cor(data.matrix(entity_df[, chk_feats]),
+        						use="pairwise.complete.obs"))
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
-        
+
         row_ix <- ceiling(which.max(abs_corxx_mtrx) / ncol(abs_corxx_mtrx))
         col_ix <- which.max(abs_corxx_mtrx[row_ix, ])
         feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
         feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
         print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
         print(myplot_scatter( entity_df, feat_1, feat_2))
-        
-        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_1, 
-             feats_df[ feats_df$id == feat_1, "cor.y"]))
+
+        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_1,
+             feats_df[feats_df$id == feat_1, "cor.y"]))
     #     print(myplot_scatter( entity_df, rsp_var, feat_2))
-        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_2, 
-             feats_df[ feats_df$id == feat_2, "cor.y"]))
+        print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_2,
+             feats_df[feats_df$id == feat_2, "cor.y"]))
     #     print(myplot_scatter( entity_df, rsp_var, feat_2))
-    
+
         plot_df <- melt( entity_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
-        print(myplot_scatter(plot_df, rsp_var, "value", 
-                             facet_colcol_name="variable", smooth=TRUE))    
-    
+        print(myplot_scatter(plot_df, rsp_var, "value",
+                             facet_colcol_name="variable", smooth=TRUE))
+
 #         if ( id_var %in% c(feat_1, feat_2)) drop_feat <-  id_var else {
 #   	  if (intersect( id_vars, c(feat_1, feat_2)))
-		if (feat_1 %in%  exclude_vars_as_features) drop_feat <- feat_1 else {
-			if (feat_2 %in%  exclude_vars_as_features) drop_feat <- feat_2 else {
+# 		if (feat_1 %in%  exclude_vars_as_features) drop_feat <- feat_1 else {
+# 			if (feat_2 %in% exclude_vars_as_features) drop_feat <- feat_2 else {
 				drop_feat <- ifelse(
 					abs( feats_df[ feats_df$id == feat_1, "cor.y"]) >=
 					abs( feats_df[ feats_df$id == feat_2, "cor.y"]),
 									feat_2, feat_1)
-			}
-		}
+# 			}
+# 		}
 #         }
-        warning("Dropping ", drop_feat, " as a feature")
-        print( feats_df <- subset( feats_df, id != drop_feat))
+        warning("Identified ", drop_feat, " as highly correlated with other features")
+        print("checking correlations for features:")
+        print(chk_feats <- chk_feats[chk_feats != drop_feat])
     }
-    
-     feats_df$cor.low <- 1
+
+	feats_df[, "cor.low"] <- 0
+    feats_df[feats_df$id %in% chk_feats, "cor.low"] <- 1
     # print( feats_df)
-    return( feats_df[, c("id", "cor.low")])
+#    return(feats_df[, c("id", "cor.low")])
+    return(feats_df)
 }
 
 ## 05.5.1	add back in key features even though they might have been eliminated
@@ -687,272 +690,545 @@ mydelete_cor_features <- function( feats_df,  entity_df, rsp_var,
 ## 07.	    design models
 ## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
-## 08.	    run models
-mybuild_models_df_row <- function(method, indep_vars_vctr, n.fit, 
-							     	inv.elapsedtime.everything,
-     								inv.elapsedtime.final,
-                                  R.sq.fit=NULL, R.sq.OOB=NULL, 
-                                  Adj.R.sq.fit=NULL, 
-                                  SSE.fit=NULL, SSE.OOB=NULL,
-                                  AIC.fit=NULL, 
-                                  auc.fit=NULL, auc.OOB=NULL,
-                                  accuracy.fit,
-                                  accuracySD.fit)
-{
-    return(data.frame(
-    	method=method,
-    	#feats=paste(method, paste(indep_vars_vctr, collapse=", "), sep=":"),
-    	feats=paste(indep_vars_vctr, collapse=", "),    	
-        #call.formula=toString(summary(mdl)$call$formula),
-        n.fit=n.fit,
-		inv.elapsedtime.everything=inv.elapsedtime.everything,
-     	inv.elapsedtime.final=inv.elapsedtime.final,
-        R.sq.fit=ifelse(is.null(R.sq.fit), NA, R.sq.fit),
-        R.sq.OOB=ifelse(is.null(R.sq.OOB), NA, R.sq.OOB), 
-        Adj.R.sq.fit=ifelse(is.null(Adj.R.sq.fit), NA, Adj.R.sq.fit),
-        SSE.fit=ifelse(is.null(SSE.fit), NA, SSE.fit),
-        SSE.OOB=ifelse(is.null(SSE.OOB), NA, SSE.OOB),
-        AIC.fit=ifelse(is.null(AIC.fit), NA, AIC.fit),
-        auc.fit=ifelse(is.null(auc.fit), NA, auc.fit),
-        auc.OOB=ifelse(is.null(auc.OOB), NA, auc.OOB),
-        accuracy.fit=ifelse(is.null(accuracy.fit), NA, accuracy.fit),
-        accuracySD.fit=ifelse(is.null(accuracySD.fit), NA, accuracySD.fit)        
-    ))
-}    
+## 08.	    fit models
+myprint_mdl <- function(mdl) {
+	if (!inherits(mdl, "train"))
+        stop("Not a legitimate \"train\" object")
 
-myrun_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
+    lcl_mdl <- mdl$finalModel
+
+    if (inherits(lcl_mdl, "list")) {
+		# Custom model
+    	print(summary(lcl_mdl))
+    	return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "rpart")) {
+    	require(rpart.plot)
+    	prp(lcl_mdl)
+
+    	lcl_mdl$call <- lcl_mdl$call[-3]	# Hide "data" printing
+    	print(summary(lcl_mdl))
+    	return(TRUE)
+    }
+
+    	plot(lcl_mdl, ask=FALSE)
+    	print(summary(lcl_mdl))
+    	return(TRUE)
+
+#    stop("not implemented yet: ", class(lcl_mdl))
+
+# 	#Customized plots for each method
+# 	if (method == "glm") plot(native_mdl <-
+# 			glm(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+# 				   family="binomial"), ask=FALSE) else
+# 	if (method == "rpart") {
+# 		require(rpart)
+# 	    require(rpart.plot)
+# 	    if (is.null(loss_mtrx)) {
+# 			prp(native_mdl <-
+# 				rpart(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+# 					   method="class", control=rpart.control(cp=mdl$bestTune$cp)))
+# 		} else
+# 			prp(native_mdl <-
+# 				rpart(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+# 					   method="class", control=rpart.control(cp=mdl$bestTune$cp),
+# 					   parms=list(loss=loss_mtrx)))
+# 	} else
+# 		stop("not implemented yet")
+
+}
+
+myfit_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out,
 						fit_df, OOB_df=NULL) {
-    
+
     if (length(indep_vars_vctr) == 1)
 	    if (indep_vars_vctr == ".")
     	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
-    
-    mdl <- lm(reformulate(indep_vars_vctr, 
+
+    mdl <- lm(reformulate(indep_vars_vctr,
                             response=rsp_var), data=fit_df)
 	plot(mdl, ask=FALSE)
-	                            
+
     if (!is.null(OOB_df)) {
     	OOB_df[, rsp_var_out] <- predict(mdl, newdata=OOB_df)
-		print(SSE.OOB <- sum((OOB_df[, rsp_var_out] - 
+		print(SSE.OOB <- sum((OOB_df[, rsp_var_out] -
 							  OOB_df[, rsp_var]) ^ 2))
-		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 / 
-							sum((OOB_df[, rsp_var] - 
+		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 /
+							sum((OOB_df[, rsp_var] -
 								#mean(OOB_df[, rsp_var])
-								mean(mdl$fitted.values)    
-							) ^ 2)))	
+								mean(mdl$fitted.values)
+							) ^ 2)))
     } else {SSE.OOB <- NA; R.sq.OOB <- NA}
-    
+
 #   s2T <- sum(anova(mdl)[[2]]) / sum(anova(mdl)[[1]])
 # 	MSE <- anova(mdl)[[3]][2]
 # 	print(adj.R2 <- (s2T - MSE) / s2T)
 #	adj.R2 undefined for OOB ?
-                           
+
      models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
                                            R.sq.fit=summary(mdl)$r.squared,
-                                           R.sq.OOB=R.sq.OOB, 
-                                           Adj.R.sq.fit=summary(mdl)$r.squared, 
-                                           SSE.fit=sum(mdl$residuals ^ 2), 
+                                           R.sq.OOB=R.sq.OOB,
+                                           Adj.R.sq.fit=summary(mdl)$r.squared,
+                                           SSE.fit=sum(mdl$residuals ^ 2),
                                            SSE.OOB=SSE.OOB)
-                                           
+
     print(summary(glb_mdl <<- mdl));
-#     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, 
+#     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit,
               glb_models_df <<- rbind(glb_models_df,  models_df)
-#             ))    
+#             ))
     return(list("model"=mdl, "models_df"= models_df))
 }
 
 mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 
+	print(as.table(confusionMatrix(obs_df[, predct_var],
+								   obs_df[, actual_var])))
+
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-	mrg_obs_xtab_df <- orderBy(reformulate(actual_var), 
+	mrg_obs_xtab_df <- orderBy(reformulate(actual_var),
 								mycreate_tbl_df(obs_df, actual_var)[, 1, FALSE])
 	for (val in unique(mrg_obs_xtab_df[, 1]))
 		mrg_obs_xtab_df[, paste(predct_var, val, sep=".")] <- 0
 	#print(mrg_obs_xtab_df)
-	
+
 	obs_xtab_df <- mycreate_xtab(obs_df, c(actual_var, predct_var))
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 	#print(obs_xtab_df)
 
 	for (col_ix in 2:ncol(obs_xtab_df))
-		mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[, 
+		mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[,
 			-which(names(mrg_obs_xtab_df) == names(obs_xtab_df)[col_ix])],
 								 obs_xtab_df[, c(1, col_ix)], all.x=TRUE)
-								 
+
 	mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
-	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0								 
-	#print(mrg_obs_xtab_df)			
-	return(mrg_obs_xtab_df)			
+	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0
+	print(mrg_obs_xtab_df)
+	return(mrg_obs_xtab_df)
 }
 
 mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 										rsp_var, rsp_var_out) {
-	
-	if ((class(obs_df[, rsp_var]) != "factor") | 
+
+	if ((class(obs_df[, rsp_var]) != "factor") |
 		(length(levels(obs_df[, rsp_var])) != 2))
 		stop("expecting a factor with two levels:", rsp_var)
-	obs_df[, rsp_var_out] <- 
+	obs_df[, rsp_var_out] <-
 		factor(levels(obs_df[, rsp_var])[
-			(obs_df[, paste0(rsp_var_out, ".proba")] >= 
+			(obs_df[, paste0(rsp_var_out, ".proba")] >=
 				proba_threshold) * 1 + 1])
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-# 	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var), 
+# 	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var),
 # 								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
 # 	for (val in unique(mrg_obs_xtab_df[, 1]))
 # 		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
 # 	#print(mrg_obs_xtab_df)
-# 	
+#
 # 	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
 # 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 # 	#print(obs_xtab_df)
-# 
+#
 # 	for (col_ix in 2:ncol(obs_xtab_df))
-# 		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <- 
+# 		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <-
 # 			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
-	mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)			
+	mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)
 	#print(mrg_obs_xtab_df)
 
-	# This F-score formula ignores NAs in prediction. 
+	# This F-score formula ignores NAs in prediction.
 	#	FN should be FN + knt(actual == +ve, predicted == NA) ???
-	#	knt(actual == -ve, predicted == NA) may be ignored because that adds to TN which is 
+	#	knt(actual == -ve, predicted == NA) may be ignored because that adds to TN which is
 	#		not used in f.score ???
 	#obs_f_score <- 2 * precision * recall / (precision + recall)
 	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
-	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) / 
-					((2 * mrg_obs_xtab_df[2,3]) + 
+	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) /
+					((2 * mrg_obs_xtab_df[2,3]) +
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
 }
 
-myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out, 
-						  fit_df, OOB_df=NULL, method="glm",  
-						  tune_models_df=NULL, n_cv_folds=NULL, 
-						  loss_mtrx=NULL, summaryFunction=NULL, metric=NULL, maximize=NULL) {
+myrbind_df <- function(df1, df2) {
+	if ((nrow(df1) == 0) | (nrow(df2) == 0))
+		return(rbind(df1, df2))
 
-### Does not work for multinomials yet
+	if (length(union_names <- union(names(df1), names(df2))) !=
+		length(intersect(names(df1), names(df2)))) {
+		df1[ , setdiff(union_names, names(df1))] <- NA
+		df2[ , setdiff(union_names, names(df2))] <- NA
+	}
 
-    require(ROCR)
-    require(caret)
-    
-#     print(indep_vars_vctr)
-#     print(method)
-	
-	is.binomial <- (length(unique(fit_df[, rsp_var])) == 2)    
-	if (length(indep_vars_vctr) == 1)
-        if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
-    	    
-   tuneGrid <- NULL 	    
-   if (!is.null(tune_models_df)) {
-		tune_params_df <- getModelInfo(method)[[method]]$parameters
-		if (length((tune_params_vctr <- intersect( tune_models_df$parameter, 
+	return(rbind(df1[, union_names], df2[, union_names]))
+}
+
+mycreate_MFO_classfr <- function() {
+	algrthm <- list(label="MFO.Classifier", type="Classification",
+								library=NULL)
+	algrthm$parameters <- data.frame(parameter=c("parameter"),
+												class=c("character"),
+												label=c("parameter"))
+	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+		print("in MFO.Classifier$fit")
+		unique.vals <- sort(unique(y))
+		unique.prob <- sort(table(y) / length(y), decreasing=TRUE)
+		MFO.val <- names(unique.prob)[1]
+
+		print("unique.vals:"); 	print(unique.vals)
+		print("unique.prob:"); 	print(unique.prob)
+		print("MFO.val:"); 		print(MFO.val)
+		return(list(unique.vals=unique.vals, unique.prob=unique.prob, MFO.val=MFO.val))
+	}
+	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
+											submodels=NULL) {
+		print("in MFO.Classifier$predict")
+		y <- factor(rep(modelFit$MFO.val, nrow(newdata)), levels=modelFit$unique.vals)
+		if ((length(unique(y)) > 1) | (unique(y) != as.character(modelFit$MFO.val)))
+			stop("this should not happen")
+
+		return(y)
+	}
+	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
+		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
+
+		outcomes_vctr <- predict(modelFit, newdata)
+		prob_df <- as.data.frame(matrix(rep(modelFit$unique.prob, nrow(newdata)),
+										byrow=TRUE, ncol=length(modelFit$unique.prob),
+								dimnames=list(NULL, as.character(modelFit$unique.vals))))
+		for (row_ix in 1:nrow(newdata)) {
+			max_col_ix <- which.max(prob_df[row_ix, ])
+			out_col_name <- as.character(outcomes_vctr[row_ix])
+			if (out_col_name != names(prob_df)[max_col_ix]) {
+				print(row_ix)
+				tmp <- prob_df[row_ix, out_col_name]
+				prob_df[row_ix, out_col_name] <- prob_df[row_ix, max_col_ix]
+				prob_df[row_ix, max_col_ix] <- tmp
+			}
+		}
+		return(prob_df)
+	}
+	algrthm$sort <- function(x) x
+	algrthm$levels <- function(x) levels(x)
+	#print(algrthm)
+	return(algrthm)
+}
+
+mycreate_random_classfr <- function() {
+	algrthm <- list(label="Random.Classifier", type="Classification",
+								library=NULL)
+	algrthm$parameters <- data.frame(parameter=c("parameter"),
+												class=c("character"),
+												label=c("parameter"))
+	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+		return(list(unique.vals=sort(unique(y)), unique.prob=table(y) / length(y)))
+	}
+	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
+											submodels=NULL) {
+		return(sample(modelFit$unique.vals, nrow(newdata), replace=TRUE,
+						prob=modelFit$unique.prob))
+	}
+	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
+		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
+
+		outcomes_vctr <- predict(modelFit, newdata)
+		prob_df <- as.data.frame(matrix(rep(modelFit$unique.prob, nrow(newdata)),
+										byrow=TRUE, ncol=length(modelFit$unique.prob),
+								dimnames=list(NULL, as.character(modelFit$unique.vals))))
+		for (row_ix in 1:nrow(newdata)) {
+			max_col_ix <- which.max(prob_df[row_ix, ])
+			out_col_name <- as.character(outcomes_vctr[row_ix])
+			if (out_col_name != names(prob_df)[max_col_ix]) {
+				print(row_ix)
+				tmp <- prob_df[row_ix, out_col_name]
+				prob_df[row_ix, out_col_name] <- prob_df[row_ix, max_col_ix]
+				prob_df[row_ix, max_col_ix] <- tmp
+			}
+		}
+		return(prob_df)
+	}
+	algrthm$sort <- function(x) x
+	algrthm$levels <- function(x) levels(x)
+	#print(algrthm)
+	return(algrthm)
+}
+
+mycreate_baseln_classfr <- function() {
+	algrthm <- list(label="Baseline.Classifier", type="Classification",
+								library=NULL)
+	algrthm$parameters <- data.frame(parameter=c("parameter"),
+												class=c("character"),
+												label=c("parameter"))
+	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+		print("in Baseline.Classifier$fit")
+
+		print("class(x):"); print(class(x))
+		print("dimnames(x)[[2]]:"); print(dimnames(x)[[2]])
+		print("length(x):"); print(length(x))
+		print("head(x):"); print(head(x))
+
+		print("class(y):"); print(class(y))
+		#print("names(y):"); print(names(y))
+		print("length(y):"); print(length(y))
+		print("head(y):"); print(head(y))
+
+		x_names <- setdiff(dimnames(x)[[2]], ".rnorm")
+# 		if (length(x_name) > 1)
+# 			stop("Baseline.Classifier currently supports only var vs. ", paste(x_name, sep=" "))
+
+		return(list(x_names=x_names, x_vals=as.character(unique(y))))
+	}
+	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
+											submodels=NULL) {
+		print("in Baseline.Classifier$predict")
+		print("class(newdata):"); print(class(newdata))
+		print("head(newdata):"); print(head(newdata))
+
+		print("x_names: "); print(modelFit$x_names)
+		print("x_vals: "); print(modelFit$x_vals)
+
+		y <- factor(rep(modelFit$x_vals[1], nrow(newdata)), levels=modelFit$x_vals)
+		for (row_ix in 1:nrow(newdata)) {
+			if (sum(newdata[row_ix, modelFit$x_names]) > 0) {
+				# not the default level in the factor
+				y[row_ix] <- factor(modelFit$x_vals[which(newdata[row_ix, ] == 1) + 1],
+									levels=modelFit$x_vals)
+			}
+		}
+
+		print("length(y):"); print(length(y))
+		print("head(y):"); print(head(y))
+		return(y)
+	}
+	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
+		print("in Baseline.Classifier$prob")
+		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
+
+		outcomes_vctr <- predict(modelFit, newdata)
+		prob_df <- as.data.frame(matrix(rep(0, length(unique(outcomes_vctr)) * nrow(newdata)),
+										byrow=TRUE, nrow=nrow(newdata),
+								dimnames=list(NULL, as.character(unique(outcomes_vctr)))))
+		for (row_ix in 1:nrow(newdata)) {
+			out_col_ix <- grep(as.character(outcomes_vctr[row_ix]),
+								as.character(unique(outcomes_vctr)))
+			prob_df[row_ix, out_col_ix] <- 1
+		}
+		return(prob_df)
+	}
+	algrthm$sort <- function(x) x
+	algrthm$levels <- function(x) levels(x)
+	#print(algrthm)
+	return(algrthm)
+}
+
+mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
+							model_summaryFunction=NULL, model_metric=NULL,
+							model_metric_maximize=NULL,
+							ret_type="stats") {
+	if (!(ret_type %in% c("stats", "raw", "prob")))
+		stop("ret_type: ", ret_type, " not supported")
+
+	if (!(ret_type %in% c("stats", "raw")))
+		stop("ret_type: ", ret_type, " not supported yet")
+
+	df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
+	stats_df <- data.frame(model_id=model_id_method)
+
+	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
+	print(t(conf_lst$table))
+	print(conf_lst$overall)
+
+	for (stat in c("Accuracy", "AccuracyLower", "AccuracyUpper", "Kappa")) {
+		stats_df[, paste0("max.", stat, ".", label)] <- conf_lst$overall[stat]
+	}
+
+	if (!is.null(model_summaryFunction)) {
+		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
+		stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
+							model_metric, ".", label)] <- model_summaryFunction(df)
+	}
+
+	if (ret_type == "stats") return(stats_df) else
+	if (ret_type == "raw") return(df[, rsp_var_out])
+}
+
+myfit_mdl_classification <- function(model_id, model_method,
+						  indep_vars_vctr, rsp_var, rsp_var_out,
+						  fit_df, OOB_df=NULL,
+						  n_cv_folds=0, tune_models_df=NULL,
+						  model_loss_mtrx=NULL, model_summaryFunction=NULL,
+						  model_metric=NULL, model_metric_maximize=NULL) {
+	require(caret)
+
+	model_id_method <- paste0(model_id, ".", model_method)
+    print(sprintf("fitting model: %s", model_id_method))
+
+	if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2))
+	    require(ROCR)
+
+	models_df <- data.frame(model_id=model_id_method,
+							model_method=model_method)
+
+	if ((length(indep_vars_vctr) == 1) & any(indep_vars_vctr %in% "."))
+    	indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
+
+    if (!(".rnorm" %in% indep_vars_vctr))
+    	indep_vars_vctr <- union(indep_vars_vctr, ".rnorm")
+
+    # rpart does not like .rnorm
+    if ((model_method == "rpart") & (".rnorm" %in% indep_vars_vctr))
+    	indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
+
+	print(sprintf("    indep_vars: %s", paste(indep_vars_vctr, collapse=", ")))
+    models_df$feats	<- paste(indep_vars_vctr, collapse=", ")
+
+    rsp_var_out <- paste0(rsp_var_out, model_id, ".", model_method)
+
+    mytuneGrid <- NULL
+#     if (!is.null(tune_models_df) &
+#     	(nrow(subset(modelLookup(), model == model_method)) > 0)) {
+# 		tune_params_df <- getModelInfo(model_method)[[model_method]]$parameters
+
+    # tune_params_df is needed later irrespective of mytuneGrid
+    if (nrow(subset(modelLookup(), model == model_method)) > 0)
+        tune_params_df <- getModelInfo(model_method)[[model_method]]$parameters
+
+    if (!is.null(tune_models_df) &
+        (nrow(subset(modelLookup(), model == model_method)) > 0)) {
+        if (length((tune_params_vctr <- intersect( tune_models_df$parameter,
 											tune_params_df$parameter))) > 0) {
 			args_lst <- NULL
-			for (param_ix in 1:length(tune_params_vctr))								
+			for (param_ix in 1:length(tune_params_vctr))
 				args_lst[[param_ix]] <- seq(
-	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"], 
-	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"], 
+	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"],
+	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"],
 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
 
-			names(args_lst) <- tune_params_vctr
-			tuneGrid <- do.call("expand.grid", args_lst)				
+			# For single values, convert to list
+            if (length(args_lst) == 1) args_lst <- list(args_lst)
+            names(args_lst) <- tune_params_vctr
+			mytuneGrid <- do.call("expand.grid", args_lst)
 		}
-   } 	        
-#     print(tuneGrid)
-	
-	if (is.null(n_cv_folds)) n_cv_folds <- 3
+    }
+#     print(mytuneGrid)
 
-	if (is.null(summaryFunction)) {
-		myControl <- trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE)
-	} else {
-		myControl <- trainControl(method="cv", number=n_cv_folds, verboseIter=TRUE,
-									summaryFunction=summaryFunction)
-	}								
-		
-	if (is.null(metric)) {	
-	    mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-    	             method=method, 
-        	         trControl=myControl, 
-            	     tuneGrid=tuneGrid)
-    } else {
-    	mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-    	             method=method, 
-        	         trControl=myControl, 
-            	     tuneGrid=tuneGrid, metric=metric, maximize=maximize)
-    }        	     
+	if (model_method == "myrandom_classfr") model_method <- mycreate_random_classfr() else
+	if (model_method == "mybaseln_classfr") model_method <- mycreate_baseln_classfr() else
+	if (model_method == "myMFO_classfr") 	model_method <- mycreate_MFO_classfr()
 
-	if (mdl$bestTune[1, 1] != "none") 
-		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted")) 
+	set.seed(200)
+    methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
+    if (model_method == "rf") methodControl <- "oob"    # cv is not useful for rf
 
-	# Customized plots for each method
-	if (method == "glm") plot(native_mdl <- 
-			glm(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
-				   family="binomial"), ask=FALSE) else
-	if (method == "rpart") {
-		require(rpart)
-	    require(rpart.plot)
-		prp(native_mdl <- 
-			rpart(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
-            	   method="class", control=rpart.control(cp=mdl$bestTune$cp)))
-	} else		                  
-	if (method == "rf") {
-		require(rpart)
-		require(randomForest)
-		plot(native_mdl <- 
-			randomForest(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df, 
-            	   control=rpart.control(mtry=mdl$bestTune$mtry)))
-	} else		                  
-		stop("not implemented yet")		                  
+	if (is.null(model_summaryFunction))
+		myControl <- trainControl(method=methodControl, number=n_cv_folds, verboseIter=TRUE) else
+		myControl <- trainControl(method=methodControl, number=n_cv_folds,
+                                  summaryFunction=model_summaryFunction, verboseIter=TRUE)
 
-	if (is.binomial) {               
-		fit_df[, paste0(rsp_var_out, ".proba")] <- 
-			predict(mdl, newdata=fit_df, type="prob")[, 2]		
+	model_metric <- ifelse(!is.null(model_metric), model_metric,
+					 			ifelse(is.factor(fit_df[, rsp_var]), "Accuracy", "RMSE"))
+	model_metric_maximize <- ifelse(!is.null(model_metric_maximize), model_metric_maximize,
+				 					ifelse(model_metric == "RMSE", FALSE, TRUE))
+
+	mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
+				 method=model_method, trControl=myControl,
+				 tuneGrid=mytuneGrid,
+				 tuneLength=ifelse(n_cv_folds == 0, 1,
+				 					ifelse(!is.null(mytuneGrid), nrow(mytuneGrid), 3)),
+				 metric=model_metric,
+				 maximize=model_metric_maximize)
+
+	#print(mdl$bestTune)
+	if ((nrow(mdl$results) > 1) & (mdl$bestTune[1, 1] != "none")) {
+		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted"))
+		for (param in (params_vctr <- as.character(tune_params_df[, "parameter"]))) {
+			if ((mdl$bestTune[1, param] == min(mdl$results[, param])) |
+				(mdl$bestTune[1, param] == max(mdl$results[, param])))
+				warning("model's bestTune found at an extreme of tuneGrid for parameter: ", param)
+		}
+	}
+
+	myprint_mdl(mdl)
+
+    models_lst <- glb_models_lst;
+#    print(sprintf("length(models_lst): %d", length(models_lst)))
+#    print("models_lst:"); print(models_lst)
+#    print(sprintf("appending element: %s to models_lst...", model_id_method))
+    models_lst[[model_id_method]] <- mdl;
+#    print("appended to models_lst")
+    glb_models_lst <<- models_lst
+
+	#models_df$n.fit <- nrow(fit_df)
+	models_df$max.nTuningRuns <- nrow(mdl$results)
+    models_df$min.elapsedtime.everything <- mdl$times$everything["elapsed"]
+    models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
+
+	if (is.binomial) {
+		stop("add clf_proba_threshold stuff")
+		fit_df[, paste0(rsp_var_out, ".proba")] <-
+			predict(mdl, newdata=fit_df, type="prob")[, 2]
 		ROCRpred <- prediction(fit_df[, paste0(rsp_var_out, ".proba")],
 							   fit_df[, rsp_var])
-		auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
-	} else auc.fit <- NULL
-               
-    if (!is.null(OOB_df) & is.binomial) {
-    	OOB_df[, paste0(rsp_var_out, ".proba")] <- 
-    		predict(mdl, newdata=OOB_df, type="prob")[, 2]
-    	ROCRpred <- prediction(OOB_df[, paste0(rsp_var_out, ".proba")],
-        	                   OOB_df[, rsp_var])
-    	auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
-    } else {auc.OOB <- NULL}
-    
-     models_df <- mybuild_models_df_row(method, indep_vars_vctr, n.fit=nrow(fit_df),
-     	inv.elapsedtime.everything=1.0 / mdl$times$everything["elapsed"],
-     	inv.elapsedtime.final     =1.0 / mdl$times$final["elapsed"],
-                                           R.sq.fit=native_mdl$r.squared, #R.sq.OOB=R.sq.OOB, 
-                                           Adj.R.sq.fit=native_mdl$r.squared, 
-                                           SSE.fit=sum(native_mdl$residuals ^ 2), #SSE.OOB=SSE.OOB,
-                                           AIC.fit=native_mdl$aic,
-                                           auc.fit=auc.fit, auc.OOB=auc.OOB,
-    	accuracy.fit=mdl$results[mdl$results[, names(mdl$finalModel$tuneValue)[1]] == 
-    							 mdl$finalModel$tuneValue[1, 1], 
-    							"Accuracy"],
-    	accuracySD.fit=mdl$results[mdl$results[, names(mdl$finalModel$tuneValue)[1]] == 
-    							 mdl$finalModel$tuneValue[1, 1], 
-    							"AccuracySD"]
-    							    	)
+		models_df$max.auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
 
-    print(mdl$finalModel)
-    models_lst <- glb_models_lst
-    models_lst[[length(glb_models_lst) + 1]] <- mdl
-    glb_models_lst <<-  models_lst
-    
-#      models_fn_lst <- glb_models_fn_lst
-#      models_fn_lst[[length(glb_models_lst) + 1]] <- myrun_mdl_classification
-#     glb_models_fn_lst <<-  models_lst
+		if (!is.null(OOB_df)) {
+			OOB_df[, paste0(rsp_var_out, ".proba")] <-
+			predict(mdl, newdata=OOB_df, type="prob")[, 2]
+			ROCRpred <- prediction(OOB_df[, paste0(rsp_var_out, ".proba")],
+								   OOB_df[, rsp_var])
+			models_df$max.auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
+		}
+	}
 
-#     print(orderBy(~ -auc.OOB, 
-                  glb_models_df <<- rbind(glb_models_df,  models_df)
-#          ))
-#     return(list("model"=mdl, "model_fn"= myrun_mdl_classification, "models_df"= models_df))
-#     print("exiting myrun_mdl_classification")
-    return(list("model"=mdl, "models_df"= models_df))    
+	# compute/gather OOB prediction stats
+# 	for (data in c("fit", "OOB")) {
+# 		print(sprintf("data: %s", data))
+# 		if (data == "fit") { df <- fit_df} else {df <- OOB_df}
+# 		if (!is.null(df)) {
+# 			models_df <- merge(models_df, mypredict_mdl(mdl, df, rsp_var, rsp_var_out, model_id_method, data,
+# 							model_summaryFunction, model_metric,
+# 							model_metric_maximize,ret_type="stats"))
+# 		}
+#     }
+		models_df <- merge(models_df, mypredict_mdl(mdl, fit_df, rsp_var, rsp_var_out, model_id_method, "fit",
+						model_summaryFunction, model_metric,
+						model_metric_maximize,ret_type="stats"), all.x=TRUE)
+	if (!is.null(OOB_df))
+		models_df <- merge(models_df, mypredict_mdl(mdl, OOB_df, rsp_var, rsp_var_out, model_id_method, "OOB",
+						model_summaryFunction, model_metric,
+						model_metric_maximize,ret_type="stats"), all.x=TRUE)
+
+    if (inherits(mdl$finalModel, c("list", "randomForest", "rpart"))) {
+    	# list implies custom model
+    	# summary(randomForest)$r.squared causes an error
+    	# summary(rpart) always spits out stuff
+
+
+    } else {
+		models_df$max.R.sq.fit <- summary(mdl$finalModel)$r.squared
+		models_df$max.Adj.R.sq.fit <- summary(mdl$finalModel)$adj.r.squared
+    }
+    models_df$min.SSE.fit <- sum(mdl$finalModel$residuals ^ 2)
+	models_df$min.aic.fit <- mdl$finalModel$aic
+
+	if (nrow(mdl$results) > 0) {
+		myresults_df <- mdl$results
+		for (param in names(mdl$bestTune)) {
+			myresults_df <- myresults_df[myresults_df[, param] == mdl$bestTune[1, param], ]
+		if (nrow(myresults_df) != 1)
+			stop ("this should not happen")
+		for (result in setdiff(names(myresults_df), names(mdl$bestTune)))
+			models_df[1,
+				paste0(ifelse(model_metric_maximize, "max.", "min."), result, ".fit")] <-
+					myresults_df[1, result]
+		}
+	}
+
+	print(models_df)
+	glb_models_df <<- myrbind_df(glb_models_df, models_df)
+
+    return(list("model"=mdl, "models_df"= models_df))
 }
 
 ## 08.1	    fit on simple shuffled sample
@@ -973,7 +1249,7 @@ myrun_mdl_classification <- function(indep_vars_vctr, rsp_var, rsp_var_out,
 myextract_mdl_feats <- function( sel_mdl,  entity_df) {
 
 			if ("coefficients" %in% names( sel_mdl)) {
-		# mdl is lm OR glm.binomial	
+		# mdl is lm OR glm.binomial
 		stop("not implemented yet")
 		plot_vars_df <- as.data.frame(summary( sel_mdl)$coefficients)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "Pr.z"
@@ -985,52 +1261,52 @@ myextract_mdl_feats <- function( sel_mdl,  entity_df) {
 		plot_vars_df <- as.data.frame( sel_mdl$variable.importance)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
-		#print(plot_vars_df)    
+		#print(plot_vars_df)
     } else if ("importance" %in% names( sel_mdl)) {
     	# mdl is randomForest
 		plot_vars_df <- as.data.frame( sel_mdl$importance)
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
-		#print(plot_vars_df)    
+		#print(plot_vars_df)
     } else if (any(class( sel_mdl) %in% "train")) {
     	# mdl is caret::train
-		plot_vars_df <- varImp( sel_mdl)$importance
+		plot_vars_df <- varImp(sel_mdl)$importance
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
-		#print(plot_vars_df)    
+		#print(plot_vars_df)
     } else stop("not implemented yet")
-    
-    plot_vars_df$id <- rownames(plot_vars_df)    
+
+    plot_vars_df$id <- rownames(plot_vars_df)
     plot_vars_df$fit.feat <- (plot_vars_df$id %in% names( entity_df))
-    
+
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
 		dummy_vars_df$root.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
-			paste0(unlist(strsplit(dummy_vars_df[row_ix, "id"], ".fctr", fixed=TRUE))[1], 
+			paste0(unlist(strsplit(dummy_vars_df[row_ix, "id"], ".fctr", fixed=TRUE))[1],
 					".fctr"))
-		#print(dummy_vars_df)					
-		dummy_vars_df <- mutate(dummy_vars_df, 
+		#print(dummy_vars_df)
+		dummy_vars_df <- mutate(dummy_vars_df,
 								vld.fit.feat=(root.feat %in% names( entity_df))
 								)
-		#print(dummy_vars_df)								
+		#print(dummy_vars_df)
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
-	
-		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")], 		
+
+		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")],
 									data.frame(id=unique(dummy_vars_df$root.feat),
-			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, max, na.rm=TRUE)))				
-    } else vld_plot_vars_df <- plot_vars_df	
-    
+			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, max, na.rm=TRUE)))
+    } else vld_plot_vars_df <- plot_vars_df
+
     #print(orderBy(~ -importance, vld_plot_vars_df))
     return(orderBy(~ -importance, vld_plot_vars_df))
 }
 
-mymerge_feats_importance <- function( feats_df,  sel_mdl,  entity_df) {
-    plot_vars_df <- myextract_mdl_feats( sel_mdl,  entity_df)
+mymerge_feats_importance <- function(feats_df, sel_mdl, entity_df) {
+    plot_vars_df <- myextract_mdl_feats( sel_mdl, entity_df)
     return(orderBy(~ -importance, merge( feats_df, plot_vars_df[,c("id", "importance")], all=TRUE)))
 }
 
 ## 11.	    predict results for new data
-## 11.1	    run models with data to predict
+## 11.1	    fit models with data to predict
 ## 11.2	    collect votes from each cross-validation for each model
 ## 11.3	    collect votes from each model
 
