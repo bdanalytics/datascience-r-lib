@@ -41,6 +41,28 @@ Based on analysis utilizing <> techniques, <conclusion heading>:
 ### ![](<filename>.png)
 
 ## Potential next steps include:
+- Organization:
+    - Categorize by chunk
+    - Priority criteria:
+        0. Ease of change
+        1. Impacts report
+        2. Cleans innards
+        3. Bug report
+        
+- manage.missing.data chunk:
+    - cleaner way to manage re-splitting of training vs. new entity
+
+- fit.models chunk:
+    - Prediction accuracy scatter graph:
+    -   Add tiles (raw vs. PCA)
+    -   Use shiny for drop-down of "important" features
+    -   Use plot.ly for interactive plots ?
+    
+    - Change .fit suffix of model metrics to .mdl if it's data independent (e.g. AIC, Adj.R.Squared - is it truly data independent ?, etc.)
+    - move model_type parameter to myfit_mdl before indep_vars_vctr (keep all model_* together)
+    - create a custom model for rpart that has minbucket as a tuning parameter
+    - varImp for randomForest crashes in caret version:6.0.41 -> submit bug report
+
 - Probability handling for multinomials vs. desired binomial outcome
 -   ROCR currently supports only evaluation of binary classification tasks (version 1.0.7)
 -   extensions toward multiclass classification are scheduled for the next release
@@ -52,11 +74,6 @@ Based on analysis utilizing <> techniques, <conclusion heading>:
 - Compare glb_sel_mdl vs. glb_fin_mdl:
     - varImp
     - Prediction differences (shd be minimal ?)
-
-- Prediction accuracy scatter graph:
--   Add tiles (raw vs. PCA)
--   Use shiny for drop-down of "important" features
--   Use plot.ly for interactive plots ?
 
 - Move glb_analytics_diag_plots to mydsutils.R: (+) Easier to debug (-) Too many glb vars used
 - Add print(ggplot.petrinet(glb_analytics_pn) + coord_flip()) at the end of every major chunk
@@ -95,28 +112,27 @@ glb_split_newdata_method <- "sample"          # "condition" or "sample"
 glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
 glb_split_newdata_size_ratio <- 0.4               # > 0 & < 1
 glb_split_sample.seed <- 88               # or any integer
-glb_max_obs <- 1000 # or NULL
+glb_max_obs <- NULL # or any integer
 
 glb_is_regression <- FALSE; glb_is_classification <- TRUE
 
 glb_rsp_var_raw <- "<rsp_var_raw>"
 
 # for classification, the response variable has to be a factor
-#   especially for random forests (method="rf")
 glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 
 # if the response factor is based on numbers e.g (0/1 vs. "A"/"B"), 
 #   caret predict(..., type="prob") crashes
-glb_map_rsp_raw_to_var <- function(raw) {
+glb_map_rsp_raw_to_var <- NULL # or function(raw) {
     #relevel(factor(ifelse(raw == 1, "R", "A")), as.factor(c("R", "A")), ref="A")
     #as.factor(paste0("B", raw))
-} # or NULL   
+#}
 #glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5))
 
-glb_map_rsp_var_to_raw <- function(var) {
+glb_map_rsp_var_to_raw <- NULL # or function(var) {
     #as.numeric(var) - 1
     #as.numeric(var)
-} # or NULL
+#}
 #glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5)))
 
 if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
@@ -126,19 +142,26 @@ glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
 glb_id_vars <- NULL # or c("<id_var>")
 
 # List transformed vars  
-glb_exclude_vars_as_features <- c("bucket2008.fctr")     # or c(NULL)
+glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>")    
 # List feats that shd be excluded due to known causation by prediction variable
 if (glb_rsp_var_raw != glb_rsp_var)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                             glb_rsp_var_raw)
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-                                      c("reimbursement2009")) # or NULL
+                                      c(NULL)) # or c("<col_name>")
 # List output vars (useful during testing in console)          
 # glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-#                         grep(glb_rsp_var_out, names(glb_entity_df), value=TRUE)) 
+#                         grep(glb_rsp_var_out, names(glb_trnent_df), value=TRUE)) 
 
 glb_impute_na_data <- FALSE            # or TRUE
 glb_mice_complete.seed <- 144               # or any integer
+
+# Regression
+#   rpart:  .rnorm messes with the models badly
+#           caret creates dummy vars for factor feats which messes up the tuning
+#               - better to feed as.numeric(<feat>.fctr) to caret 
+
+glb_models_method_vctr <- c("lm", "glm", "rpart", "rf")
 
 # Classification
 #   rpart:  .rnorm messes with the models badly
@@ -146,34 +169,34 @@ glb_mice_complete.seed <- 144               # or any integer
 #               - better to feed as.numeric(<feat>.fctr) to caret 
 
 #glb_models_method_vctr <- c("glm", "rpart", "rf")   # Binomials
-glb_models_method_vctr <- c("rpart", "rf")          # Multinomials
+#glb_models_method_vctr <- c("rpart", "rf")          # Multinomials
 
 glb_models_lst <- list(); glb_models_df <- data.frame()
 # Baseline prediction model feature(s)
-glb_Baseline_mdl_var <- c("bucket2008.fctr") # or NULL
+glb_Baseline_mdl_var <- NULL # or c("<col_name>")
 
-glb_model_metric_terms <- matrix(c(
-                              0,1,2,3,4,
-                              2,0,1,2,3,
-                              4,2,0,1,2,
-                              6,4,2,0,1,
-                              8,6,4,2,0
-                          ), byrow=TRUE, nrow=5)    # or NULL
-glb_model_metric <- "loss.error" # or NULL
-glb_model_metric_maximize <- FALSE # or NULL (TRUE is not the default for both classification & regression) 
-glb_model_metric_smmry <- function(data, lev=NULL, model=NULL) {
-    confusion_mtrx <- t(as.matrix(confusionMatrix(data$pred, data$obs)))
-    #print(confusion_mtrx)
-    #print(confusion_mtrx * glb_model_metric_terms)
-    metric <- sum(confusion_mtrx * glb_model_metric_terms) / nrow(data)
-    names(metric) <- glb_model_metric
-    return(metric)
-}
+glb_model_metric_terms <- NULL # or matrix(c(
+#                               0,1,2,3,4,
+#                               2,0,1,2,3,
+#                               4,2,0,1,2,
+#                               6,4,2,0,1,
+#                               8,6,4,2,0
+#                           ), byrow=TRUE, nrow=5)
+glb_model_metric <- NULL # or "<metric_name>"
+glb_model_metric_maximize <- NULL # or FALSE (TRUE is not the default for both classification & regression) 
+glb_model_metric_smmry <- NULL # or function(data, lev=NULL, model=NULL) {
+#     confusion_mtrx <- t(as.matrix(confusionMatrix(data$pred, data$obs)))
+#     #print(confusion_mtrx)
+#     #print(confusion_mtrx * glb_model_metric_terms)
+#     metric <- sum(confusion_mtrx * glb_model_metric_terms) / nrow(data)
+#     names(metric) <- glb_model_metric
+#     return(metric)
+# }
 
 glb_tune_models_df <- 
    rbind(
-    data.frame(parameter="cp", min=0.00005, max=0.00005, by=0.000005),
-                              #min=0.00004; max=0.00006; by=0.000005
+    #data.frame(parameter="cp", min=0.00005, max=0.00005, by=0.000005),
+                            #seq(from=0.01,  to=0.01, by=0.01)
     #data.frame(parameter="mtry", min=2, max=4, by=1),
     data.frame(parameter="dummy", min=2, max=4, by=1)
         ) 
@@ -183,12 +206,15 @@ glb_n_cv_folds <- 3 # or NULL
 glb_clf_proba_threshold <- NULL # 0.5
 
 # Model selection criteria
-# For binomial classification add AIC
-glb_model_sel_frmla <- formula(paste0("~ ", 
-    ifelse(!is.null(glb_model_metric), 
-        paste0(ifelse(!glb_model_metric_maximize, "+min.", "-max."), 
-               paste0(glb_model_metric, ".OOB")), 
-           ""), " -max.Accuracy.OOB -max.Kappa.OOB"))
+# Regression:
+glb_model_evl_criteria <- c("min.RMSE.OOB", "max.R.sq.OOB", "max.Adj.R.sq.fit", "min.aic.fit")
+# Classification:    Binomial: add AIC
+# Classification: Multinomial:
+# glb_model_sel_frmla <- formula(paste0("~ ", 
+#     ifelse(!is.null(glb_model_metric), 
+#         paste0(ifelse(!glb_model_metric_maximize, "+min.", "-max."), 
+#                paste0(glb_model_metric, ".OOB")), 
+#            ""), " -max.Accuracy.OOB -max.Kappa.OOB"))
 
 glb_sel_mdl_id <- "All.X.lser.ys.cp.4015.rpart" # or NULL
 glb_fin_mdl_id <- glb_sel_mdl_id # or "Final"
@@ -233,36 +259,40 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: import data
 ```{r import_data, cache=FALSE}
-glb_entity_df <- myimport_data(
-    url=glb_trnng_url, 
-    comment="glb_entity_df", force_header=TRUE,
-    print_diagn=(glb_is_separate_newent_dataset | 
-                !glb_split_entity_newent_datasets))
+glb_entity_df <- myimport_data(url=glb_trnng_url, 
+    comment=ifelse(!glb_is_separate_newent_dataset, "glb_entity_df", "glb_trnent_df"), 
+                                force_header=TRUE)
+if (!glb_is_separate_newent_dataset) {
+    glb_trnent_df <- glb_entity_df; comment(glb_trnent_df) <- "glb_trnent_df"
+} # else glb_entity_df is maintained as is for chunk:inspectORexplore.data
     
 if (glb_is_separate_newent_dataset) {
     glb_newent_df <- myimport_data(
         url=glb_newdt_url, 
-        comment="glb_newent_df", force_header=TRUE, print_diagn=TRUE)
+        comment="glb_newent_df", force_header=TRUE)
+    
+    # To make plots / stats / checks easier in chunk:inspectORexplore.data
+    glb_entity_df <- rbind(glb_trnent_df, glb_newent_df); comment(glb_entity_df) <- "glb_entity_df"
 } else {
     if (!glb_split_entity_newent_datasets) {
         stop("Not implemented yet") 
-        glb_newent_df <- glb_entity_df[sample(1:nrow(glb_entity_df),
-                                          max(2, nrow(glb_entity_df) / 1000)),]                    
+        glb_newent_df <- glb_trnent_df[sample(1:nrow(glb_trnent_df),
+                                          max(2, nrow(glb_trnent_df) / 1000)),]                    
     } else      if (glb_split_newdata_method == "condition") {
             glb_newent_df <- do.call("subset", 
-                list(glb_entity_df, parse(text=glb_split_newdata_condition)))
-            glb_entity_df <- do.call("subset", 
-                list(glb_entity_df, parse(text=paste0("!(", 
+                list(glb_trnent_df, parse(text=glb_split_newdata_condition)))
+            glb_trnent_df <- do.call("subset", 
+                list(glb_trnent_df, parse(text=paste0("!(", 
                                                       glb_split_newdata_condition,
                                                       ")"))))
         } else if (glb_split_newdata_method == "sample") {
                 require(caTools)
                 
                 set.seed(glb_split_sample.seed)
-                split <- sample.split(glb_entity_df[, glb_rsp_var_raw], 
+                split <- sample.split(glb_trnent_df[, glb_rsp_var_raw], 
                                       SplitRatio=(1-glb_split_newdata_size_ratio))
-                glb_newent_df <- glb_entity_df[!split, ] 
-                glb_entity_df <- glb_entity_df[split ,]
+                glb_newent_df <- glb_trnent_df[!split, ] 
+                glb_trnent_df <- glb_trnent_df[split ,]
         } else stop("glb_split_newdata_method should be %in% c('condition', 'sample')")   
 
     comment(glb_newent_df) <- "glb_newent_df"
@@ -270,16 +300,16 @@ if (glb_is_separate_newent_dataset) {
     str(glb_newent_df)
 
     if (glb_split_entity_newent_datasets) {
-        myprint_df(glb_entity_df)
-        str(glb_entity_df)        
+        myprint_df(glb_trnent_df)
+        str(glb_trnent_df)        
     }
 }         
 
 if (!is.null(glb_max_obs)) {
-    if (nrow(glb_entity_df) > glb_max_obs) {
-        warning("glb_entity_df restricted to glb_max_obs: ", format(glb_max_obs, big.mark=","))
-        org_entity_df <- glb_entity_df
-        glb_entity_df <- org_entity_df[split <- 
+    if (nrow(glb_trnent_df) > glb_max_obs) {
+        warning("glb_trnent_df restricted to glb_max_obs: ", format(glb_max_obs, big.mark=","))
+        org_entity_df <- glb_trnent_df
+        glb_trnent_df <- org_entity_df[split <- 
             sample.split(org_entity_df[, glb_rsp_var_raw], SplitRatio=glb_max_obs), ]
         org_entity_df <- NULL
     }
@@ -313,33 +343,35 @@ print(tail(glb_script_df, 2))
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: inspect/explore data
 ```{r inspectORexplore_data, cache=FALSE}
-#print(str(glb_entity_df))
-#View(glb_entity_df)
+#print(str(glb_trnent_df))
+#View(glb_trnent_df)
 
 # List info gathered for various columns
 # <col_name>:   <description>; <notes>
 
 # Create new features that help diagnostics
 #   Create factors of string variables
-str_vars <- sapply(1:length(names(glb_entity_df)), 
-    function(col) ifelse(class(glb_entity_df[, names(glb_entity_df)[col]]) == "character",
-                         names(glb_entity_df)[col], ""))
+str_vars <- sapply(1:length(names(glb_trnent_df)), 
+    function(col) ifelse(class(glb_trnent_df[, names(glb_trnent_df)[col]]) == "character",
+                         names(glb_trnent_df)[col], ""))
 if (length(str_vars <- setdiff(str_vars[str_vars != ""], 
                                glb_exclude_vars_as_features)) > 0) {
     warning("Creating factors of string variables:", paste0(str_vars, collapse=", "))
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, str_vars)
     for (var in str_vars) {
         glb_entity_df[, paste0(var, ".fctr")] <- factor(glb_entity_df[, var], 
-                        as.factor(union(glb_entity_df[, var], glb_newent_df[, var])))
+                        as.factor(unique(glb_entity_df[, var])))
+        glb_trnent_df[, paste0(var, ".fctr")] <- factor(glb_trnent_df[, var], 
+                        as.factor(unique(glb_entity_df[, var])))
         glb_newent_df[, paste0(var, ".fctr")] <- factor(glb_newent_df[, var], 
-                        as.factor(union(glb_entity_df[, var], glb_newent_df[, var])))
+                        as.factor(unique(glb_entity_df[, var])))
     }
 }
 
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
 
-add_new_diag_feats <- function(obs_df, obs_twin_df) {
+add_new_diag_feats <- function(obs_df, ref_df=glb_entity_df) {
     require(plyr)
     
     obs_df <- mutate(obs_df,
@@ -380,21 +412,25 @@ add_new_diag_feats <- function(obs_df, obs_twin_df) {
     return(obs_df)
 }
 
-glb_entity_df <- add_new_diag_feats(glb_entity_df, glb_newent_df)
-glb_newent_df <- add_new_diag_feats(glb_newent_df, glb_entity_df)
+glb_entity_df <- add_new_diag_feats(glb_entity_df)
+glb_trnent_df <- add_new_diag_feats(glb_trnent_df)
+glb_newent_df <- add_new_diag_feats(glb_newent_df)
 
-# Histogram of predictor in glb_entity_df & glb_newent_df
-print(myplot_histogram(glb_entity_df, glb_rsp_var_raw))
-if (glb_is_classification)
-    print(table(glb_entity_df[, glb_rsp_var_raw]) / nrow(glb_entity_df))
-
-print(myplot_histogram(glb_newent_df, glb_rsp_var_raw))
+# Histogram of predictor in glb_trnent_df & glb_newent_df
+plot_df <- rbind(cbind(glb_trnent_df[, glb_rsp_var_raw, FALSE], data.frame(.data="Training")),
+                 cbind(glb_trnent_df[, glb_rsp_var_raw, FALSE], data.frame(.data="New")))
+print(myplot_histogram(plot_df, glb_rsp_var_raw) + facet_wrap(~ .data))
+if (glb_is_classification) {
+    #print(table(df[, glb_rsp_var_raw]) / nrow(df))    
+    print((xtab_df <- mycreate_xtab(plot_df, c(".data", glb_rsp_var_raw))) / 
+              sum(xtab_df))    
+}    
 
 # Check for duplicates in glb_id_vars
 if (length(glb_id_vars) > 0) {
-    id_vars_dups_df <- subset(id_vars_df <- mycreate_tbl_df(
-        rbind(glb_entity_df[, glb_id_vars, FALSE], glb_newent_df[, glb_id_vars, FALSE]),
-            glb_id_vars), .freq > 1)
+    id_vars_dups_df <- subset(id_vars_df <- 
+            mycreate_tbl_df(glb_entity_df[, glb_id_vars, FALSE], glb_id_vars),
+                                .freq > 1)
     if (nrow(id_vars_dups_df) > 0) {
         warning("Duplicates found in glb_id_vars data:", nrow(id_vars_dups_df))
         myprint_df(id_vars_dups_df)
@@ -404,46 +440,48 @@ if (length(glb_id_vars) > 0) {
     }
 }
 
-#pairs(subset(glb_entity_df, select=-c(col_symbol)))
-# Check for glb_newent_df & glb_entity_df features range mismatches
+#pairs(subset(glb_trnent_df, select=-c(col_symbol)))
+# Check for glb_newent_df & glb_trnent_df features range mismatches
 
 # Other diagnostics:
-# print(subset(glb_entity_df, <col1_name> == max(glb_entity_df$<col1_name>, na.rm=TRUE) & 
-#                         <col2_name> <= mean(glb_entity_df$<col1_name>, na.rm=TRUE)))
+# print(subset(glb_trnent_df, <col1_name> == max(glb_trnent_df$<col1_name>, na.rm=TRUE) & 
+#                         <col2_name> <= mean(glb_trnent_df$<col1_name>, na.rm=TRUE)))
 
-# print(glb_entity_df[which.max(glb_entity_df$<col_name>),])
+# print(glb_trnent_df[which.max(glb_trnent_df$<col_name>),])
 
-# print(<col_name>_freq_glb_entity_df <- mycreate_tbl_df(glb_entity_df, "<col_name>"))
-# print(which.min(table(glb_entity_df$<col_name>)))
-# print(which.max(table(glb_entity_df$<col_name>)))
-# print(which.max(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>)[, 2]))
-# print(table(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>))
-# print(table(is.na(glb_entity_df$<col1_name>), glb_entity_df$<col2_name>))
-# print(table(sign(glb_entity_df$<col1_name>), glb_entity_df$<col2_name>))
-# print(mycreate_xtab(glb_entity_df, <col1_name>))
-# print(mycreate_xtab(glb_entity_df, c(<col1_name>, <col2_name>)))
-# print(<col1_name>_<col2_name>_xtab_glb_entity_df <- 
-#   mycreate_xtab(glb_entity_df, c("<col1_name>", "<col2_name>")))
-# <col1_name>_<col2_name>_xtab_glb_entity_df[is.na(<col1_name>_<col2_name>_xtab_glb_entity_df)] <- 0
-# print(<col1_name>_<col2_name>_xtab_glb_entity_df <- 
-#   mutate(<col1_name>_<col2_name>_xtab_glb_entity_df, 
+# print(<col_name>_freq_glb_trnent_df <- mycreate_tbl_df(glb_trnent_df, "<col_name>"))
+# print(which.min(table(glb_trnent_df$<col_name>)))
+# print(which.max(table(glb_trnent_df$<col_name>)))
+# print(which.max(table(glb_trnent_df$<col1_name>, glb_trnent_df$<col2_name>)[, 2]))
+# print(table(glb_trnent_df$<col1_name>, glb_trnent_df$<col2_name>))
+# print(table(is.na(glb_trnent_df$<col1_name>), glb_trnent_df$<col2_name>))
+# print(table(sign(glb_trnent_df$<col1_name>), glb_trnent_df$<col2_name>))
+# print(mycreate_xtab(glb_trnent_df, <col1_name>))
+# print(mycreate_xtab(glb_trnent_df, c(<col1_name>, <col2_name>)))
+# print(<col1_name>_<col2_name>_xtab_glb_trnent_df <- 
+#   mycreate_xtab(glb_trnent_df, c("<col1_name>", "<col2_name>")))
+# <col1_name>_<col2_name>_xtab_glb_trnent_df[is.na(<col1_name>_<col2_name>_xtab_glb_trnent_df)] <- 0
+# print(<col1_name>_<col2_name>_xtab_glb_trnent_df <- 
+#   mutate(<col1_name>_<col2_name>_xtab_glb_trnent_df, 
 #             <col3_name>=(<col1_name> * 1.0) / (<col1_name> + <col2_name>))) 
 
 # print(<col2_name>_min_entity_arr <- 
-#    sort(tapply(glb_entity_df$<col1_name>, glb_entity_df$<col2_name>, min, na.rm=TRUE)))
+#    sort(tapply(glb_trnent_df$<col1_name>, glb_trnent_df$<col2_name>, min, na.rm=TRUE)))
 # print(<col1_name>_na_by_<col2_name>_arr <- 
-#    sort(tapply(glb_entity_df$<col1_name>.NA, glb_entity_df$<col2_name>, mean, na.rm=TRUE)))
+#    sort(tapply(glb_trnent_df$<col1_name>.NA, glb_trnent_df$<col2_name>, mean, na.rm=TRUE)))
 
 # Other plots:
-# print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>"))
-# print(myplot_box(df=glb_entity_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
-# print(myplot_line(subset(glb_entity_df, Symbol %in% c("KO", "PG")), 
+# print(myplot_box(df=glb_trnent_df, ycol_names="<col1_name>"))
+# print(myplot_box(df=glb_trnent_df, ycol_names="<col1_name>", xcol_name="<col2_name>"))
+# print(myplot_line(subset(glb_trnent_df, Symbol %in% c("KO", "PG")), 
 #                   "Date.my", "StockPrice", facet_row_colnames="Symbol") + 
 #     geom_vline(xintercept=as.numeric(as.Date("2003-03-01"))) +
 #     geom_vline(xintercept=as.numeric(as.Date("1983-01-01")))        
 #         )
-# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", smooth=TRUE))
-# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", colorcol_name="<Pred.fctr>"))
+# print(myplot_scatter(glb_trnent_df, "<col1_name>", "<col2_name>", smooth=TRUE))
+# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", colorcol_name="<Pred.fctr>") + 
+#         geom_point(data=subset(glb_entity_df, <condition>), 
+#                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5))
 
 glb_script_df <- rbind(glb_script_df, 
     data.frame(chunk_label="manage_missing_data", 
@@ -454,10 +492,10 @@ print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: manage missing data
-```{r manage_missing_data_1, cache=FALSE}
-# print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+```{r manage_missing_data, cache=FALSE}
+# print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
 # print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
-# glb_entity_df <- na.omit(glb_entity_df)
+# glb_trnent_df <- na.omit(glb_trnent_df)
 # glb_newent_df <- na.omit(glb_newent_df)
 # df[is.na(df)] <- 0
 
@@ -489,8 +527,8 @@ glb_impute_missing_data <- function(entity_df, newent_df) {
 #                         imp_entity_df))
         
         # Partition again
-        glb_entity_df <<- subset(union_df, .src == "entity", select=-c(.src, .rownames))
-        comment(glb_entity_df) <- "entity_df"
+        glb_trnent_df <<- subset(union_df, .src == "entity", select=-c(.src, .rownames))
+        comment(glb_trnent_df) <- "entity_df"
         glb_newent_df <<- subset(union_df, .src == "newent", select=-c(.src, .rownames))
         comment(glb_newent_df) <- "newent_df"
         
@@ -504,11 +542,11 @@ glb_impute_missing_data <- function(entity_df, newent_df) {
 }
 
 if (glb_impute_na_data) {
-    if ((sum(sapply(names(glb_entity_df), 
-                    function(col) sum(is.na(glb_entity_df[, col])))) > 0) | 
+    if ((sum(sapply(names(glb_trnent_df), 
+                    function(col) sum(is.na(glb_trnent_df[, col])))) > 0) | 
         (sum(sapply(names(glb_newent_df), 
                     function(col) sum(is.na(glb_newent_df[, col])))) > 0))
-        glb_impute_missing_data(glb_entity_df, glb_newent_df)
+        glb_impute_missing_data(glb_trnent_df, glb_newent_df)
 }    
 
 glb_script_df <- rbind(glb_script_df, 
@@ -526,22 +564,22 @@ print(tail(glb_script_df, 2))
 #     comment="map_<col_name>_df", print_diagn=TRUE)
 # map_<col_name>_df <- read.csv(paste0(getwd(), "/data/<file_name>.csv"), strip.white=TRUE)
 
-# glb_entity_df <- mymap_codes(glb_entity_df, "<from_col_name>", "<to_col_name>", 
+# glb_trnent_df <- mymap_codes(glb_trnent_df, "<from_col_name>", "<to_col_name>", 
 #     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
 #                           map_tgt_col_name="<to_col_name>")
 # glb_newent_df <- mymap_codes(glb_newent_df, "<from_col_name>", "<to_col_name>", 
 #     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
 #                           map_tgt_col_name="<to_col_name>")
     					
-# glb_entity_df$<col_name>.fctr <- factor(glb_entity_df$<col_name>, 
-#                     as.factor(union(glb_entity_df$<col_name>, glb_newent_df$<col_name>)))
+# glb_trnent_df$<col_name>.fctr <- factor(glb_trnent_df$<col_name>, 
+#                     as.factor(union(glb_trnent_df$<col_name>, glb_newent_df$<col_name>)))
 # glb_newent_df$<col_name>.fctr <- factor(glb_newent_df$<col_name>, 
-#                     as.factor(union(glb_entity_df$<col_name>, glb_newent_df$<col_name>)))
+#                     as.factor(union(glb_trnent_df$<col_name>, glb_newent_df$<col_name>)))
 
 if (!is.null(glb_map_rsp_raw_to_var)) {
-    glb_entity_df[, glb_rsp_var] <- 
-        glb_map_rsp_raw_to_var(glb_entity_df[, glb_rsp_var_raw])
-    mycheck_map_results(mapd_df=glb_entity_df, 
+    glb_trnent_df[, glb_rsp_var] <- 
+        glb_map_rsp_raw_to_var(glb_trnent_df[, glb_rsp_var_raw])
+    mycheck_map_results(mapd_df=glb_trnent_df, 
                         from_col_name=glb_rsp_var_raw, to_col_name=glb_rsp_var)
         
     glb_newent_df[, glb_rsp_var] <- 
@@ -561,17 +599,17 @@ print(tail(glb_script_df, 2))
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: extract features
 ```{r extract_features, cache=FALSE}
 # Create new features that help prediction
-# <col_name>.lag.2 <- lag(zoo(glb_entity_df$<col_name>), -2, na.pad=TRUE)
-# glb_entity_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
+# <col_name>.lag.2 <- lag(zoo(glb_trnent_df$<col_name>), -2, na.pad=TRUE)
+# glb_trnent_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
 # <col_name>.lag.2 <- lag(zoo(glb_newent_df$<col_name>), -2, na.pad=TRUE)
 # glb_newent_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
 # 
-# glb_newent_df[1, "<col_name>.lag.2"] <- glb_entity_df[nrow(glb_entity_df) - 1, 
+# glb_newent_df[1, "<col_name>.lag.2"] <- glb_trnent_df[nrow(glb_trnent_df) - 1, 
 #                                                    "<col_name>"]
-# glb_newent_df[2, "<col_name>.lag.2"] <- glb_entity_df[nrow(glb_entity_df), 
+# glb_newent_df[2, "<col_name>.lag.2"] <- glb_trnent_df[nrow(glb_trnent_df), 
 #                                                    "<col_name>"]
                                                    
-# glb_entity_df <- mutate(glb_entity_df,
+# glb_trnent_df <- mutate(glb_trnent_df,
 #     <new_col_name>=
 #                     )
 
@@ -579,13 +617,13 @@ print(tail(glb_script_df, 2))
 #     <new_col_name>=
 #                     )
 
-# print(summary(glb_entity_df))
+# print(summary(glb_trnent_df))
 # print(summary(glb_newent_df))
 
-# print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+# print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
 # print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
 
-# print(myplot_scatter(glb_entity_df, "<col1_name>", "<col2_name>", smooth=TRUE))
+# print(myplot_scatter(glb_trnent_df, "<col1_name>", "<col2_name>", smooth=TRUE))
 
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
@@ -600,7 +638,7 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: select features
 ```{r select_features, cache=FALSE}
-print(glb_feats_df <- myselect_features(entity_df=glb_entity_df, 
+print(glb_feats_df <- myselect_features(entity_df=glb_trnent_df, 
                        exclude_vars_as_features=glb_exclude_vars_as_features, 
                        rsp_var=glb_rsp_var))
 
@@ -615,7 +653,7 @@ print(tail(glb_script_df, 2))
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: remove correlated features
 ```{r remove_correlated_features, cache=FALSE}
 print(glb_feats_df <- orderBy(~-cor.y, 
-          myfind_cor_features(feats_df=glb_feats_df, entity_df=glb_entity_df, 
+          myfind_cor_features(feats_df=glb_feats_df, entity_df=glb_trnent_df, 
                                 rsp_var=glb_rsp_var)))
 
 glb_script_df <- rbind(glb_script_df, 
@@ -637,23 +675,18 @@ if (!is.null(glb_Baseline_mdl_var)) {
              " than the Baseline var: ", glb_Baseline_mdl_var)
 }
 
-#   Regression:
-if (glb_is_regression) {
-    #   Linear:
-    myfit_mdl_fn <- myfit_mdl_lm
-}    
-
-#   Classification:
-if (glb_is_classification) myfit_mdl_fn <- myfit_mdl_classification 
-glb_is_binomial <- (length(unique(glb_entity_df[, glb_rsp_var])) <= 2)
+glb_model_type <- ifelse(glb_is_regression, "regression", "classification")
+#   Identify Binomial Classification:
+if (glb_is_classification)
+    glb_is_binomial <- (length(unique(glb_trnent_df[, glb_rsp_var])) <= 2)
     
-# Any models that have tuning parameters has "better" results with cross-validation
+# Any models that have tuning parameters has "better" results with cross-validation (except rf)
 #   & "different" results for different outcome metrics
 
 # Baseline
 if (!is.null(glb_Baseline_mdl_var)) {
 #     lm_mdl <- lm(reformulate(glb_Baseline_mdl_var, 
-#                             response="bucket2009"), data=glb_entity_df)
+#                             response="bucket2009"), data=glb_trnent_df)
 #     print(summary(lm_mdl))
 #     plot(lm_mdl, ask=FALSE)
 #     ret_lst <- myfit_mdl_fn(model_id="Baseline", 
@@ -661,7 +694,7 @@ if (!is.null(glb_Baseline_mdl_var)) {
 #                                         ifelse(glb_is_binomial, "glm", "rpart")),
 #                             indep_vars_vctr=glb_Baseline_mdl_var,
 #                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-#                             fit_df=glb_entity_df, OOB_df=glb_newent_df,
+#                             fit_df=glb_trnent_df, OOB_df=glb_newent_df,
 #                             n_cv_folds=0, tune_models_df=NULL,
 #                             model_loss_mtrx=glb_model_metric_terms,
 #                             model_summaryFunction=glb_model_metric_smmry,
@@ -670,68 +703,75 @@ if (!is.null(glb_Baseline_mdl_var)) {
     ret_lst <- myfit_mdl_fn(model_id="Baseline", model_method="mybaseln_classfr",
                             indep_vars_vctr=glb_Baseline_mdl_var,
                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                            fit_df=glb_trnent_df, OOB_df=glb_newent_df)
 }
 
 # Most Frequent Outcome "MFO" model: mean(y) for regression
 #   Not using caret's nullModel since model stats not avl
 #   Cannot use rpart for multinomial classification since it predicts non-MFO
-ret_lst <- myfit_mdl_fn(model_id="MFO", model_method="myMFO_classfr",
+ret_lst <- myfit_mdl(model_id="MFO", 
+                     model_method=ifelse(glb_is_regression, "lm", "myMFO_classfr"), 
+                     model_type=glb_model_type,
                         indep_vars_vctr=".rnorm",
                         rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+                        fit_df=glb_trnent_df, OOB_df=glb_newent_df)
 
-# "random" model - only for classification; none needed for regression since it is same as MFO
-ret_lst <- myfit_mdl_fn(model_id="Random", model_method="myrandom_classfr",
-                        indep_vars_vctr=".rnorm",
-                        rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
+if (glb_is_classification)
+    # "random" model - only for classification; none needed for regression since it is same as MFO
+    ret_lst <- myfit_mdl_fn(model_id="Random", model_method="myrandom_classfr",
+                            indep_vars_vctr=".rnorm",
+                            rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
+                            fit_df=glb_trnent_df, OOB_df=glb_newent_df)
 
 # Max.cor.Y
-ret_lst <- myfit_mdl_fn(model_id="Max.cor.Y.cv.0", 
+ret_lst <- myfit_mdl(model_id="Max.cor.Y.cv.0", 
                         model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
+                     model_type=glb_model_type,
                         indep_vars_vctr=max_cor_y_x_var,
                         rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df)
-ret_lst <- myfit_mdl_fn(model_id="Max.cor.Y.cv.G", 
+                        fit_df=glb_trnent_df, OOB_df=glb_newent_df)
+ret_lst <- myfit_mdl(model_id="Max.cor.Y.cv.G", 
                         model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
+                     model_type=glb_model_type,
                         indep_vars_vctr=max_cor_y_x_var,
                         rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
 
 # Interactions.High.cor.Y
 if (nrow(int_feats_df <- subset(glb_feats_df, (cor.low == 0) & 
                                               (exclude.as.feat == 0))) > 0) {
-    # Only glm handles interaction terms (checked that rpart does not)
+    # lm & glm handle interaction terms; rpart & rf do not
     #   This does not work - why ???
 #     indep_vars_vctr <- ifelse(glb_is_binomial, 
 #         c(max_cor_y_x_var, paste(max_cor_y_x_var, 
 #                         subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
 #         union(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"]))
-    if (glb_is_regression | glb_is_binomial) {
+    if (glb_is_regression || glb_is_binomial) {
         indep_vars_vctr <- 
             c(max_cor_y_x_var, paste(max_cor_y_x_var, int_feats_df[, "id"], sep=":"))       
     } else { indep_vars_vctr <- union(max_cor_y_x_var, int_feats_df[, "id"]) }
     
-    ret_lst <- myfit_mdl_fn(model_id="Interact.High.cor.y", 
+    ret_lst <- myfit_mdl(model_id="Interact.High.cor.y", 
                             model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
+                         model_type=glb_model_type,
                             indep_vars_vctr,
                             glb_rsp_var, glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                            fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                             n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)                        
 }    
 
 # Low.cor.X
-ret_lst <- myfit_mdl_fn(model_id="Low.cor.X", 
+ret_lst <- myfit_mdl(model_id="Low.cor.X", 
                         model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
                         indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[, "id"],
+                         model_type=glb_model_type,                     
                         glb_rsp_var, glb_rsp_var_out,
-                        fit_df=glb_entity_df, OOB_df=glb_newent_df,
+                        fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
 
 # User specified
@@ -739,11 +779,11 @@ for (method in glb_models_method_vctr) {
     print(sprintf("iterating over method:%s", method))
 
     # All X that is not user excluded
-    indep_vars_vctr <- setdiff(names(glb_entity_df), 
+    indep_vars_vctr <- setdiff(names(glb_trnent_df), 
         union(glb_rsp_var, glb_exclude_vars_as_features))
     
     # easier to exclude features
-#     indep_vars_vctr <- setdiff(names(glb_entity_df), 
+#     indep_vars_vctr <- setdiff(names(glb_trnent_df), 
 #         union(union(glb_rsp_var, glb_exclude_vars_as_features), 
 #               c("<feat1_name>", "<feat2_name>")))
     
@@ -752,7 +792,7 @@ for (method in glb_models_method_vctr) {
 
     # User specified bivariate models
 #     indep_vars_vctr_lst <- list()
-#     for (feat in setdiff(names(glb_entity_df), 
+#     for (feat in setdiff(names(glb_trnent_df), 
 #                          union(glb_rsp_var, glb_exclude_vars_as_features)))
 #         indep_vars_vctr_lst[["feat"]] <- feat
 
@@ -766,49 +806,35 @@ for (method in glb_models_method_vctr) {
 
 #     glb_sel_mdl <- glb_sel_wlm_mdl <- ret_lst[["model"]]
 #     rpart_sel_wlm_mdl <- rpart(reformulate(indep_vars_vctr, response=glb_rsp_var), 
-#                                data=glb_entity_df, method="class", 
+#                                data=glb_trnent_df, method="class", 
 #                                control=rpart.control(cp=glb_sel_wlm_mdl$bestTune$cp),
 #                            parms=list(loss=glb_model_metric_terms))
 #     print("rpart_sel_wlm_mdl"); prp(rpart_sel_wlm_mdl)
 # 
     model_id_pfx <- "All.X";
-    ret_lst <- myfit_mdl_fn(model_id=paste0(model_id_pfx, ".lser.no.cp.opt"), model_method=method,
+    ret_lst <- myfit_mdl(model_id=paste0(model_id_pfx, ""), model_method=method,
                             indep_vars_vctr=indep_vars_vctr,
+                            model_type=glb_model_type,
                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
-                            n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
-    if (method == "rpart")
-    ret_lst <- myfit_mdl_fn(model_id=paste0(model_id_pfx, ".lser.no.cp.4015"), model_method=method,
-                            indep_vars_vctr=indep_vars_vctr,
-                            rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
-                            n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df)
+                            fit_df=glb_trnent_df, OOB_df=glb_newent_df,
+                n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df)
     
     # rf is hard-coded in caret to recognize only Accuracy / Kappa evaluation metrics
     #   only for OOB in trainControl ?
-    ret_lst <- myfit_mdl_fn(model_id=paste0(model_id_pfx, ".lser.ys.cp.opt"), model_method=method,
-                            indep_vars_vctr=indep_vars_vctr,
-                            rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
-                            n_cv_folds=glb_n_cv_folds, tune_models_df=NULL,
-                            model_loss_mtrx=glb_model_metric_terms,
-                            model_summaryFunction=glb_model_metric_smmry,
-                            model_metric=glb_model_metric,
-                            model_metric_maximize=glb_model_metric_maximize)
-    if (method == "rpart")
-    ret_lst <- myfit_mdl_fn(model_id=paste0(model_id_pfx, ".lser.ys.cp.4015"), model_method=method,
-                            indep_vars_vctr=indep_vars_vctr,
-                            rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
-                            fit_df=glb_entity_df, OOB_df=glb_newent_df,
-                            n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df,
-                            model_loss_mtrx=glb_model_metric_terms,
-                            model_summaryFunction=glb_model_metric_smmry,
-                            model_metric=glb_model_metric,
-                            model_metric_maximize=glb_model_metric_maximize)
+#     if (method == "rpart")
+#     ret_lst <- myfit_mdl_fn(model_id=paste0(model_id_pfx, ""), model_method=method,
+#                             indep_vars_vctr=indep_vars_vctr,
+#                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
+#                             fit_df=glb_trnent_df, OOB_df=glb_newent_df,
+#                             n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df,
+#                             model_loss_mtrx=glb_model_metric_terms,
+#                             model_summaryFunction=glb_model_metric_smmry,
+#                             model_metric=glb_model_metric,
+#                             model_metric_maximize=glb_model_metric_maximize)
 }
 
 # Simplify a model
-# fit_df <- glb_entity_df; glb_mdl <- step(<complex>_mdl)
+# fit_df <- glb_trnent_df; glb_mdl <- step(<complex>_mdl)
 
 print(glb_models_df)
 
@@ -818,7 +844,7 @@ if (!is.null(glb_model_metric_smmry)) {
     stats_mdl_df <- data.frame()
     for (model_id in stats_df$model_id) {
         stats_mdl_df <- rbind(stats_mdl_df, 
-            mypredict_mdl(glb_models_lst[[model_id]], glb_entity_df, glb_rsp_var, 
+            mypredict_mdl(glb_models_lst[[model_id]], glb_trnent_df, glb_rsp_var, 
                           glb_rsp_var_out, model_id, "fit",
         						glb_model_metric_smmry, glb_model_metric, 
         						glb_model_metric_maximize, ret_type="stats"))
@@ -862,8 +888,8 @@ for (var in grep("^min.", names(plt_models_df), value=TRUE)) {
 }
 print(plt_models_df)
 print(myplot_radar(radar_inp_df=plt_models_df))
-print(myplot_radar(radar_inp_df=subset(plt_models_df, 
-        !(model_id %in% grep("random|MFO", plt_models_df$model_id, value=TRUE)))))
+# print(myplot_radar(radar_inp_df=subset(plt_models_df, 
+#         !(model_id %in% grep("random|MFO", plt_models_df$model_id, value=TRUE)))))
 
 # Compute CI for <metric>SD
 glb_models_df <- mutate(glb_models_df, 
@@ -950,8 +976,10 @@ for (var in unique(mltd_models_df$label)) {
     }
 }
 
-mltd_goback_df <- build_statsCI_data(glb_models_df[, c("model_id", goback_vars)])
-mltd_models_df <- rbind(mltd_models_df, mltd_goback_df)
+if (length(goback_vars) > 0) {
+    mltd_goback_df <- build_statsCI_data(glb_models_df[, c("model_id", goback_vars)])
+    mltd_models_df <- rbind(mltd_models_df, mltd_goback_df)
+}
 
 mltd_models_df <- merge(mltd_models_df, glb_models_df[, c("model_id", "model_method")], all.x=TRUE)
 
@@ -968,25 +996,21 @@ print(myplot_bar(mltd_models_df, "model_id", "value", colorcol_name="model_metho
           facet_grid(label ~ data, scales="free") + 
           theme(axis.text.x = element_text(angle = 90,vjust = 0.5)))
 
-if (glb_is_regression) {
-    print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit, glb_models_df))
-    stop("glb_sel_mdl not selected")
-    print(myplot_scatter(plot_models_df, "Adj.R.sq.fit", "R.sq.OOB") + 
-          geom_text(aes(label=feats.label), data=plot_models_df, color="NavyBlue", 
-                    size=3.5, angle=45))
-}    
-
-if (glb_is_classification) {
-    print(tmp_models_df <- orderBy(glb_model_sel_frmla, glb_models_df))    
-    print("Metrics used for model selection:"); print(glb_model_sel_frmla)
-    print(sprintf("Best model id: %s", tmp_models_df[1, "model_id"]))
+model_evl_terms <- c(NULL)
+for (metric in glb_model_evl_criteria)
+    model_evl_terms <- c(model_evl_terms, 
+                    ifelse(length(grep("max", metric)) > 0, "-", "+"), metric)
+model_sel_frmla <- as.formula(paste(c("~ ", model_evl_terms), collapse=" "))
+print(tmp_models_df <- orderBy(model_sel_frmla, glb_models_df)[, c("model_id", glb_model_evl_criteria)])
+print(myplot_radar(radar_inp_df=tmp_models_df))
+print("Metrics used for model selection:"); print(model_sel_frmla)
+print(sprintf("Best model id: %s", tmp_models_df[1, "model_id"]))
     
-    if (is.null(glb_sel_mdl_id)) 
-        { glb_sel_mdl_id <- tmp_models_df[1, "model_id"] } else 
+if (is.null(glb_sel_mdl_id)) 
+    { glb_sel_mdl_id <- tmp_models_df[1, "model_id"] } else 
         print(sprintf("User specified selection: %s", glb_sel_mdl_id))   
     
-    myprint_mdl(glb_sel_mdl <- glb_models_lst[[glb_sel_mdl_id]])
-}
+myprint_mdl(glb_sel_mdl <- glb_models_lst[[glb_sel_mdl_id]])
  
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
@@ -1001,24 +1025,25 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit.data.training.all
 ```{r fit.data.training.all_0, cache=FALSE}
-if (glb_fin_mdl_id %in% names(glb_models_lst)) {
+if (!is.null(glb_fin_mdl_id) && (glb_fin_mdl_id %in% names(glb_models_lst))) {
     warning("Final model same as user selected model")
     glb_fin_mdl <- glb_sel_mdl
 } else {    
-    print(mdl_feats_df <- myextract_mdl_feats( sel_mdl=glb_sel_mdl, 
-                                               entity_df=glb_entity_df))
+    print(mdl_feats_df <- myextract_mdl_feats(sel_mdl=glb_sel_mdl, entity_df=glb_trnent_df))
     
     # Sync with parameters in mydsutils.R
-    ret_lst <- myfit_mdl_fn(model_id="Final",
-                            indep_vars_vctr=mdl_feats_df$id,
+    ret_lst <- myfit_mdl(model_id="Final", model_method=glb_sel_mdl$method,
+                            indep_vars_vctr=mdl_feats_df$id, model_type=glb_model_type,
                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out, 
-                            fit_df=glb_entity_df,
-                            model_method=glb_sel_mdl$method,
-                            model_loss_mtrx=glb_model_metric_terms, # Automate this
+                            fit_df=glb_trnent_df, OOB_df=NULL,
+                         # Automate from here
+                         #  Issues if glb_sel_mdl$method == "rf" b/c trainControl is "oob"; not "cv"
+                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL,
+                            model_loss_mtrx=glb_model_metric_terms,
                             model_summaryFunction=glb_sel_mdl$control$summaryFunction,
                             model_metric=glb_sel_mdl$metric,
                             model_metric_maximize=glb_sel_mdl$maximize)
-    glb_fin_mdl <- glb_models_lst[["Final"]] 
+    glb_fin_mdl <- glb_models_lst[[length(glb_models_lst)]] 
 }
 
 glb_script_df <- rbind(glb_script_df, 
@@ -1030,39 +1055,40 @@ print(tail(glb_script_df, 2))
 ```
 
 ```{r fit.data.training.all_1, cache=FALSE}
+glb_rsp_var_out <- paste0(glb_rsp_var_out, tail(names(glb_models_lst), 1))
 if (glb_is_regression) {
-    glb_entity_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_entity_df)
-    print(myplot_scatter(glb_entity_df, glb_rsp_var, glb_rsp_var_out, 
+    glb_trnent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_trnent_df, type="raw")
+    print(myplot_scatter(glb_trnent_df, glb_rsp_var, glb_rsp_var_out, 
                          smooth=TRUE))
-    glb_entity_df[, paste0(glb_rsp_var_out, ".err")] <- 
-        abs(glb_entity_df[, glb_rsp_var_out] - glb_entity_df[, glb_rsp_var])
+    glb_trnent_df[, paste0(glb_rsp_var_out, ".err")] <- 
+        abs(glb_trnent_df[, glb_rsp_var_out] - glb_trnent_df[, glb_rsp_var])
     print(head(orderBy(reformulate(c("-", paste0(glb_rsp_var_out, ".err"))), 
-                       glb_entity_df)))                             
+                       glb_trnent_df)))                             
 }    
 
-if (glb_is_classification & glb_is_binomial) {
+if (glb_is_classification && glb_is_binomial) {
     stop("not implemented")
             if (any(class(glb_fin_mdl) %in% c("train"))) {
-        glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_fin_mdl, newdata=glb_entity_df, type="prob")[, 2]
+        glb_trnent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
+            predict(glb_fin_mdl, newdata=glb_trnent_df, type="prob")[, 2]
     } else  if (any(class(glb_fin_mdl) %in% c("rpart", "randomForest"))) {
-        glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_fin_mdl, newdata=glb_entity_df, type="prob")[, 2]
+        glb_trnent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
+            predict(glb_fin_mdl, newdata=glb_trnent_df, type="prob")[, 2]
     } else  if (class(glb_fin_mdl) == "glm") {
         stop("not implemented yet")
-        glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] <- 
-            predict(glb_fin_mdl, newdata=glb_entity_df, type="response")
+        glb_trnent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
+            predict(glb_fin_mdl, newdata=glb_trnent_df, type="response")
     } else  stop("not implemented yet")   
 
     require(ROCR)
-    ROCRpred <- prediction(glb_entity_df[, paste0(glb_rsp_var_out, ".proba")],
-                           glb_entity_df[, glb_rsp_var])
+    ROCRpred <- prediction(glb_trnent_df[, paste0(glb_rsp_var_out, ".proba")],
+                           glb_trnent_df[, glb_rsp_var])
     ROCRperf <- performance(ROCRpred, "tpr", "fpr")
     plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
     
     thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
     thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix) 
-        mycompute_classifier_f.score(mdl=glb_fin_mdl, obs_df=glb_entity_df, 
+        mycompute_classifier_f.score(mdl=glb_fin_mdl, obs_df=glb_trnent_df, 
                                      proba_threshold=thresholds_df[row_ix, "threshold"], 
                                       rsp_var=glb_rsp_var, 
                                       rsp_var_out=glb_rsp_var_out))
@@ -1080,27 +1106,27 @@ if (glb_is_classification & glb_is_binomial) {
                       glb_clf_proba_threshold))
     }
 
-    if ((class(glb_entity_df[, glb_rsp_var]) != "factor") | 
-    	(length(levels(glb_entity_df[, glb_rsp_var])) != 2))
+    if ((class(glb_trnent_df[, glb_rsp_var]) != "factor") | 
+    	(length(levels(glb_trnent_df[, glb_rsp_var])) != 2))
 		stop("expecting a factor with two levels:", glb_rsp_var)
-	glb_entity_df[, glb_rsp_var_out] <- 
-		factor(levels(glb_entity_df[, glb_rsp_var])[
-			(glb_entity_df[, paste0(glb_rsp_var_out, ".proba")] >= 
+	glb_trnent_df[, glb_rsp_var_out] <- 
+		factor(levels(glb_trnent_df[, glb_rsp_var])[
+			(glb_trnent_df[, paste0(glb_rsp_var_out, ".proba")] >= 
 				glb_clf_proba_threshold) * 1 + 1])
              
-    print(mycreate_xtab(glb_entity_df, c(glb_rsp_var, glb_rsp_var_out)))
+    print(mycreate_xtab(glb_trnent_df, c(glb_rsp_var, glb_rsp_var_out)))
     print(sprintf("f.score=%0.4f", 
-        mycompute_classifier_f.score(glb_fin_mdl, glb_entity_df, 
+        mycompute_classifier_f.score(glb_fin_mdl, glb_trnent_df, 
                                      glb_clf_proba_threshold, 
                                      glb_rsp_var, glb_rsp_var_out)))    
 }    
 
-if (glb_is_classification & !glb_is_binomial) {
-    glb_entity_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_entity_df, type="raw")
+if (glb_is_classification && !glb_is_binomial) {
+    glb_trnent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, newdata=glb_trnent_df, type="raw")
 }    
 
 print(glb_feats_df <- mymerge_feats_importance(feats_df=glb_feats_df, sel_mdl=glb_fin_mdl, 
-                                               entity_df=glb_entity_df))
+                                               entity_df=glb_trnent_df))
 
 
 # Most of this code is used again in predict.data.new chunk
@@ -1117,12 +1143,13 @@ glb_analytics_diag_plots <- function(obs_df) {
     }
     
     if (glb_is_regression) {
-        plot_vars_df <- subset(glb_feats_df, Pr.z < 0.1)
-        print(myplot_prediction_regression(obs_df, 
-                    ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"), 
-                                           plot_vars_df$id[1],
-                    glb_rsp_var, glb_rsp_var_out)
-#               + facet_wrap(reformulate(plot_vars_df$id[2])) # if [1,2] is a factor                                                         
+        plot_vars_df <- subset(glb_feats_df, importance > glb_feats_df[glb_feats_df$id == ".rnorm", "importance"])
+        print(myplot_prediction_regression(df=obs_df, 
+                    feat_x=ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], ".rownames"), 
+                                           feat_y=plot_vars_df$id[1],
+                    rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
+                    id_vars=glb_id_vars)
+#               + facet_wrap(reformulate(plot_vars_df$id[2])) # if [1 or 2] is a factor                                                         
 #               + geom_point(aes_string(color="<col_name>.fctr")) #  to color the plot
               )
     }    
@@ -1141,7 +1168,7 @@ glb_analytics_diag_plots <- function(obs_df) {
                 )
     }    
 }
-glb_analytics_diag_plots(obs_df=glb_entity_df)
+glb_analytics_diag_plots(obs_df=glb_trnent_df)
 
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
@@ -1157,10 +1184,13 @@ print(tail(glb_script_df, 2))
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: predict data.new
 ```{r predict.data.new, cache=FALSE}
 if (glb_is_regression)
-    glb_newent_df[, glb_rsp_var_out] <- predict(glb_fin_mdl, 
-                                        newdata=glb_newent_df, type="response")
+    glb_newent_df[, glb_rsp_var_out] <- 
+        mypredict_mdl(glb_fin_mdl, glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
+                      "Final", "Final",
+                				glb_model_metric_smmry, glb_model_metric, 
+        						glb_model_metric_maximize, ret_type="raw")
 
-if (glb_is_classification & glb_is_binomial) {
+if (glb_is_classification && glb_is_binomial) {
     # Compute selected model predictions
             if (any(class(glb_fin_mdl) %in% c("train"))) {
         glb_newent_df[, paste0(glb_rsp_var_out, ".proba")] <- 
@@ -1194,9 +1224,8 @@ if (glb_is_classification & glb_is_binomial) {
 				glb_clf_proba_threshold) * 1 + 1])
 }
 
-if (glb_is_classification & !glb_is_binomial) {
+if (glb_is_classification && !glb_is_binomial) {
     # Compute final model predictions
-    glb_rsp_var_out <- paste0(glb_rsp_var_out, "Final")
 	glb_newent_df[, glb_rsp_var_out] <- 
         mypredict_mdl(glb_fin_mdl, glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
                       "Final", "Final",
@@ -1207,24 +1236,13 @@ if (glb_is_classification & !glb_is_binomial) {
 myprint_df(glb_newent_df[, c(glb_id_vars, glb_rsp_var, glb_rsp_var_out)])
 
 if (glb_is_regression) {
-    print(sprintf("Total SSE: %0.4f", 
-                  sum((glb_newent_df[, glb_rsp_var_out] - 
-                        glb_newent_df[, glb_rsp_var]) ^ 2)))
-    print(sprintf("RMSE: %0.4f", 
-                  (sum((glb_newent_df[, glb_rsp_var_out] - 
-                        glb_newent_df[, glb_rsp_var]) ^ 2) / nrow(glb_newent_df)) ^ 0.5))                        
-    print(myplot_scatter(glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
-                         smooth=TRUE))
-                         
-    glb_newent_df[, paste0(glb_rsp_var_out, ".err")] <- 
-        abs(glb_newent_df[, glb_rsp_var_out] - glb_newent_df[, glb_rsp_var])
-    print(head(orderBy(reformulate(c("-", paste0(glb_rsp_var_out, ".err"))), 
-                       glb_newent_df)))                                                      
-
-#     glb_newent_df[, "<Output Pred variable>"] <- func(glb_newent_df[, glb_pred_var_name])                         
+    print(mypredict_mdl(glb_fin_mdl, glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
+                      "Final", "Final",
+                    			glb_model_metric_smmry, glb_model_metric, 
+        						glb_model_metric_maximize, ret_type="stats"))        
 }                         
 
-if (glb_is_classification & glb_is_binomial) {
+if (glb_is_classification && glb_is_binomial) {
     ROCRpred <- prediction(glb_newent_df[, paste0(glb_rsp_var_out, ".proba")],
                            glb_newent_df[, glb_rsp_var])
     print(sprintf("auc=%0.4f", auc <- as.numeric(performance(ROCRpred, "auc")@y.values)))   
@@ -1253,7 +1271,7 @@ if (glb_is_classification & glb_is_binomial) {
                                       rsp_var_out=paste0(glb_rsp_var, ".predictdmy"))))
 }    
     
-if (glb_is_classification & !glb_is_binomial) {
+if (glb_is_classification && !glb_is_binomial) {
     print(mypredict_mdl(glb_fin_mdl, glb_newent_df, glb_rsp_var, glb_rsp_var_out, 
                       "Final", "Final",
                 				glb_model_metric_smmry, glb_model_metric, 
@@ -1265,7 +1283,7 @@ glb_analytics_diag_plots(obs_df=glb_newent_df)
 tmp_replay_lst <- replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
         "data.new.prediction")), flip_coord=TRUE)
-#print(ggplot.petrinet(tmp_replay_lst[["pn"]]) + coord_flip())
+print(ggplot.petrinet(tmp_replay_lst[["pn"]]) + coord_flip())
 ```
 
 Null Hypothesis ($\sf{H_{0}}$): mpg is not impacted by am_fctr.  
@@ -1299,7 +1317,7 @@ print(ggplot(plot_script_df, aes(x=reorder(chunk_label_major, chunk_step_major_d
 
 ## remove nearZeroVar features (not much variance)
 #require(reshape)
-#var_features_df <- melt(summaryBy(. ~ factor(0), data=glb_entity_df[, features_lst], 
+#var_features_df <- melt(summaryBy(. ~ factor(0), data=glb_trnent_df[, features_lst], 
 #                             FUN=var, keep.names=TRUE), 
 #                             variable_name=c("feature"))
 #names(var_features_df)[2] <- "var"
@@ -1307,19 +1325,19 @@ print(ggplot(plot_script_df, aes(x=reorder(chunk_label_major, chunk_step_major_d
 # summaryBy ignores factors whereas nearZeroVar inspects factors
 
 # k_fold <- 5
-# glb_entity_df[order(glb_entity_df$classe, 
-#                   glb_entity_df$user_name, 
-#                   glb_entity_df$my.rnorm),"my.cv_ix"] <- 
-#     rep(1:k_fold, length.out=nrow(glb_entity_df))
-# summaryBy(X ~ my.cv_ix, data=glb_entity_df, FUN=length)
-# tapply(glb_entity_df$X, list(glb_entity_df$classe, glb_entity_df$user_name, 
-#                            glb_entity_df$my.cv_ix), length)
+# glb_trnent_df[order(glb_trnent_df$classe, 
+#                   glb_trnent_df$user_name, 
+#                   glb_trnent_df$my.rnorm),"my.cv_ix"] <- 
+#     rep(1:k_fold, length.out=nrow(glb_trnent_df))
+# summaryBy(X ~ my.cv_ix, data=glb_trnent_df, FUN=length)
+# tapply(glb_trnent_df$X, list(glb_trnent_df$classe, glb_trnent_df$user_name, 
+#                            glb_trnent_df$my.cv_ix), length)
 
 #require(DAAG)
-#glb_entity_df$classe.proper <- as.numeric(glb_entity_df$classe == "A")
-#rnorm.glm <- glm(classe.proper ~ rnorm, family=binomial, data=glb_entity_df)
+#glb_trnent_df$classe.proper <- as.numeric(glb_trnent_df$classe == "A")
+#rnorm.glm <- glm(classe.proper ~ rnorm, family=binomial, data=glb_trnent_df)
 #cv.binary(rnorm.glm, nfolds=k_fold, print.details=TRUE)
-#result <- cv.lm(df=glb_entity_df, form.lm=formula(classe ~ rnorm), 
+#result <- cv.lm(df=glb_trnent_df, form.lm=formula(classe ~ rnorm), 
 #                    m=k_fold, seed=12345, printit=TRUE)
 
 #plot(mdl_1$finalModel, uniform=TRUE, main="base")

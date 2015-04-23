@@ -6,8 +6,8 @@
 
 ## 01. 		import data
 
-myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL, force_header=FALSE,
-							print_diagn=TRUE, ...){
+myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL,
+							force_header=FALSE, print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
     url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
@@ -739,6 +739,7 @@ myprint_mdl <- function(mdl) {
 
 }
 
+# Get rid of myfit_mdl_lm after incorporating the functionality into myfit_mdl
 myfit_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out,
 						fit_df, OOB_df=NULL) {
 
@@ -1035,25 +1036,34 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 	df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
 	stats_df <- data.frame(model_id=model_id_method)
 
-	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
-	print(t(conf_lst$table))
-	print(conf_lst$overall)
+    if (mdl$modelType == "Classification") {
+    	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
+    	print(t(conf_lst$table))
+    	print(conf_lst$overall)
 
-	for (stat in c("Accuracy", "AccuracyLower", "AccuracyUpper", "Kappa")) {
-		stats_df[, paste0("max.", stat, ".", label)] <- conf_lst$overall[stat]
-	}
+    	for (stat in c("Accuracy", "AccuracyLower", "AccuracyUpper", "Kappa")) {
+    		stats_df[, paste0("max.", stat, ".", label)] <- conf_lst$overall[stat]
+    	}
 
-	if (!is.null(model_summaryFunction)) {
-		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
-		stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
-							model_metric, ".", label)] <- model_summaryFunction(df)
-	}
+    	if (!is.null(model_summaryFunction)) {
+    		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
+    		stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
+    							model_metric, ".", label)] <- model_summaryFunction(df)
+    	}
+    } else
+    if (mdl$modelType == "Regression") {
+        SSE <- sum((df[, rsp_var_out] - df[, rsp_var]) ^ 2)
+        #stats_df[, paste0("max.R.sq.", label)] <- 1 - (SSE / sum((df[, rsp_var] - mean(mdl$finalModel$fitted.values)) ^ 2))
+        stats_df[, paste0("max.R.sq.", label)] <- 1 -
+            (SSE / sum((df[, rsp_var] - mean(predict(mdl, mdl$trainingData, "raw"))) ^ 2))
+        stats_df[, paste0("min.RMSE.", label)] <- (sum((df[, rsp_var_out] - df[, rsp_var]) ^ 2) / (nrow(df) - 0)) ^ 0.5
+    }
 
 	if (ret_type == "stats") return(stats_df) else
 	if (ret_type == "raw") return(df[, rsp_var_out])
 }
 
-myfit_mdl_classification <- function(model_id, model_method,
+myfit_mdl <- function(model_id, model_method, model_type="classification",
 						  indep_vars_vctr, rsp_var, rsp_var_out,
 						  fit_df, OOB_df=NULL,
 						  n_cv_folds=0, tune_models_df=NULL,
@@ -1064,8 +1074,11 @@ myfit_mdl_classification <- function(model_id, model_method,
 	model_id_method <- paste0(model_id, ".", model_method)
     print(sprintf("fitting model: %s", model_id_method))
 
-	if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2))
-	    require(ROCR)
+    if (!(model_type %in% c("regression", "classification")))
+        stop("unsupported model_type: ", model_type)
+    if (model_type == "classification")
+	    if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2))
+	        require(ROCR)
 
 	models_df <- data.frame(model_id=model_id_method,
 							model_method=model_method)
@@ -1073,8 +1086,8 @@ myfit_mdl_classification <- function(model_id, model_method,
 	if ((length(indep_vars_vctr) == 1) & any(indep_vars_vctr %in% "."))
     	indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
 
-    if (!(".rnorm" %in% indep_vars_vctr))
-    	indep_vars_vctr <- union(indep_vars_vctr, ".rnorm")
+#     if (!(".rnorm" %in% indep_vars_vctr))
+#     	indep_vars_vctr <- union(indep_vars_vctr, ".rnorm")
 
     # rpart does not like .rnorm
     if ((model_method == "rpart") & (".rnorm" %in% indep_vars_vctr))
@@ -1106,7 +1119,7 @@ myfit_mdl_classification <- function(model_id, model_method,
 	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
 
 			# For single values, convert to list
-            if (length(args_lst) == 1) args_lst <- list(args_lst)
+            if (length(args_lst[[1]]) == 1) args_lst <- list(args_lst)
             names(args_lst) <- tune_params_vctr
 			mytuneGrid <- do.call("expand.grid", args_lst)
 		}
@@ -1151,20 +1164,15 @@ myfit_mdl_classification <- function(model_id, model_method,
 
 	myprint_mdl(mdl)
 
-    models_lst <- glb_models_lst;
-#    print(sprintf("length(models_lst): %d", length(models_lst)))
-#    print("models_lst:"); print(models_lst)
-#    print(sprintf("appending element: %s to models_lst...", model_id_method))
-    models_lst[[model_id_method]] <- mdl;
-#    print("appended to models_lst")
-    glb_models_lst <<- models_lst
+    models_lst <- glb_models_lst; models_lst[[model_id_method]] <- mdl; glb_models_lst <<- models_lst
 
 	#models_df$n.fit <- nrow(fit_df)
 	models_df$max.nTuningRuns <- nrow(mdl$results)
     models_df$min.elapsedtime.everything <- mdl$times$everything["elapsed"]
     models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
 
-	if (is.binomial) {
+	if (model_type == "classification")
+        if (is.binomial) {
 		stop("add clf_proba_threshold stuff")
 		fit_df[, paste0(rsp_var_out, ".proba")] <-
 			predict(mdl, newdata=fit_df, type="prob")[, 2]
@@ -1181,17 +1189,8 @@ myfit_mdl_classification <- function(model_id, model_method,
 		}
 	}
 
-	# compute/gather OOB prediction stats
-# 	for (data in c("fit", "OOB")) {
-# 		print(sprintf("data: %s", data))
-# 		if (data == "fit") { df <- fit_df} else {df <- OOB_df}
-# 		if (!is.null(df)) {
-# 			models_df <- merge(models_df, mypredict_mdl(mdl, df, rsp_var, rsp_var_out, model_id_method, data,
-# 							model_summaryFunction, model_metric,
-# 							model_metric_maximize,ret_type="stats"))
-# 		}
-#     }
-		models_df <- merge(models_df, mypredict_mdl(mdl, fit_df, rsp_var, rsp_var_out, model_id_method, "fit",
+	# compute/gather fit & OOB prediction stats
+		models_df <- merge(models_df, mypredict_mdl(mdl, df=fit_df, rsp_var, rsp_var_out, model_id_method, label="fit",
 						model_summaryFunction, model_metric,
 						model_metric_maximize,ret_type="stats"), all.x=TRUE)
 	if (!is.null(OOB_df))
@@ -1203,25 +1202,24 @@ myfit_mdl_classification <- function(model_id, model_method,
     	# list implies custom model
     	# summary(randomForest)$r.squared causes an error
     	# summary(rpart) always spits out stuff
-
-
     } else {
-		models_df$max.R.sq.fit <- summary(mdl$finalModel)$r.squared
+		#models_df$max.R.sq.fit <- summary(mdl$finalModel)$r.squared
 		models_df$max.Adj.R.sq.fit <- summary(mdl$finalModel)$adj.r.squared
+		#models_df$min.SSE.fit <- sum(mdl$finalModel$residuals ^ 2)
+		models_df$min.aic.fit <- mdl$finalModel$aic
     }
-    models_df$min.SSE.fit <- sum(mdl$finalModel$residuals ^ 2)
-	models_df$min.aic.fit <- mdl$finalModel$aic
 
 	if (nrow(mdl$results) > 0) {
 		myresults_df <- mdl$results
 		for (param in names(mdl$bestTune)) {
 			myresults_df <- myresults_df[myresults_df[, param] == mdl$bestTune[1, param], ]
-		if (nrow(myresults_df) != 1)
-			stop ("this should not happen")
-		for (result in setdiff(names(myresults_df), names(mdl$bestTune)))
-			models_df[1,
-				paste0(ifelse(model_metric_maximize, "max.", "min."), result, ".fit")] <-
-					myresults_df[1, result]
+    		if (nrow(myresults_df) != 1)
+    			stop ("this should not happen")
+    		for (result in setdiff(names(myresults_df), names(mdl$bestTune))) {
+    		    metric_pfx <- ifelse(length(grep("Rsquared", result) > 0), "max.",
+                                     ifelse(model_metric_maximize, "max.", "min."))
+    			models_df[1, paste0(metric_pfx, result, ".fit")] <- myresults_df[1, result]
+    		}
 		}
 	}
 
@@ -1246,7 +1244,7 @@ myfit_mdl_classification <- function(model_id, model_method,
 ## 09.3     export cv test data for inspection
 
 ## 10.	    build finalized model on all training data
-myextract_mdl_feats <- function( sel_mdl,  entity_df) {
+myextract_mdl_feats <- function(sel_mdl, entity_df) {
 
 			if ("coefficients" %in% names( sel_mdl)) {
 		# mdl is lm OR glm.binomial
@@ -1270,7 +1268,16 @@ myextract_mdl_feats <- function( sel_mdl,  entity_df) {
 		#print(plot_vars_df)
     } else if (any(class( sel_mdl) %in% "train")) {
     	# mdl is caret::train
-		plot_vars_df <- varImp(sel_mdl)$importance
+        if ((inherits(sel_mdl$finalModel, "randomForest")) &&
+            (sel_mdl$modelType == "Regression")) {
+            # varImp for randomForest regression crashes in caret version:6.0.41
+            #   randomForest::importance provided IncNodePurity but
+            #       caret is looking for %IncMSE
+            plot_vars_df <- as.data.frame(importance(sel_mdl$finalModel))
+            plot_vars_df[, paste0(".scld.", names(plot_vars_df)[1])] <- plot_vars_df[, 1] * 100.0 / max(plot_vars_df[, 1])
+            plot_vars_df <- plot_vars_df[, paste0(".scld.", names(plot_vars_df)[1]), FALSE]
+            names(plot_vars_df) <- "Overall"
+        } else plot_vars_df <- varImp(sel_mdl)$importance
 		names(plot_vars_df)[length(names(plot_vars_df))] <- "importance"
 		plot_vars_df <- orderBy(~ -importance, plot_vars_df)
 		#print(plot_vars_df)
