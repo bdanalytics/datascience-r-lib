@@ -739,48 +739,6 @@ myprint_mdl <- function(mdl) {
 
 }
 
-# Get rid of myfit_mdl_lm after incorporating the functionality into myfit_mdl
-myfit_mdl_lm <- function(indep_vars_vctr, rsp_var, rsp_var_out,
-						fit_df, OOB_df=NULL) {
-
-    if (length(indep_vars_vctr) == 1)
-	    if (indep_vars_vctr == ".")
-    	    indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
-
-    mdl <- lm(reformulate(indep_vars_vctr,
-                            response=rsp_var), data=fit_df)
-	plot(mdl, ask=FALSE)
-
-    if (!is.null(OOB_df)) {
-    	OOB_df[, rsp_var_out] <- predict(mdl, newdata=OOB_df)
-		print(SSE.OOB <- sum((OOB_df[, rsp_var_out] -
-							  OOB_df[, rsp_var]) ^ 2))
-		print(R.sq.OOB <- 1 - (SSE.OOB * 1.0 /
-							sum((OOB_df[, rsp_var] -
-								#mean(OOB_df[, rsp_var])
-								mean(mdl$fitted.values)
-							) ^ 2)))
-    } else {SSE.OOB <- NA; R.sq.OOB <- NA}
-
-#   s2T <- sum(anova(mdl)[[2]]) / sum(anova(mdl)[[1]])
-# 	MSE <- anova(mdl)[[3]][2]
-# 	print(adj.R2 <- (s2T - MSE) / s2T)
-#	adj.R2 undefined for OOB ?
-
-     models_df <- mybuild_models_df_row(indep_vars_vctr, n.fit=nrow(fit_df),
-                                           R.sq.fit=summary(mdl)$r.squared,
-                                           R.sq.OOB=R.sq.OOB,
-                                           Adj.R.sq.fit=summary(mdl)$r.squared,
-                                           SSE.fit=sum(mdl$residuals ^ 2),
-                                           SSE.OOB=SSE.OOB)
-
-    print(summary(glb_mdl <<- mdl));
-#     print(orderBy(~ -R.sq.OOB -Adj.R.sq.fit,
-              glb_models_df <<- rbind(glb_models_df,  models_df)
-#             ))
-    return(list("model"=mdl, "models_df"= models_df))
-}
-
 mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 
 	print(as.table(confusionMatrix(obs_df[, predct_var],
@@ -817,8 +775,8 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 		stop("expecting a factor with two levels:", rsp_var)
 	obs_df[, rsp_var_out] <-
 		factor(levels(obs_df[, rsp_var])[
-			(obs_df[, paste0(rsp_var_out, ".proba")] >=
-				proba_threshold) * 1 + 1])
+			(obs_df[, paste0(rsp_var_out, ".prob")] >=
+				proba_threshold) * 1 + 1], levels(obs_df[, rsp_var]))
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
@@ -878,7 +836,8 @@ mycreate_MFO_classfr <- function() {
 		print("unique.vals:"); 	print(unique.vals)
 		print("unique.prob:"); 	print(unique.prob)
 		print("MFO.val:"); 		print(MFO.val)
-		return(list(unique.vals=unique.vals, unique.prob=unique.prob, MFO.val=MFO.val))
+		return(list(unique.vals=unique.vals, unique.prob=unique.prob,
+                    MFO.val=MFO.val, x.names=dimnames(x)[[2]]))
 	}
 	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
 											submodels=NULL) {
@@ -890,26 +849,22 @@ mycreate_MFO_classfr <- function() {
 		return(y)
 	}
 	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
-		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
-
-		outcomes_vctr <- predict(modelFit, newdata)
+		print("in MFO.Classifier$prob")
 		prob_df <- as.data.frame(matrix(rep(modelFit$unique.prob, nrow(newdata)),
 										byrow=TRUE, ncol=length(modelFit$unique.prob),
 								dimnames=list(NULL, as.character(modelFit$unique.vals))))
-		for (row_ix in 1:nrow(newdata)) {
-			max_col_ix <- which.max(prob_df[row_ix, ])
-			out_col_name <- as.character(outcomes_vctr[row_ix])
-			if (out_col_name != names(prob_df)[max_col_ix]) {
-				print(row_ix)
-				tmp <- prob_df[row_ix, out_col_name]
-				prob_df[row_ix, out_col_name] <- prob_df[row_ix, max_col_ix]
-				prob_df[row_ix, max_col_ix] <- tmp
-			}
-		}
+		print(head(prob_df))
 		return(prob_df)
 	}
 	algrthm$sort <- function(x) x
 	algrthm$levels <- function(x) levels(x)
+	algrthm$varImp <- function(modelFit) {
+	    print("in MFO.Classifier$varImp")
+	    varimp_df <- data.frame(Overall=rep(0, length(modelFit$x.names)))
+        rownames(varimp_df) <- modelFit$x.names
+	    print(varimp_df)
+	    return(varimp_df)
+	}
 	#print(algrthm)
 	return(algrthm)
 }
@@ -930,9 +885,11 @@ mycreate_random_classfr <- function() {
 						prob=modelFit$unique.prob))
 	}
 	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
+		print("in Random.Classifier$prob")
 		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
 
-		outcomes_vctr <- predict(modelFit, newdata)
+		outcomes_vctr <- sample(modelFit$unique.vals, nrow(newdata), replace=TRUE,
+								prob=modelFit$unique.prob)
 		prob_df <- as.data.frame(matrix(rep(modelFit$unique.prob, nrow(newdata)),
 										byrow=TRUE, ncol=length(modelFit$unique.prob),
 								dimnames=list(NULL, as.character(modelFit$unique.vals))))
@@ -940,7 +897,7 @@ mycreate_random_classfr <- function() {
 			max_col_ix <- which.max(prob_df[row_ix, ])
 			out_col_name <- as.character(outcomes_vctr[row_ix])
 			if (out_col_name != names(prob_df)[max_col_ix]) {
-				print(row_ix)
+				#print(row_ix)
 				tmp <- prob_df[row_ix, out_col_name]
 				prob_df[row_ix, out_col_name] <- prob_df[row_ix, max_col_ix]
 				prob_df[row_ix, max_col_ix] <- tmp
@@ -1033,8 +990,57 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 	if (!(ret_type %in% c("stats", "raw")))
 		stop("ret_type: ", ret_type, " not supported yet")
 
-	df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
+	if (mdl$modelType == "Classification") {
+		is.binomial <- (length(unique(df[, rsp_var])) == 2)
+	}
 	stats_df <- data.frame(model_id=model_id_method)
+
+	if ((mdl$modelType == "Classification") && is.binomial) {
+		require(ROCR)
+
+		df[, paste0(rsp_var_out, ".prob")] <-
+			predict(mdl, newdata=df, type="prob")[, 2]
+		ROCRpred <- prediction(df[, paste0(rsp_var_out, ".prob")],
+							   df[, rsp_var])
+		stats_df[, paste0("max.auc.", label)] <-
+			as.numeric(performance(ROCRpred, "auc")@y.values)
+
+		ROCRperf <- performance(ROCRpred, "tpr", "fpr")
+		if (length(ROCRperf@y.values[[1]]) > 2) {
+			plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
+
+			thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
+			thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix)
+				mycompute_classifier_f.score(mdl, obs_df=df,
+									proba_threshold=thresholds_df[row_ix, "threshold"],
+											  rsp_var,
+											  rsp_var_out))
+			print(thresholds_df)
+			print(myplot_line(thresholds_df, "threshold", "f.score"))
+
+# 			prob_threshold <- thresholds_df[which.max(thresholds_df$f.score),
+# 													 "threshold"]
+            # Avoid picking 0.0 as threshold
+			prob_threshold <- orderBy(~ -f.score -threshold, thresholds_df)[1, "threshold"]
+		} else # the plot crashes
+			prob_threshold <- 0.5
+
+		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
+					  prob_threshold, label))
+		stats_df[, paste0("opt.prob.threshold.", label)] <- prob_threshold
+
+		df[, rsp_var_out] <-
+			factor(levels(df[, rsp_var])[
+				(df[, paste0(rsp_var_out, ".prob")] >=
+					prob_threshold) * 1 + 1], levels(df[, rsp_var]))
+
+		print(mycreate_xtab(df, c(rsp_var, rsp_var_out)))
+		stats_df[ , paste0("max.f.score.", label)] <-
+			mycompute_classifier_f.score(mdl, df,
+										 prob_threshold,
+										 rsp_var, rsp_var_out)
+	} else df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
+
 
     if (mdl$modelType == "Classification") {
     	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
@@ -1047,8 +1053,14 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 
     	if (!is.null(model_summaryFunction)) {
     		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
+            result <- model_summaryFunction(df)
+            if (length(result) > 1) {
+                warning("Expecting 1 metric: ", model_metric, "; recd: ", paste0(names(result), collapse=", "),
+                        "; retaining ", names(result)[1], " only")
+                result <- result[1]
+            }
     		stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
-    							model_metric, ".", label)] <- model_summaryFunction(df)
+    							model_metric, ".", label)] <- result
     	}
     } else
     if (mdl$modelType == "Regression") {
@@ -1077,8 +1089,9 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
     if (!(model_type %in% c("regression", "classification")))
         stop("unsupported model_type: ", model_type)
     if (model_type == "classification")
-	    if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2))
-	        require(ROCR)
+	    if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2)) {
+	        #require(ROCR)
+	    }
 
 	models_df <- data.frame(model_id=model_id_method,
 							model_method=model_method)
@@ -1132,7 +1145,8 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 
 	set.seed(200)
     methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
-    if (model_method == "rf") methodControl <- "oob"    # cv is not useful for rf
+    if (!inherits(model_method, "list") && (model_method == "rf"))
+    	 methodControl <- "oob"    # cv is not useful for rf
 
 	if (is.null(model_summaryFunction))
 		myControl <- trainControl(method=methodControl, number=n_cv_folds, verboseIter=TRUE) else
@@ -1171,30 +1185,14 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
     models_df$min.elapsedtime.everything <- mdl$times$everything["elapsed"]
     models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
 
-	if (model_type == "classification")
-        if (is.binomial) {
-		stop("add clf_proba_threshold stuff")
-		fit_df[, paste0(rsp_var_out, ".proba")] <-
-			predict(mdl, newdata=fit_df, type="prob")[, 2]
-		ROCRpred <- prediction(fit_df[, paste0(rsp_var_out, ".proba")],
-							   fit_df[, rsp_var])
-		models_df$max.auc.fit <- as.numeric(performance(ROCRpred, "auc")@y.values)
-
-		if (!is.null(OOB_df)) {
-			OOB_df[, paste0(rsp_var_out, ".proba")] <-
-			predict(mdl, newdata=OOB_df, type="prob")[, 2]
-			ROCRpred <- prediction(OOB_df[, paste0(rsp_var_out, ".proba")],
-								   OOB_df[, rsp_var])
-			models_df$max.auc.OOB <- as.numeric(performance(ROCRpred, "auc")@y.values)
-		}
-	}
-
 	# compute/gather fit & OOB prediction stats
-		models_df <- merge(models_df, mypredict_mdl(mdl, df=fit_df, rsp_var, rsp_var_out, model_id_method, label="fit",
+		models_df <- merge(models_df, mypredict_mdl(mdl, df=fit_df,
+						rsp_var, rsp_var_out, model_id_method, label="fit",
 						model_summaryFunction, model_metric,
 						model_metric_maximize,ret_type="stats"), all.x=TRUE)
 	if (!is.null(OOB_df))
-		models_df <- merge(models_df, mypredict_mdl(mdl, OOB_df, rsp_var, rsp_var_out, model_id_method, "OOB",
+		models_df <- merge(models_df, mypredict_mdl(mdl, df=OOB_df,
+						rsp_var, rsp_var_out, model_id_method, label="OOB",
 						model_summaryFunction, model_metric,
 						model_metric_maximize,ret_type="stats"), all.x=TRUE)
 
