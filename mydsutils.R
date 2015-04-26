@@ -1143,7 +1143,7 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 	if (model_method == "mybaseln_classfr") model_method <- mycreate_baseln_classfr() else
 	if (model_method == "myMFO_classfr") 	model_method <- mycreate_MFO_classfr()
 
-	set.seed(200)
+	set.seed(111)
     methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
     if (!inherits(model_method, "list") && (model_method == "rf"))
     	 methodControl <- "oob"    # cv is not useful for rf
@@ -1285,9 +1285,13 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
     plot_vars_df$fit.feat <- (plot_vars_df$id %in% names( entity_df))
 
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
-		dummy_vars_df$root.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
+		dummy_vars_df$root1.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
 			paste0(unlist(strsplit(dummy_vars_df[row_ix, "id"], ".fctr", fixed=TRUE))[1],
 					".fctr"))
+        # caret might be adding a prefix of "`" to dummy vars
+        dummy_vars_df$root.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
+            ifelse((chrs <- unlist(strsplit(dummy_vars_df[row_ix, "root1.feat"], "")))[1] == "`",
+                   paste0(tail(chrs, -1), collapse=""), dummy_vars_df[row_ix, "root1.feat"]))
 		#print(dummy_vars_df)
 		dummy_vars_df <- mutate(dummy_vars_df,
 								vld.fit.feat=(root.feat %in% names( entity_df))

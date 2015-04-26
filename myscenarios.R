@@ -1,3 +1,17 @@
+#For rf
+crt_mdl <- glb_models_lst[["All.X.rf"]]$finalModel
+vu <- varUsed(crt_mdl, count=TRUE)
+vusorted <- sort(vu, decreasing = FALSE, index.return = TRUE)
+dotchart(vusorted$x, names(crt_mdl$forest$xlevels[vusorted$ix]))
+
+set.seed(200)
+ntv_mdl <- randomForest(over50k.fctr ~ age+capitalgain+capitalloss+hoursperweek+workclass.fctr+education.fctr+maritalstatus.fctr+occupation.fctr+relationship.fctr+race.fctr+sex.fctr+nativecountry.fctr+.rnorm, data = glb_trnent_df)
+vu <- varUsed(ntv_mdl, count=TRUE)
+vusorted <- sort(vu, decreasing = FALSE, index.return = TRUE)
+dotchart(vusorted$x, names(ntv_mdl$forest$xlevels[vusorted$ix]))
+
+ntv_mdl <-
+
 model_id_pfx <- "Baseline.tst";     model_method <- "mybaseln_classfr"; indep_vars_vctr <- glb_Baseline_mdl_var
 model_id_pfx <- "MFO.tst";          model_method <- "myMFO_classfr";    indep_vars_vctr <- ".rnorm"
 model_id_pfx <- "Max.cor.Y.tst";    model_method <- "rpart";            indep_vars_vctr <- max_cor_y_x_var

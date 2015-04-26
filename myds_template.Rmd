@@ -126,12 +126,15 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
     #relevel(factor(ifelse(raw == 1, "R", "A")), as.factor(c("R", "A")), ref="A")
     #as.factor(paste0("B", raw))
+    #as.factor(raw)    
 #}
 #glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
     #as.numeric(var) - 1
     #as.numeric(var)
+    #levels(var)[as.numeric(var)]
+    #c(" <=50K", " >50K")[as.numeric(var)]
 #}
 #glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5)))
 
@@ -160,10 +163,12 @@ glb_mice_complete.seed <- 144               # or any integer
 #         caret creates dummy vars for factor feats which messes up the tuning
 #             - better to feed as.numeric(<feat>.fctr) to caret 
 # Regression
-#glb_models_method_vctr <- c("lm", "glm", "rpart", "rf")
+if (glb_is_regression)
+    glb_models_method_vctr <- c("lm", "glm", "rpart", "rf") else
 # Classification
-#glb_models_method_vctr <- c("glm", "rpart", "rf")   # Binomials
-#glb_models_method_vctr <- c("rpart", "rf")          # Multinomials
+    if (glb_is_binomial)
+        glb_models_method_vctr <- c("glm", "rpart", "rf") else  
+        glb_models_method_vctr <- c("rpart", "rf")
 
 glb_models_lst <- list(); glb_models_df <- data.frame()
 # Baseline prediction model feature(s)
@@ -663,7 +668,10 @@ print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit models
-```{r fit.models, cache=FALSE}
+```{r fit.models_0, cache=FALSE}
+if (glb_is_classification && glb_is_binomial && (length(unique(glb_trnent_df[, glb_rsp_var])) < 2))
+    stop("glb_trnent_df$", glb_rsp_var, ": contains less than 2 unique values: ", paste0(unique(glb_trnent_df[, glb_rsp_var]), collapse=", "))
+
 max_cor_y_x_var <- orderBy(~ -cor.y.abs, 
         subset(glb_feats_df, (exclude.as.feat == 0) & (cor.low == 1)))[1, "id"]
 if (!is.null(glb_Baseline_mdl_var)) {
@@ -738,6 +746,7 @@ ret_lst <- myfit_mdl(model_id="Max.cor.Y.cv.0.cp.0",
                         fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                         n_cv_folds=0, tune_models_df=data.frame(parameter="cp", min=0.0, max=0.0, by=0.1))
 
+if (glb_is_regression || glb_is_binomial) # For multinomials this model will be run next by default
 ret_lst <- myfit_mdl(model_id="Max.cor.Y", 
                         model_method="rpart",
                      model_type=glb_model_type,
@@ -844,6 +853,15 @@ for (method in glb_models_method_vctr) {
                                 fit_df=glb_trnent_df, OOB_df=glb_newent_df,        
             n_cv_folds=0, tune_models_df=data.frame(parameter="cp", min=0.0, max=0.0, by=0.1))
     
+    # Compare how rf performs w/i & w/o .rnorm
+    if (method == "rf")
+        ret_lst <- myfit_mdl(model_id=paste0(model_id_pfx, ".no.rnorm"), model_method=method,
+                                indep_vars_vctr=setdiff(indep_vars_vctr, c(".rnorm")),
+                                model_type=glb_model_type,
+                                rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
+                                fit_df=glb_trnent_df, OOB_df=glb_newent_df,
+                    n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df)
+    
     # rf is hard-coded in caret to recognize only Accuracy / Kappa evaluation metrics
     #   only for OOB in trainControl ?
 
@@ -862,6 +880,16 @@ for (method in glb_models_method_vctr) {
 # fit_df <- glb_trnent_df; glb_mdl <- step(<complex>_mdl)
 
 print(glb_models_df)
+
+glb_script_df <- rbind(glb_script_df, 
+                   data.frame(chunk_label="fit.models", 
+    chunk_step_major=glb_script_df[nrow(glb_script_df), "chunk_step_major"], 
+    chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1,                              
+                              elapsed=(proc.time() - glb_script_tm)["elapsed"]))
+print(tail(glb_script_df, 2))
+```
+
+```{r fit.models_1, cache=FALSE, fig.height=7.5, fig.width=7.5}
 
 if (!is.null(glb_model_metric_smmry)) {
     stats_df <- glb_models_df[, "model_id", FALSE]
