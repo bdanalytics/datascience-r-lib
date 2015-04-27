@@ -144,6 +144,11 @@ if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
 glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
 glb_id_vars <- NULL # or c("<id_var>")
 
+glb_is_textual <- FALSE # vs. glb_is_numerical ???
+#Sys.setlocale("LC_ALL", "C") # For english
+glb_txt_var <- NULL # or c("<col_name>")   
+glb_append_stop_words <- NULL # or c("<freq_word>") 
+
 # List transformed vars  
 glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>")    
 # List feats that shd be excluded due to known causation by prediction variable
@@ -429,25 +434,39 @@ glb_newent_df <- add_new_diag_feats(glb_newent_df)
 plot_df <- rbind(cbind(glb_trnent_df[, glb_rsp_var_raw, FALSE], data.frame(.data="Training")),
                  cbind(glb_trnent_df[, glb_rsp_var_raw, FALSE], data.frame(.data="New")))
 print(myplot_histogram(plot_df, glb_rsp_var_raw) + facet_wrap(~ .data))
-if (glb_is_classification) {
-    xtab_df <- mycreate_xtab(plot_df, c(".data", glb_rsp_var_raw))
+
+# used later in encode.retype.data chunk
+glb_display_class_dstrb <- function(var) {
+    plot_df <- rbind(cbind(glb_trnent_df[, var, FALSE], 
+                           data.frame(.data="Training")),
+                     cbind(glb_trnent_df[, var, FALSE], 
+                           data.frame(.data="New")))
+    xtab_df <- mycreate_xtab(plot_df, c(".data", var))
     rownames(xtab_df) <- xtab_df$.data
     xtab_df <- subset(xtab_df, select=-.data)
     print(xtab_df / rowSums(xtab_df))    
 }    
+if (glb_is_classification) glb_display_class_dstrb(glb_rsp_var_raw)
 
 # Check for duplicates in glb_id_vars
 if (length(glb_id_vars) > 0) {
     id_vars_dups_df <- subset(id_vars_df <- 
             mycreate_tbl_df(glb_entity_df[, glb_id_vars, FALSE], glb_id_vars),
                                 .freq > 1)
-    if (nrow(id_vars_dups_df) > 0) {
-        warning("Duplicates found in glb_id_vars data:", nrow(id_vars_dups_df))
-        myprint_df(id_vars_dups_df)
+} else {
+    tmp_entity_df <- glb_entity_df
+    tmp_entity_df$.rownames <- rownames(tmp_entity_df)
+    id_vars_dups_df <- subset(id_vars_df <- 
+            mycreate_tbl_df(tmp_entity_df[, ".rownames", FALSE], ".rownames"),
+                                .freq > 1)
+}
+
+if (nrow(id_vars_dups_df) > 0) {
+    warning("Duplicates found in glb_id_vars data:", nrow(id_vars_dups_df))
+    myprint_df(id_vars_dups_df)
     } else {
         # glb_id_vars are unique across obs in both glb_<>_df
         glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_id_vars)
-    }
 }
 
 #pairs(subset(glb_trnent_df, select=-c(col_symbol)))
@@ -560,7 +579,7 @@ if (glb_impute_na_data) {
 }    
 
 glb_script_df <- rbind(glb_script_df, 
-    data.frame(chunk_label="encode_retype_data", 
+    data.frame(chunk_label="encodeORretype.data", 
         chunk_step_major=max(glb_script_df$chunk_step_major), 
         chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1,
                               elapsed=(proc.time() - glb_script_tm)["elapsed"]))
@@ -568,7 +587,7 @@ print(tail(glb_script_df, 2))
 ```
 
 ### Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``.``r glb_script_df[nrow(glb_script_df), "chunk_step_minor"]``: encode/retype data
-```{r encode_retype_data_1, cache=FALSE}
+```{r encodeORretype.data, cache=FALSE}
 # map_<col_name>_df <- myimport_data(
 #     url="<map_url>", 
 #     comment="map_<col_name>_df", print_diagn=TRUE)
@@ -601,6 +620,8 @@ if (!is.null(glb_map_rsp_raw_to_var)) {
         glb_map_rsp_raw_to_var(glb_newent_df[, glb_rsp_var_raw])
     mycheck_map_results(mapd_df=glb_newent_df, 
                         from_col_name=glb_rsp_var_raw, to_col_name=glb_rsp_var)    
+    
+    if (glb_is_classification) glb_display_class_dstrb(glb_rsp_var)
 }
 
 glb_script_df <- rbind(glb_script_df, 
@@ -613,6 +634,7 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: extract features
 ```{r extract_features, cache=FALSE}
+#```{r extract_features, cache=FALSE, eval=glb_is_textual}
 # Create new features that help prediction
 # <col_name>.lag.2 <- lag(zoo(glb_trnent_df$<col_name>), -2, na.pad=TRUE)
 # glb_trnent_df[, "<col_name>.lag.2"] <- coredata(<col_name>.lag.2)
@@ -632,8 +654,76 @@ print(tail(glb_script_df, 2))
 #     <new_col_name>=
 #                     )
 
-# print(summary(glb_trnent_df))
-# print(summary(glb_newent_df))
+if (glb_is_textual) {
+    require(tm)
+    
+    glb_corpus <- Corpus(VectorSource(glb_entity_df[, glb_txt_var]))
+    glb_corpus <- tm_map(glb_corpus, tolower)
+    glb_corpus <- tm_map(glb_corpus, PlainTextDocument)
+    glb_corpus <- tm_map(glb_corpus, removePunctuation)
+    glb_corpus <- tm_map(glb_corpus, removeWords, 
+                         c(glb_append_stop_words, stopwords("english")))
+    glb_corpus <- tm_map(glb_corpus, stemDocument)    
+    
+    full_freqs_DTM <- DocumentTermMatrix(glb_corpus)
+    full_freqs_vctr <- colSums(as.matrix(full_freqs_DTM))
+    names(full_freqs_vctr) <- dimnames(full_freqs_DTM)[[2]]
+    full_freqs_df <- as.data.frame(full_freqs_vctr)
+    names(full_freqs_df) <- "freq.full"
+    full_freqs_df$term <- rownames(full_freqs_df)
+    full_freqs_df <- orderBy(~ -freq.full, full_freqs_df)
+#    ggplot(full_freqs_df, aes(x=freq.full)) + stat_ecdf()
+#    print(myplot_hbar(head(full_freqs_df, 10), "term", "freq.full"))
+
+    sprs_threshold <- 0.995
+    sprs_freqs_DTM <- removeSparseTerms(full_freqs_DTM, sprs_threshold)
+    sprs_freqs_vctr <- colSums(as.matrix(sprs_freqs_DTM))
+    names(sprs_freqs_vctr) <- dimnames(sprs_freqs_DTM)[[2]]
+    sprs_freqs_df <- as.data.frame(sprs_freqs_vctr)
+    names(sprs_freqs_df) <- "freq.sprs"
+    sprs_freqs_df$term <- rownames(sprs_freqs_df)
+    sprs_freqs_df <- orderBy(~ -freq.sprs, sprs_freqs_df)
+#     ggplot(sprs_freqs_df, aes(x=freq.sprs)) + stat_ecdf()
+#     print(myplot_hbar(head(sprs_freqs_df, 10), "term", "freq.sprs"))
+
+    terms_freqs_df <- merge(full_freqs_df, sprs_freqs_df, all.x=TRUE)
+    melt_freqs_df <- orderBy(~ -value, melt(terms_freqs_df, id.var="term"))
+    print(ggplot(melt_freqs_df, aes(value, color=variable)) + stat_ecdf() + 
+              geom_hline(yintercept=1-sprs_threshold, linetype = "dotted"))
+    print(myplot_hbar(head(melt_freqs_df, 20), "term", "value", colorcol_name="variable"))
+    melt_freqs_df <- orderBy(~ -value, melt(subset(terms_freqs_df, is.na(freq.sprs)), id.var="term"))
+    print(myplot_hbar(head(melt_freqs_df, 10), "term", "value", colorcol_name="variable"))
+
+    # Create txt features
+    txt_X_df <- as.data.frame(as.matrix(sprs_freqs_DTM))
+    colnames(txt_X_df) <- make.names(colnames(txt_X_df))
+    # Add dependent variable
+    glb_entity_df <- cbind(glb_entity_df, txt_X_df)
+
+    # a working copy of this is reqd in manage.missingdata chunk
+    union_df <- rbind(mutate(glb_trnent_df, .src = "trnent"),
+                      mutate(glb_newent_df, .src = "newent"))
+    if (is.null(glb_id_vars)) {
+        union_df$.rownames <- rownames(union_df)
+        tmp_entity_df <- glb_entity_df
+        tmp_entity_df$.rownames <- rownames(tmp_entity_df)
+        mrg_entity_df <- merge(tmp_entity_df, union_df[, c(".src", ".rownames")])
+    } else stop("not implemented yet")       
+    
+    # Partition again
+    glb_trnent_df <- subset(mrg_entity_df, .src == "trnent", select=-c(.src, .rownames))
+    comment(glb_trnent_df) <- "trnent_df"
+    glb_newent_df <- subset(mrg_entity_df, .src == "newent", select=-c(.src, .rownames))
+    comment(glb_newent_df) <- "newent_df"
+
+    # Generate summaries
+    print(summary(glb_entity_df))
+    print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+    print(summary(glb_trnent_df))
+    print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
+    print(summary(glb_newent_df))
+    print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
+}
 
 # print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
 # print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
@@ -669,7 +759,8 @@ print(tail(glb_script_df, 2))
 ```{r remove_correlated_features, cache=FALSE}
 print(glb_feats_df <- orderBy(~-cor.y, 
           myfind_cor_features(feats_df=glb_feats_df, entity_df=glb_trnent_df, 
-                                rsp_var=glb_rsp_var)))
+                              rsp_var=glb_rsp_var, 
+                            checkConditionalX=(glb_is_classification && glb_is_binomial))))
 
 glb_script_df <- rbind(glb_script_df, 
                    data.frame(chunk_label="fit.models", 
@@ -681,11 +772,13 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit models
 ```{r fit.models_0, cache=FALSE}
-if (glb_is_classification && glb_is_binomial && (length(unique(glb_trnent_df[, glb_rsp_var])) < 2))
-    stop("glb_trnent_df$", glb_rsp_var, ": contains less than 2 unique values: ", paste0(unique(glb_trnent_df[, glb_rsp_var]), collapse=", "))
+if (glb_is_classification && glb_is_binomial && 
+        (length(unique(glb_trnent_df[, glb_rsp_var])) < 2))
+    stop("glb_trnent_df$", glb_rsp_var, ": contains less than 2 unique values: ",
+         paste0(unique(glb_trnent_df[, glb_rsp_var]), collapse=", "))
 
 max_cor_y_x_var <- orderBy(~ -cor.y.abs, 
-        subset(glb_feats_df, (exclude.as.feat == 0) & (cor.low == 1)))[1, "id"]
+        subset(glb_feats_df, (exclude.as.feat == 0) & !is.cor.y.abs.low))[1, "id"]
 if (!is.null(glb_Baseline_mdl_var)) {
     if ((max_cor_y_x_var != glb_Baseline_mdl_var) & 
         (glb_feats_df[max_cor_y_x_var, "cor.y.abs"] > 
@@ -714,15 +807,16 @@ ret_lst <- myfit_mdl(model_id="MFO",
                         fit_df=glb_trnent_df, OOB_df=glb_newent_df)
 
 if (glb_is_classification)
-    # "random" model - only for classification; none needed for regression since it is same as MFO
+    # "random" model - only for classification; 
+    #   none needed for regression since it is same as MFO
     ret_lst <- myfit_mdl(model_id="Random", model_method="myrandom_classfr",
                             model_type=glb_model_type,                         
                             indep_vars_vctr=".rnorm",
                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
                             fit_df=glb_trnent_df, OOB_df=glb_newent_df)
 
-# Any models that have tuning parameters has "better" results with cross-validation (except rf)
-#   & "different" results for different outcome metrics
+# Any models that have tuning parameters has "better" results with cross-validation
+#   (except rf) & "different" results for different outcome metrics
 
 # Max.cor.Y
 #   Check impact of cv
@@ -740,7 +834,8 @@ ret_lst <- myfit_mdl(model_id="Max.cor.Y.cv.0.cp.0",
                         indep_vars_vctr=max_cor_y_x_var,
                         rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
                         fit_df=glb_trnent_df, OOB_df=glb_newent_df,
-                        n_cv_folds=0, tune_models_df=data.frame(parameter="cp", min=0.0, max=0.0, by=0.1))
+                        n_cv_folds=0, 
+            tune_models_df=data.frame(parameter="cp", min=0.0, max=0.0, by=0.1))
 
 if (glb_is_regression || glb_is_binomial) # For multinomials this model will be run next by default
 ret_lst <- myfit_mdl(model_id="Max.cor.Y", 
@@ -762,8 +857,9 @@ ret_lst <- myfit_mdl(model_id="Max.cor.Y",
                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
 
 # Interactions.High.cor.Y
-if (nrow(int_feats_df <- subset(glb_feats_df, (cor.low == 0) & 
-                                              (exclude.as.feat == 0))) > 0) {
+if (length(int_feats <- setdiff(unique(glb_feats_df$cor.high.X), NA)) > 0) {
+# if (nrow(int_feats_df <- subset(glb_feats_df, !is.na(cor.high.X) & 
+#                                               (exclude.as.feat == 0))) > 0) {
     # lm & glm handle interaction terms; rpart & rf do not
     #   This does not work - why ???
 #     indep_vars_vctr <- ifelse(glb_is_binomial, 
@@ -772,8 +868,8 @@ if (nrow(int_feats_df <- subset(glb_feats_df, (cor.low == 0) &
 #         union(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"]))
     if (glb_is_regression || glb_is_binomial) {
         indep_vars_vctr <- 
-            c(max_cor_y_x_var, paste(max_cor_y_x_var, int_feats_df[, "id"], sep=":"))       
-    } else { indep_vars_vctr <- union(max_cor_y_x_var, int_feats_df[, "id"]) }
+            c(max_cor_y_x_var, paste(max_cor_y_x_var, int_feats, sep=":"))       
+    } else { indep_vars_vctr <- union(max_cor_y_x_var, int_feats) }
     
     ret_lst <- myfit_mdl(model_id="Interact.High.cor.y", 
                             model_method=ifelse(glb_is_regression, "lm", 
@@ -786,18 +882,32 @@ if (nrow(int_feats_df <- subset(glb_feats_df, (cor.low == 0) &
 }    
 
 # Low.cor.X
+if (glb_is_classification && glb_is_binomial)
+    indep_vars_vctr <- subset(glb_feats_df, is.na(cor.high.X) & 
+                                            is.ConditionalX.y & 
+                                            (exclude.as.feat != 1))[, "id"] else
+    indep_vars_vctr <- subset(glb_feats_df, is.na(cor.high.X) & 
+                                            (exclude.as.feat != 1))[, "id"]                                                
 ret_lst <- myfit_mdl(model_id="Low.cor.X", 
                         model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
-                        indep_vars_vctr=subset(glb_feats_df, cor.low == 1)[, "id"],
-                         model_type=glb_model_type,                     
+                        indep_vars_vctr=indep_vars_vctr,
+                        model_type=glb_model_type,                     
                         glb_rsp_var, glb_rsp_var_out,
                         fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
 
 # All X that is not user excluded
-model_id_pfx <- "All.X";
-indep_vars_vctr <- setdiff(names(glb_trnent_df), union(glb_rsp_var, glb_exclude_vars_as_features))
+if (glb_is_classification && glb_is_binomial) {
+    model_id_pfx <- "Conditional.X"
+# indep_vars_vctr <- setdiff(names(glb_trnent_df), union(glb_rsp_var, glb_exclude_vars_as_features))
+    indep_vars_vctr <- subset(glb_feats_df, is.ConditionalX.y & 
+                                            (exclude.as.feat != 1))[, "id"]
+} else {
+    model_id_pfx <- "All.X"
+    indep_vars_vctr <- subset(glb_feats_df, 
+                                            (exclude.as.feat != 1))[, "id"]
+}
 for (method in glb_models_method_vctr) {
     ret_lst <- myfit_mdl(model_id=paste0(model_id_pfx, ""), model_method=method,
                             indep_vars_vctr=indep_vars_vctr,
@@ -886,7 +996,6 @@ print(tail(glb_script_df, 2))
 ```
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15}
-
 if (!is.null(glb_model_metric_smmry)) {
     stats_df <- glb_models_df[, "model_id", FALSE]
 
@@ -1081,14 +1190,26 @@ if (!is.null(glb_fin_mdl_id) && (glb_fin_mdl_id %in% names(glb_models_lst))) {
         # get actual method from the model_id
         model_method <- tail(unlist(strsplit(glb_sel_mdl_id, "[.]")), 1)
         
+    tune_finmdl_df <- NULL
+    if (nrow(glb_sel_mdl$bestTune) > 0) {
+        for (param in names(glb_sel_mdl$bestTune)) {
+            #print(sprintf("param: %s", param))
+            tune_finmdl_df <- rbind(tune_finmdl_df, 
+                data.frame(parameter=param, 
+                           min=glb_sel_mdl$bestTune[1, param], 
+                           max=glb_sel_mdl$bestTune[1, param], 
+                           by=1)) # by val does not matter
+        }
+    } 
+    
     # Sync with parameters in mydsutils.R
     ret_lst <- myfit_mdl(model_id="Final", model_method=model_method,
                             indep_vars_vctr=mdl_feats_df$id, model_type=glb_model_type,
                             rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out, 
                             fit_df=glb_trnent_df, OOB_df=NULL,
+                            n_cv_folds=glb_n_cv_folds, tune_models_df=tune_finmdl_df,
                          # Automate from here
                          #  Issues if glb_sel_mdl$method == "rf" b/c trainControl is "oob"; not "cv"
-                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL,
                             model_loss_mtrx=glb_model_metric_terms,
                             model_summaryFunction=glb_sel_mdl$control$summaryFunction,
                             model_metric=glb_sel_mdl$metric,
@@ -1123,11 +1244,13 @@ glb_get_predictions <- function(df) {
     if (glb_is_classification && glb_is_binomial) {
         # incorporate glb_clf_proba_threshold
         #   shd it only be for glb_fin_mdl or for earlier models ?
-        if (glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, "opt.prob.threshold.fit"] != 
-            glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "opt.prob.threshold.fit"])
+        if (glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, 
+                          "opt.prob.threshold.fit"] != 
+            glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, 
+                          "opt.prob.threshold.fit"])
             stop("user specification for probability threshold required")
         else prob_threshold <- 
-    glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, "opt.prob.threshold.OOB"]
+    glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "opt.prob.threshold.OOB"]
         
         df[, paste0(glb_rsp_var_out, ".prob")] <- 
             predict(glb_fin_mdl, newdata=df, type="prob")[, 2]
@@ -1145,14 +1268,14 @@ glb_get_predictions <- function(df) {
 
     return(df)
 }    
-glb_trnent_df <- glb_get_predictions(glb_trnent_df)
+glb_trnent_df <- glb_get_predictions(df=glb_trnent_df)
 
 print(glb_feats_df <- mymerge_feats_importance(feats_df=glb_feats_df, sel_mdl=glb_fin_mdl, 
                                                entity_df=glb_trnent_df))
 
 # Used again in predict.data.new chunk
 glb_analytics_diag_plots <- function(obs_df) {
-    for (var in subset(glb_feats_df, !is.na(importance))$id) {
+    for (var in subset(glb_feats_df, importance > 0)$id) {
         plot_df <- melt(obs_df, id.vars=var, 
                         measure.vars=c(glb_rsp_var, glb_rsp_var_out))
 #         if (var == "<feat_name>") print(myplot_scatter(plot_df, var, "value", 
@@ -1181,7 +1304,7 @@ glb_analytics_diag_plots <- function(obs_df) {
     }    
     
     if (glb_is_classification) {
-        if (nrow(plot_vars_df <- subset(glb_feats_df, !is.na(importance))) == 0)
+        if (nrow(plot_vars_df <- subset(glb_feats_df, importance > 0)) == 0)
             warning("No features in selected model are statistically important")
         else print(myplot_prediction_classification(df=obs_df, 
                 feat_x=ifelse(nrow(plot_vars_df) > 1, plot_vars_df$id[2], 

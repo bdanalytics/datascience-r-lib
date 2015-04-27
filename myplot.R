@@ -140,8 +140,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     g
 }
 
-myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL)
-    return(myplot_bar(df, xcol_name, ycol_names, xlabel_formatter, facet_spec) + coord_flip())
+myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL, ...)
+    return(myplot_bar(df, xcol_name, ycol_names, xlabel_formatter, facet_spec, ...) + coord_flip())
 
 myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
                              show_stats=TRUE, facet_frmla=NULL) {
@@ -277,12 +277,12 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
 
-    if (is.factor(df[, rsp_var])) color_var <- rsp_var else {
+    if (is.factor(df[, rsp_var])) { color_var <- rsp_var } else {
         color_var <- paste0(rsp_var, ".fctr")
         df[, color_var] <- as.factor(df[,rsp_var])
     }
 
-     predct_accurate_var_name <- paste0(rsp_var_out, ".accurate")
+    predct_accurate_var_name <- paste0(rsp_var_out, ".accurate")
     df[,  predct_accurate_var_name] <-
         (df[,rsp_var] == df[,rsp_var_out])
 

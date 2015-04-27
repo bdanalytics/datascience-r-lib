@@ -613,22 +613,37 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    id features / create feature combinations for highly correlated features
-myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
+myfind_cor_features <- function(feats_df, entity_df, rsp_var, checkConditionalX=FALSE) {
 	require(reshape2)
 
+	feats_df[, "cor.high.X"] <- NA
+    if (checkConditionalX) feats_df[, "is.ConditionalX.y"] <- NA
+    cor_threshold <- feats_df[feats_df$id == ".rnorm", "cor.y.abs"]
+	feats_df <- mutate(feats_df,
+                       is.cor.y.abs.low=ifelse(cor.y.abs >= cor_threshold, FALSE, TRUE))
 	if (nrow(feats_df) == 1)
-		return(data.frame(id=feats_df$id, cor.low=1))
+		return(feats_df)
 
-	#chk_feats <- setdiff(feats_df$id, exclude_vars_as_features)
-	chk_feats <- subset(feats_df, exclude.as.feat == 0)$id
+	chk_feats <- subset(feats_df, (exclude.as.feat == 0))$id
+    if (checkConditionalX) {
+        require(caret)
+        empty_dstrb_feats <- sort(chk_feats[checkConditionalX(entity_df[, chk_feats],
+                                                         entity_df[, rsp_var])])
+        feats_df[feats_df$id %in% empty_dstrb_feats, "is.ConditionalX.y"] <- FALSE
+        chk_feats <- setdiff(chk_feats, empty_dstrb_feats)
+        feats_df[feats_df$id %in% chk_feats, "is.ConditionalX.y"] <- TRUE
+    }
+	chk_feats <- sort(subset(feats_df, (exclude.as.feat == 0) &
+	                                   (!is.cor.y.abs.low) &
+                                       (is.ConditionalX.y))$id)
     repeat {
     	if (length(chk_feats) == 1)
     		break
 
-        print(corxx_mtrx <- cor(data.matrix(entity_df[, chk_feats]),
-        						use="pairwise.complete.obs"))
+        corxx_mtrx <- cor(data.matrix(entity_df[, chk_feats]),
+        						use="pairwise.complete.obs")
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
-        print(abs_corxx_mtrx)
+        #print(abs_corxx_mtrx)
         if (max(abs_corxx_mtrx, na.rm=TRUE) < 0.7) break
 
         row_ix <- ceiling(which.max(abs_corxx_mtrx) / ncol(abs_corxx_mtrx))
@@ -657,18 +672,20 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
 					abs( feats_df[ feats_df$id == feat_1, "cor.y"]) >=
 					abs( feats_df[ feats_df$id == feat_2, "cor.y"]),
 									feat_2, feat_1)
+                if (drop_feat == feat_1)
+                    feats_df[feats_df$id == feat_2, "cor.high.X"] <- drop_feat else
+                    feats_df[feats_df$id == feat_1, "cor.high.X"] <- drop_feat
 # 			}
 # 		}
 #         }
-        warning("Identified ", drop_feat, " as highly correlated with other features")
+        warning("Identified ", drop_feat, " as highly correlated with ",
+                ifelse(drop_feat == feat_1, feat_2, feat_1))
         print("checking correlations for features:")
         print(chk_feats <- chk_feats[chk_feats != drop_feat])
     }
 
-	feats_df[, "cor.low"] <- 0
-    feats_df[feats_df$id %in% chk_feats, "cor.low"] <- 1
-    # print( feats_df)
-#    return(feats_df[, c("id", "cor.low")])
+# 	feats_df[, "cor.low"] <- 0
+#     feats_df[feats_df$id %in% chk_feats, "cor.low"] <- 1
     return(feats_df)
 }
 
