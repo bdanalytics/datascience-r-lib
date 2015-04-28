@@ -680,8 +680,9 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var, checkConditionalX=
 #         }
         warning("Identified ", drop_feat, " as highly correlated with ",
                 ifelse(drop_feat == feat_1, feat_2, feat_1))
-        print("checking correlations for features:")
-        print(chk_feats <- chk_feats[chk_feats != drop_feat])
+        #print("checking correlations for features:")
+        #print(chk_feats <- chk_feats[chk_feats != drop_feat])
+        chk_feats <- chk_feats[chk_feats != drop_feat]
     }
 
 # 	feats_df[, "cor.low"] <- 0

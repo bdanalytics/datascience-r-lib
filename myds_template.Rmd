@@ -144,17 +144,21 @@ if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
 glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
 glb_id_vars <- NULL # or c("<id_var>")
 
-glb_is_textual <- FALSE # vs. glb_is_numerical ???
+glb_is_textual <- FALSE # or TRUE # vs. glb_is_numerical ???
 #Sys.setlocale("LC_ALL", "C") # For english
 glb_txt_var <- NULL # or c("<col_name>")   
 glb_append_stop_words <- NULL # or c("<freq_word>") 
+glb_sprs_threshold <- 0.970
 
 # List transformed vars  
-glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>")    
-# List feats that shd be excluded due to known causation by prediction variable
+glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
+if (glb_is_textual)
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                          glb_txt_var)
 if (glb_rsp_var_raw != glb_rsp_var)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                             glb_rsp_var_raw)
+# List feats that shd be excluded due to known causation by prediction variable
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                       c(NULL)) # or c("<col_name>")
 # List output vars (useful during testing in console)          
@@ -666,6 +670,7 @@ if (glb_is_textual) {
     glb_corpus <- tm_map(glb_corpus, stemDocument)    
     
     full_freqs_DTM <- DocumentTermMatrix(glb_corpus)
+    print("Full freqs:"); print(full_freqs_DTM)
     full_freqs_vctr <- colSums(as.matrix(full_freqs_DTM))
     names(full_freqs_vctr) <- dimnames(full_freqs_DTM)[[2]]
     full_freqs_df <- as.data.frame(full_freqs_vctr)
@@ -675,8 +680,8 @@ if (glb_is_textual) {
 #    ggplot(full_freqs_df, aes(x=freq.full)) + stat_ecdf()
 #    print(myplot_hbar(head(full_freqs_df, 10), "term", "freq.full"))
 
-    sprs_threshold <- 0.995
-    sprs_freqs_DTM <- removeSparseTerms(full_freqs_DTM, sprs_threshold)
+    sprs_freqs_DTM <- removeSparseTerms(full_freqs_DTM, glb_sprs_threshold)
+    print("Sparse freqs:"); print(sprs_freqs_DTM)
     sprs_freqs_vctr <- colSums(as.matrix(sprs_freqs_DTM))
     names(sprs_freqs_vctr) <- dimnames(sprs_freqs_DTM)[[2]]
     sprs_freqs_df <- as.data.frame(sprs_freqs_vctr)
@@ -689,7 +694,7 @@ if (glb_is_textual) {
     terms_freqs_df <- merge(full_freqs_df, sprs_freqs_df, all.x=TRUE)
     melt_freqs_df <- orderBy(~ -value, melt(terms_freqs_df, id.var="term"))
     print(ggplot(melt_freqs_df, aes(value, color=variable)) + stat_ecdf() + 
-              geom_hline(yintercept=1-sprs_threshold, linetype = "dotted"))
+              geom_hline(yintercept=glb_sprs_threshold, linetype = "dotted"))
     print(myplot_hbar(head(melt_freqs_df, 20), "term", "value", colorcol_name="variable"))
     melt_freqs_df <- orderBy(~ -value, melt(subset(terms_freqs_df, is.na(freq.sprs)), id.var="term"))
     print(myplot_hbar(head(melt_freqs_df, 10), "term", "value", colorcol_name="variable"))
@@ -717,12 +722,12 @@ if (glb_is_textual) {
     comment(glb_newent_df) <- "newent_df"
 
     # Generate summaries
-    print(summary(glb_entity_df))
-    print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
-    print(summary(glb_trnent_df))
-    print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
-    print(summary(glb_newent_df))
-    print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
+#     print(summary(glb_entity_df))
+#     print(sapply(names(glb_entity_df), function(col) sum(is.na(glb_entity_df[, col]))))
+#     print(summary(glb_trnent_df))
+#     print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
+#     print(summary(glb_newent_df))
+#     print(sapply(names(glb_newent_df), function(col) sum(is.na(glb_newent_df[, col]))))
 }
 
 # print(sapply(names(glb_trnent_df), function(col) sum(is.na(glb_trnent_df[, col]))))
