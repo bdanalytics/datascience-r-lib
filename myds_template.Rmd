@@ -52,6 +52,9 @@ Based on analysis utilizing <> techniques, <conclusion heading>:
 - manage.missing.data chunk:
     - cleaner way to manage re-splitting of training vs. new entity
 
+- extract.features chunk:
+    - Convert user-specified mutate code to config specs
+    
 - fit.models chunk:
     - Prediction accuracy scatter graph:
     -   Add tiles (raw vs. PCA)
@@ -110,9 +113,10 @@ glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
 glb_split_newdata_method <- "copy"          # "condition" or "sample" or "copy"
 glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
-glb_split_newdata_size_ratio <- 0.4               # > 0 & < 1
-glb_split_sample.seed <- 88               # or any integer
-glb_max_obs <- NULL # or any integer
+glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
+glb_split_sample.seed <- 123               # or any integer
+glb_max_trnent_obs <- NULL # or any integer
+glb_drop_vars <- c(NULL) # or c("<col_name>")
 
 glb_is_regression <- FALSE; glb_is_classification <- TRUE; glb_is_binomial <- TRUE
 
@@ -124,11 +128,11 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 # if the response factor is based on numbers e.g (0/1 vs. "A"/"B"), 
 #   caret predict(..., type="prob") crashes
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
-    #relevel(factor(ifelse(raw == 1, "R", "A")), as.factor(c("R", "A")), ref="A")
+    #relevel(factor(ifelse(raw == 1, "Y", "N")), as.factor(c("Y", "N")), ref="N")
     #as.factor(paste0("B", raw))
     #as.factor(raw)    
 #}
-#glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5))
+#glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
     #as.numeric(var) - 1
@@ -136,25 +140,25 @@ glb_map_rsp_var_to_raw <- NULL # or function(var) {
     #levels(var)[as.numeric(var)]
     #c(" <=50K", " >50K")[as.numeric(var)]
 #}
-#glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 2, 3, 4, 5)))
+#glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0)))
 
 if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
     stop("glb_map_rsp_raw_to_var function expected")
 
 glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
-glb_id_vars <- NULL # or c("<id_var>")
+glb_id_vars <- c(NULL) # or c("<id_var>")
 
 glb_is_textual <- FALSE # or TRUE # vs. glb_is_numerical ???
 #Sys.setlocale("LC_ALL", "C") # For english
-glb_txt_var <- NULL # or c("<col_name>")   
+glb_txt_var <- c(NULL) # or c("<col_name>")   
 glb_append_stop_words <- NULL # or c("<freq_word>") 
-glb_sprs_threshold <- 0.970
+glb_sprs_threshold <- 0.995     # Ideally, numrows(glb_feats_df) << numrows(glb_trnent_df)
 
 # List transformed vars  
-glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
+glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>") 
 if (glb_is_textual)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-                                          glb_txt_var)
+                                          glb_txt_vars)
 if (glb_rsp_var_raw != glb_rsp_var)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                             glb_rsp_var_raw)
@@ -318,12 +322,14 @@ if (glb_is_separate_newent_dataset) {
     }
 }         
 
-if (!is.null(glb_max_obs)) {
-    if (nrow(glb_trnent_df) > glb_max_obs) {
-        warning("glb_trnent_df restricted to glb_max_obs: ", format(glb_max_obs, big.mark=","))
+if (!is.null(glb_max_trnent_obs)) {
+    if (nrow(glb_trnent_df) > glb_max_trnent_obs) {
+        warning("glb_trnent_df restricted to glb_max_trnent_obs: ", 
+                format(glb_max_trnent_obs, big.mark=","))
         org_entity_df <- glb_trnent_df
         glb_trnent_df <- org_entity_df[split <- 
-            sample.split(org_entity_df[, glb_rsp_var_raw], SplitRatio=glb_max_obs), ]
+            sample.split(org_entity_df[, glb_rsp_var_raw], 
+                         SplitRatio=glb_max_trnent_obs), ]
         org_entity_df <- NULL
     }
 #     if (nrow(glb_newent_df) > glb_max_obs) {
@@ -339,6 +345,13 @@ if (nrow(glb_trnent_df) == nrow(glb_entity_df))
     warning("glb_trnent_df same as glb_entity_df")
 if (nrow(glb_newent_df) == nrow(glb_entity_df))
     warning("glb_newent_df same as glb_entity_df")
+
+if (length(glb_drop_vars) > 0) {
+    warning("dropping vars: ", paste0(glb_drop_vars, collapse=", "))
+    glb_entity_df <- glb_entity_df[, setdiff(names(glb_entity_df), glb_drop_vars)]
+    glb_trnent_df <- glb_trnent_df[, setdiff(names(glb_trnent_df), glb_drop_vars)]    
+    glb_newent_df <- glb_newent_df[, setdiff(names(glb_newent_df), glb_drop_vars)]    
+}
 
 glb_script_df <- rbind(glb_script_df,
                    data.frame(chunk_label="cleanse_data", 
@@ -629,7 +642,7 @@ if (!is.null(glb_map_rsp_raw_to_var)) {
 }
 
 glb_script_df <- rbind(glb_script_df, 
-                   data.frame(chunk_label="extract_features", 
+                   data.frame(chunk_label="extract.features", 
                               chunk_step_major=max(glb_script_df$chunk_step_major)+1, 
                               chunk_step_minor=0,
                               elapsed=(proc.time() - glb_script_tm)["elapsed"]))
@@ -637,7 +650,7 @@ print(tail(glb_script_df, 2))
 ```
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: extract features
-```{r extract_features, cache=FALSE}
+```{r extract.features, cache=FALSE}
 #```{r extract_features, cache=FALSE, eval=glb_is_textual}
 # Create new features that help prediction
 # <col_name>.lag.2 <- lag(zoo(glb_trnent_df$<col_name>), -2, na.pad=TRUE)
@@ -650,75 +663,111 @@ print(tail(glb_script_df, 2))
 # glb_newent_df[2, "<col_name>.lag.2"] <- glb_trnent_df[nrow(glb_trnent_df), 
 #                                                    "<col_name>"]
                                                    
-# glb_trnent_df <- mutate(glb_trnent_df,
-#     <new_col_name>=
+# glb_entity_df <- mutate(glb_entity_df,
+#     A.has.http=ifelse(grepl("http",Added,fixed=TRUE), 1, 0)
 #                     )
-
+# 
+# glb_trnent_df <- mutate(glb_trnent_df,
+#                     )
+# 
 # glb_newent_df <- mutate(glb_newent_df,
-#     <new_col_name>=
 #                     )
 
 if (glb_is_textual) {
     require(tm)
     
-    glb_corpus <- Corpus(VectorSource(glb_entity_df[, glb_txt_var]))
-    glb_corpus <- tm_map(glb_corpus, tolower)
-    glb_corpus <- tm_map(glb_corpus, PlainTextDocument)
-    glb_corpus <- tm_map(glb_corpus, removePunctuation)
-    glb_corpus <- tm_map(glb_corpus, removeWords, 
-                         c(glb_append_stop_words, stopwords("english")))
-    glb_corpus <- tm_map(glb_corpus, stemDocument)    
-    
-    full_freqs_DTM <- DocumentTermMatrix(glb_corpus)
-    print("Full freqs:"); print(full_freqs_DTM)
-    full_freqs_vctr <- colSums(as.matrix(full_freqs_DTM))
-    names(full_freqs_vctr) <- dimnames(full_freqs_DTM)[[2]]
-    full_freqs_df <- as.data.frame(full_freqs_vctr)
-    names(full_freqs_df) <- "freq.full"
-    full_freqs_df$term <- rownames(full_freqs_df)
-    full_freqs_df <- orderBy(~ -freq.full, full_freqs_df)
-#    ggplot(full_freqs_df, aes(x=freq.full)) + stat_ecdf()
-#    print(myplot_hbar(head(full_freqs_df, 10), "term", "freq.full"))
-
-    sprs_freqs_DTM <- removeSparseTerms(full_freqs_DTM, glb_sprs_threshold)
-    print("Sparse freqs:"); print(sprs_freqs_DTM)
-    sprs_freqs_vctr <- colSums(as.matrix(sprs_freqs_DTM))
-    names(sprs_freqs_vctr) <- dimnames(sprs_freqs_DTM)[[2]]
-    sprs_freqs_df <- as.data.frame(sprs_freqs_vctr)
-    names(sprs_freqs_df) <- "freq.sprs"
-    sprs_freqs_df$term <- rownames(sprs_freqs_df)
-    sprs_freqs_df <- orderBy(~ -freq.sprs, sprs_freqs_df)
-#     ggplot(sprs_freqs_df, aes(x=freq.sprs)) + stat_ecdf()
-#     print(myplot_hbar(head(sprs_freqs_df, 10), "term", "freq.sprs"))
-
-    terms_freqs_df <- merge(full_freqs_df, sprs_freqs_df, all.x=TRUE)
-    melt_freqs_df <- orderBy(~ -value, melt(terms_freqs_df, id.var="term"))
-    print(ggplot(melt_freqs_df, aes(value, color=variable)) + stat_ecdf() + 
-              geom_hline(yintercept=glb_sprs_threshold, linetype = "dotted"))
-    print(myplot_hbar(head(melt_freqs_df, 20), "term", "value", colorcol_name="variable"))
-    melt_freqs_df <- orderBy(~ -value, melt(subset(terms_freqs_df, is.na(freq.sprs)), id.var="term"))
-    print(myplot_hbar(head(melt_freqs_df, 10), "term", "value", colorcol_name="variable"))
+    glb_corpus_lst <- list(); glb_full_DTM_lst <- list(); glb_sprs_DTM_lst <- list();
+    for (txt_var in glb_txt_vars) {
+        print(sprintf("Building corpus for %s...", txt_var))
+        
+        txt_corpus <- Corpus(VectorSource(glb_entity_df[, txt_var]))
+        txt_corpus <- tm_map(txt_corpus, tolower)
+        txt_corpus <- tm_map(txt_corpus, PlainTextDocument)
+        txt_corpus <- tm_map(txt_corpus, removePunctuation)
+        txt_corpus <- tm_map(txt_corpus, removeWords, 
+                             c(glb_append_stop_words, stopwords("english")))
+        txt_corpus <- tm_map(txt_corpus, stemDocument)
+        
+        full_freqs_DTM <- DocumentTermMatrix(txt_corpus)
+        print("   Full freqs:"); print(full_freqs_DTM)
+        full_freqs_vctr <- colSums(as.matrix(full_freqs_DTM))
+        names(full_freqs_vctr) <- dimnames(full_freqs_DTM)[[2]]
+        full_freqs_df <- as.data.frame(full_freqs_vctr)
+        names(full_freqs_df) <- "freq.full"
+        full_freqs_df$term <- rownames(full_freqs_df)
+        full_freqs_df <- orderBy(~ -freq.full, full_freqs_df)
+        
+        sprs_freqs_DTM <- removeSparseTerms(full_freqs_DTM, glb_sprs_threshold)
+        print("   Sparse freqs:"); print(sprs_freqs_DTM)
+        sprs_freqs_vctr <- colSums(as.matrix(sprs_freqs_DTM))
+        names(sprs_freqs_vctr) <- dimnames(sprs_freqs_DTM)[[2]]
+        sprs_freqs_df <- as.data.frame(sprs_freqs_vctr)
+        names(sprs_freqs_df) <- "freq.sprs"
+        sprs_freqs_df$term <- rownames(sprs_freqs_df)
+        sprs_freqs_df <- orderBy(~ -freq.sprs, sprs_freqs_df)
+        
+        terms_freqs_df <- merge(full_freqs_df, sprs_freqs_df, all.x=TRUE)
+        melt_freqs_df <- orderBy(~ -value, melt(terms_freqs_df, id.var="term"))
+        print(ggplot(melt_freqs_df, aes(value, color=variable)) + stat_ecdf() + 
+                  geom_hline(yintercept=glb_sprs_threshold, linetype = "dotted"))
+        print(myplot_hbar(head(melt_freqs_df, 20), "term", "value", 
+                          colorcol_name="variable"))
+        melt_freqs_df <- orderBy(~ -value, 
+                        melt(subset(terms_freqs_df, is.na(freq.sprs)), id.var="term"))
+        print(myplot_hbar(head(melt_freqs_df, 10), "term", "value", 
+                          colorcol_name="variable"))
+        
+        glb_corpus_lst[[txt_var]] <- txt_corpus
+        glb_full_DTM_lst[[txt_var]] <- full_freqs_DTM
+        glb_sprs_DTM_lst[[txt_var]] <- sprs_freqs_DTM
+    }
 
     # Create txt features
-    txt_X_df <- as.data.frame(as.matrix(sprs_freqs_DTM))
-    colnames(txt_X_df) <- make.names(colnames(txt_X_df))
-    # Add dependent variable
-    glb_entity_df <- cbind(glb_entity_df, txt_X_df)
+    if ((length(glb_txt_vars) > 1) &&
+        (length(unique(pfxs <- sapply(glb_txt_vars, 
+                    function(txt) substr(txt, 1, 1)))) < length(glb_txt_vars)))
+            stop("Prefixes for corpus freq terms not unique: ", pfxs)
+    
+    for (txt_var in glb_txt_vars) {
+        print(sprintf("Binding DTM for %s...", txt_var))
+        txt_X_df <- as.data.frame(as.matrix(glb_sprs_DTM_lst[[txt_var]]))
+        colnames(txt_X_df) <- paste(substr(txt_var, 1, 1), ".",
+                                    make.names(colnames(txt_X_df)), sep="")
+        rownames(txt_X_df) <- rownames(glb_entity_df) # warning otherwise
+        glb_entity_df <- cbind(glb_entity_df, txt_X_df)
+        
+        # Create <txt_var>.has.http by default
+        glb_entity_df[, paste(substr(txt_var, 1, 1), ".has.http", sep="")] <- 
+            sapply(1:nrow(glb_entity_df), 
+    function(row_ix) ifelse(grepl("http", glb_entity_df[row_ix, txt_var], fixed=TRUE), 
+                            1, 0))
+    
+        # Create <txt_var>.num.words & .num.words.unq
+        glb_entity_df[, paste(substr(txt_var, 1, 1), ".num.words", sep="")] <- 
+            rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]))
+        glb_entity_df[, paste(substr(txt_var, 1, 1), ".num.words.unq", sep="")] <- 
+            rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]) != 0)
+    }        
 
     # a working copy of this is reqd in manage.missingdata chunk
     union_df <- rbind(mutate(glb_trnent_df, .src = "trnent"),
                       mutate(glb_newent_df, .src = "newent"))
-    if (is.null(glb_id_vars)) {
+    tmp_entity_df <- glb_entity_df
+    mrg_id_vars <- ifelse(length(glb_id_vars) > 0, glb_id_vars, ".rownames")
+    if (mrg_id_vars == ".rownames") {
         union_df$.rownames <- rownames(union_df)
-        tmp_entity_df <- glb_entity_df
         tmp_entity_df$.rownames <- rownames(tmp_entity_df)
-        mrg_entity_df <- merge(tmp_entity_df, union_df[, c(".src", ".rownames")])
-    } else stop("not implemented yet")       
+    }
+    mrg_entity_df <- merge(tmp_entity_df, union_df[, c(".src", mrg_id_vars)])
     
     # Partition again
-    glb_trnent_df <- subset(mrg_entity_df, .src == "trnent", select=-c(.src, .rownames))
+    glb_trnent_df <- subset(mrg_entity_df, .src == "trnent", select=-c(.src))
+    glb_newent_df <- subset(mrg_entity_df, .src == "newent", select=-c(.src))
+    if (mrg_id_vars == ".rownames") {
+        glb_trnent_df <- subset(glb_trnent_df, select=-c(.rownames))
+        glb_newent_df <- subset(glb_newent_df, select=-c(.rownames))
+    }
     comment(glb_trnent_df) <- "trnent_df"
-    glb_newent_df <- subset(mrg_entity_df, .src == "newent", select=-c(.src, .rownames))
     comment(glb_newent_df) <- "newent_df"
 
     # Generate summaries
@@ -876,7 +925,7 @@ if (length(int_feats <- setdiff(unique(glb_feats_df$cor.high.X), NA)) > 0) {
             c(max_cor_y_x_var, paste(max_cor_y_x_var, int_feats, sep=":"))       
     } else { indep_vars_vctr <- union(max_cor_y_x_var, int_feats) }
     
-    ret_lst <- myfit_mdl(model_id="Interact.High.cor.y", 
+    ret_lst <- myfit_mdl(model_id="Interact.High.cor.Y", 
                             model_method=ifelse(glb_is_regression, "lm", 
                                         ifelse(glb_is_binomial, "glm", "rpart")),
                          model_type=glb_model_type,
