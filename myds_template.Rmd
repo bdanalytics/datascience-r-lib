@@ -183,7 +183,6 @@ if (glb_is_regression)
         glb_models_method_vctr <- c("glm", "rpart", "rf") else  
         glb_models_method_vctr <- c("rpart", "rf")
 
-glb_models_lst <- list(); glb_models_df <- data.frame()
 # Baseline prediction model feature(s)
 glb_Baseline_mdl_var <- NULL # or c("<col_name>")
 
@@ -725,27 +724,32 @@ if (glb_is_textual) {
     # Create txt features
     if ((length(glb_txt_vars) > 1) &&
         (length(unique(pfxs <- sapply(glb_txt_vars, 
-                    function(txt) substr(txt, 1, 1)))) < length(glb_txt_vars)))
+                    function(txt) toupper(substr(txt, 1, 1))))) < length(glb_txt_vars)))
             stop("Prefixes for corpus freq terms not unique: ", pfxs)
     
     for (txt_var in glb_txt_vars) {
         print(sprintf("Binding DTM for %s...", txt_var))
         txt_X_df <- as.data.frame(as.matrix(glb_sprs_DTM_lst[[txt_var]]))
-        colnames(txt_X_df) <- paste(substr(txt_var, 1, 1), ".",
+        colnames(txt_X_df) <- paste(toupper(substr(txt_var, 1, 1)), ".",
                                     make.names(colnames(txt_X_df)), sep="")
         rownames(txt_X_df) <- rownames(glb_entity_df) # warning otherwise
         glb_entity_df <- cbind(glb_entity_df, txt_X_df)
         
-        # Create <txt_var>.has.http by default
-        glb_entity_df[, paste(substr(txt_var, 1, 1), ".has.http", sep="")] <- 
+        # Create <txt_var>.has.http
+        glb_entity_df[, paste(toupper(substr(txt_var, 1, 1)), ".has.http", sep="")] <- 
             sapply(1:nrow(glb_entity_df), 
     function(row_ix) ifelse(grepl("http", glb_entity_df[row_ix, txt_var], fixed=TRUE), 
                             1, 0))
     
+        # Create <txt_var>.num.chars
+        glb_entity_df[, paste(toupper(substr(txt_var, 1, 1)), ".num.chars", sep="")] <- 
+            sapply(1:nrow(glb_entity_df), 
+                    function(row_ix) nchar(glb_entity_df[row_ix, txt_var]))
+
         # Create <txt_var>.num.words & .num.words.unq
-        glb_entity_df[, paste(substr(txt_var, 1, 1), ".num.words", sep="")] <- 
+        glb_entity_df[, paste(toupper(substr(txt_var, 1, 1)), ".num.words", sep="")] <- 
             rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]))
-        glb_entity_df[, paste(substr(txt_var, 1, 1), ".num.words.unq", sep="")] <- 
+        glb_entity_df[, paste(toupper(substr(txt_var, 1, 1)), ".num.words.unq", sep="")] <- 
             rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]) != 0)
     }        
 
@@ -826,6 +830,8 @@ print(tail(glb_script_df, 2))
 
 ## Step ``r glb_script_df[nrow(glb_script_df), "chunk_step_major"]``: fit models
 ```{r fit.models_0, cache=FALSE}
+glb_models_lst <- list(); glb_models_df <- data.frame()
+
 if (glb_is_classification && glb_is_binomial && 
         (length(unique(glb_trnent_df[, glb_rsp_var])) < 2))
     stop("glb_trnent_df$", glb_rsp_var, ": contains less than 2 unique values: ",
@@ -912,14 +918,7 @@ ret_lst <- myfit_mdl(model_id="Max.cor.Y",
 
 # Interactions.High.cor.Y
 if (length(int_feats <- setdiff(unique(glb_feats_df$cor.high.X), NA)) > 0) {
-# if (nrow(int_feats_df <- subset(glb_feats_df, !is.na(cor.high.X) & 
-#                                               (exclude.as.feat == 0))) > 0) {
     # lm & glm handle interaction terms; rpart & rf do not
-    #   This does not work - why ???
-#     indep_vars_vctr <- ifelse(glb_is_binomial, 
-#         c(max_cor_y_x_var, paste(max_cor_y_x_var, 
-#                         subset(glb_feats_df, is.na(cor.low))[, "id"], sep=":")),
-#         union(max_cor_y_x_var, subset(glb_feats_df, is.na(cor.low))[, "id"]))
     if (glb_is_regression || glb_is_binomial) {
         indep_vars_vctr <- 
             c(max_cor_y_x_var, paste(max_cor_y_x_var, int_feats, sep=":"))       
@@ -951,6 +950,15 @@ ret_lst <- myfit_mdl(model_id="Low.cor.X",
                         fit_df=glb_trnent_df, OOB_df=glb_newent_df,
                         n_cv_folds=glb_n_cv_folds, tune_models_df=NULL)
 
+glb_script_df <- rbind(glb_script_df, 
+                   data.frame(chunk_label="fit.models", 
+    chunk_step_major=glb_script_df[nrow(glb_script_df), "chunk_step_major"], 
+    chunk_step_minor=glb_script_df[nrow(glb_script_df), "chunk_step_minor"]+1,                              
+                              elapsed=(proc.time() - glb_script_tm)["elapsed"]))
+print(tail(glb_script_df, 2))
+```
+
+```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15}
 # All X that is not user excluded
 if (glb_is_classification && glb_is_binomial) {
     model_id_pfx <- "Conditional.X"
@@ -1049,7 +1057,7 @@ glb_script_df <- rbind(glb_script_df,
 print(tail(glb_script_df, 2))
 ```
 
-```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15}
+```{r fit.models_2, cache=FALSE, fig.height=10, fig.width=15}
 if (!is.null(glb_model_metric_smmry)) {
     stats_df <- glb_models_df[, "model_id", FALSE]
 
@@ -1298,13 +1306,16 @@ glb_get_predictions <- function(df) {
     if (glb_is_classification && glb_is_binomial) {
         # incorporate glb_clf_proba_threshold
         #   shd it only be for glb_fin_mdl or for earlier models ?
-        if (glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, 
-                          "opt.prob.threshold.fit"] != 
-            glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, 
-                          "opt.prob.threshold.fit"])
-            stop("user specification for probability threshold required")
-        else prob_threshold <- 
-    glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "opt.prob.threshold.OOB"]
+        # for glb_trnent_df it shd opt; vs. assume for glb_newent_df
+        finmdl_prob_fit <- glb_models_df[glb_models_df$model_id == glb_fin_mdl_id, 
+                                        "opt.prob.threshold.fit"]
+        selmdl_prob_fit <- glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, 
+                                        "opt.prob.threshold.fit"]
+        if (finmdl_prob_fit != selmdl_prob_fit)
+            warning("opt.prob.threshold.fit differs for fin_mdl: ", finmdl_prob_fit,
+                    " vs. sel_mdl: ", selmdl_prob_fit)
+        prob_threshold <- glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, 
+                                        "opt.prob.threshold.OOB"]
         
         df[, paste0(glb_rsp_var_out, ".prob")] <- 
             predict(glb_fin_mdl, newdata=df, type="prob")[, 2]
@@ -1329,7 +1340,11 @@ print(glb_feats_df <- mymerge_feats_importance(feats_df=glb_feats_df, sel_mdl=gl
 
 # Used again in predict.data.new chunk
 glb_analytics_diag_plots <- function(obs_df) {
-    for (var in subset(glb_feats_df, importance > 0)$id) {
+    if (length(vars <- subset(glb_feats_df, importance > 0)$id) > 5) {
+        warning("Limiting important feature scatter plots to 5 out of ", length(vars))
+        vars <- vars[1:5]
+    }
+    for (var in vars) {
         plot_df <- melt(obs_df, id.vars=var, 
                         measure.vars=c(glb_rsp_var, glb_rsp_var_out))
 #         if (var == "<feat_name>") print(myplot_scatter(plot_df, var, "value", 
