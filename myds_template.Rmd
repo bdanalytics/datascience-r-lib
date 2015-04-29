@@ -53,6 +53,7 @@ Based on analysis utilizing <> techniques, <conclusion heading>:
     - cleaner way to manage re-splitting of training vs. new entity
 
 - extract.features chunk:
+    - Add n-grams for glb_txt_vars
     - Convert user-specified mutate code to config specs
     
 - fit.models chunk:
@@ -74,6 +75,8 @@ Based on analysis utilizing <> techniques, <conclusion heading>:
 - Add custom model to caret for a dummy (baseline) classifier (binomial & multinomial) that generates proba/outcomes which mimics the freq distribution of glb_rsp_var values; Right now glb_dmy_glm_mdl always generates most frequent outcome in training data
 - glm_dmy_mdl should use the same method as glm_sel_mdl until custom dummy classifer is implemented
 
+- fit.all.training chunk:
+    - myplot_prediction_classification: displays 'x' instead of '+' when there are no prediction errors 
 - Compare glb_sel_mdl vs. glb_fin_mdl:
     - varImp
     - Prediction differences (shd be minimal ?)
@@ -111,7 +114,7 @@ glb_trnng_url <- "<trnng_url>"
 glb_newdt_url <- "<newdt_url>"
 glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
-glb_split_newdata_method <- "copy"          # "condition" or "sample" or "copy"
+glb_split_newdata_method <- "sample"          # "condition" or "sample" or "copy"
 glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
 glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
 glb_split_sample.seed <- 123               # or any integer
@@ -150,7 +153,7 @@ glb_id_vars <- c(NULL) # or c("<id_var>")
 
 glb_is_textual <- FALSE # or TRUE # vs. glb_is_numerical ???
 #Sys.setlocale("LC_ALL", "C") # For english
-glb_txt_var <- c(NULL) # or c("<col_name>")   
+glb_txt_vars <- c(NULL) # or c("<col_name>")   
 glb_append_stop_words <- NULL # or c("<freq_word>") 
 glb_sprs_threshold <- 0.995     # Ideally, numrows(glb_feats_df) << numrows(glb_trnent_df)
 
@@ -424,7 +427,7 @@ add_new_diag_feats <- function(obs_df, ref_df=glb_entity_df) {
 #         Month=months(Date.my),
 #         Weekday=weekdays(Date.my)
 
-#         <col_name>.log=log(<col.name>),        
+#         <col_name>.log=log(1 + <col.name>),        
 #         <col_name>=<table>[as.character(<col2_name>)],
 #         <col_name>=as.numeric(<col2_name>),
 
@@ -751,6 +754,12 @@ if (glb_is_textual) {
             rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]))
         glb_entity_df[, paste(toupper(substr(txt_var, 1, 1)), ".num.words.unq", sep="")] <- 
             rowSums(as.matrix(glb_full_DTM_lst[[txt_var]]) != 0)
+    
+        for (feat in paste(toupper(substr(txt_var, 1, 1)), 
+                            c(".num.chars", ".num.words", ".num.words.unq"), sep="")) {
+            glb_entity_df[, paste0(feat, ".log")] <- log(1 + glb_entity_df[, feat])
+            print(myplot_box(glb_entity_df, paste0(feat, ".log"), glb_rsp_var))
+        }            
     }        
 
     # a working copy of this is reqd in manage.missingdata chunk
