@@ -95,7 +95,7 @@ myprint_df <- function(df, dims=FALSE) {
     	print(head(df))
 
 		# print 6 sample obs
-		print(df[sort(sample(1:dim(df)[1], 6)),])
+		print(df[sort(sample(1:dim(df)[1], 6)),, FALSE])
 
 		print(tail(df))
     }
@@ -282,7 +282,8 @@ mycheck_validarg <- function(value) {
 
 mycompute_median <- function(vector) {
     if (is.factor(vector))
-        return(factor(levels(vector)[median(as.numeric(vector), na.rm=TRUE)], levels(vector)))
+        return(factor(levels(vector)[median(as.numeric(vector), na.rm=TRUE)],
+                      levels(vector)))
 #     if (class(vector) == "Date")
 #     	return(as.Date(median(vector, na.rm=TRUE), origin="1970-01-01"))
 
@@ -290,20 +291,24 @@ mycompute_median <- function(vector) {
 }
 
 mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
+    warning("deprecated to mycompute_stats_df")
+
 	if (class(df) != "data.frame")
 		stop("df argument is not a data.frame: it is ", class(df))
 
 	ret_df <- data.frame()
 
-	# gather numeric vars
-    num_lst <- sapply(names(df), function(col) if (is.numeric(df[, col])) return(col))
-    num_vctr <- unlist(num_lst[!sapply(num_lst, is.null)])
+	# gather numeric & factor vars
+    num_lst <- sapply(names(df), function(col)
+        if (is.numeric(df[, col]) || is.factor(df[, col])) return(col))
+    num_vctr <- setdiff(unlist(num_lst[!sapply(num_lst, is.null)]), byvars_lst)
     if (length(num_vctr) > 0)
 	    ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df,
     							FUN=median, keep.names=keep.names)
 
-    # summaryBy does not compute stats for factor or Date class variables
-    non_num_lst <- sapply(names(df), function(col) if (!is.numeric(df[, col])) return(col))
+    # summaryBy does not compute stats for Date class variables
+    non_num_lst <- sapply(names(df), function(col)
+        if (!is.numeric(df[, col]) && !is.factor(df[, col])) return(col))
     non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
     non_num_vctr <- setdiff(non_num_vctr, byvars_lst)
     for (var in non_num_vctr) {
@@ -343,17 +348,65 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
-mycreate_tbl_df <- function(df, tbl_col_name) {
+mycompute_stats_df <- function(df, byvars_lst=factor(0)) {
+    if (class(df) != "data.frame")
+        stop("df argument is not a data.frame: it is ", class(df))
 
-	ret_df <- as.data.frame(sort(table(df[, tbl_col_name])))
-	names(ret_df) <- ".freq"
-	ret_df[, tbl_col_name] <- rownames(ret_df)
-	rownames(ret_df) <- 1:nrow(ret_df)
+    ret_df <- data.frame()
 
-	return(ret_df[, c(tbl_col_name, ".freq")])
+    # gather numeric vars
+    num_lst <- sapply(names(df), function(col)
+        if (is.numeric(df[, col]) || is.factor(df[, col])) return(col))
+    num_vctr <- setdiff(unlist(num_lst[!sapply(num_lst, is.null)]), byvars_lst)
+    if (length(num_vctr) > 0)
+        ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df,
+                            FUN=c(median, mean))
+
+    # summaryBy does not compute stats for factor / Date class variables
+    non_num_lst <- sapply(names(df), function(col)
+        if (!is.numeric(df[, col]) && !is.factor(df[, col])) return(col))
+    non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
+    non_num_vctr <- setdiff(non_num_vctr, byvars_lst)
+    for (var in non_num_vctr) {
+        #print("var="); print(var)
+
+        if (nrow(ret_df) == 0) {
+            ret_df <- ifelse(byvars_lst == factor(0),
+                            as.data.frame(mycompute_stats(df[, var])),
+                            as.data.frame(tapply(df[, var], df[, byvars_lst],
+                                                        FUN=mycompute_stats)))
+            names(ret_df) <- new_name
+        }
+        else {
+            if (byvars_lst == factor(0)) {
+                ret_df[, new_name] <- mycompute_median(df[, var])
+            } else {
+                ret_df[, new_name] <- tapply(df[, var], df[, byvars_lst],
+                                             FUN=mycompute_median)
+            }
+        }
+
+        # tapply strips class info
+        if (class(df[, var]) == "Date")
+            ret_df[, new_name] <- as.Date(ret_df[, new_name], origin="1970-01-01")
+    }
+
+    if (nrow(ret_df) == 1) rownames(ret_df) <- "median"
+
+    return(ret_df)
 }
 
-mycreate_xtab <- function(df, xtab_col_names) {
+mycreate_tbl_df <- function(df, tbl_col_names) {
+
+	ret_df <- as.data.frame(sort(table(df[, tbl_col_names], useNA="ifany")))
+	names(ret_df) <- ".freq"
+	ret_df[, tbl_col_names] <- rownames(ret_df)
+	rownames(ret_df) <- 1:nrow(ret_df)
+
+	return(ret_df[, c(tbl_col_names, ".freq")])
+}
+
+mycreate_xtab_df <- function(df, xtab_col_names) {
     require(doBy)
     require(reshape2)
 
@@ -393,6 +446,21 @@ mycreate_xtab <- function(df, xtab_col_names) {
 
 }
 
+mycreate_sqlxtab_df <- function(obs_df, xtab_col_names) {
+    require(sqldf)
+    # _n does not work with ggplot
+    sql <- "SELECT "
+    for (var in xtab_col_names)
+        sql <- paste0(sql, "\"", var, "\", ")
+    sql <- paste0(sql, " SUM(1) AS \".n\" ")
+    sql <- paste0(sql, "FROM obs_df GROUP BY ")
+    for (var in xtab_col_names)
+        sql <- paste0(sql, "\"", var, "\"",
+                      ifelse(var == tail(xtab_col_names, 1), " ", ", "))
+    sql <- paste0(sql, "ORDER BY \".n\" DESC")
+    return(sqldf(sql))
+}
+
 mydelete_cols_df <- function(df, colnames) {
     return(subset(df, select=names(df)[!names(df) %in% colnames]))
 }
@@ -401,6 +469,15 @@ myfind_all_na_cols_df <- function(df) {
     na_cols <- which(as.numeric(colSums(is.na(df))) == nrow(df))
     return(names(df)[na_cols])
 }
+
+myfind_chr_cols_df <- function(df) {
+    cols <- sapply(names(df),
+                   function(col) ifelse(inherits(df[, col], "character"), col, ""))
+    return(cols[cols != ""])
+}
+#myfind_chr_cols_df(glb_entity_df)
+
+myfind_dups_df <- function(df) { stop("use native duplicated R fn") }
 
 myformat_number <- function(x) {
     if (class(x) != "num") x <- as.numeric(x)
@@ -429,8 +506,9 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 #                                                        steps))
 
 ## 02.3	    encode/retype data (convert types; map codes)
-mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
-    if (length(unique(mapd_df[, from_col_name])) == nrow(mapd_df)) map_summry_df <- mapd_df else {
+mycheck_map_results <- function(mapd_df, from_col_name, to_col_name, print.all=FALSE) {
+    if (length(unique(mapd_df[, from_col_name])) == nrow(mapd_df))
+        map_summry_df <- mapd_df else {
         require(sqldf)
 
         # _n does not work with ggplot
@@ -448,7 +526,7 @@ mycheck_map_results <- function(mapd_df, from_col_name, to_col_name) {
         map_summry_df <- sqldf(sql)
     }
 
-	myprint_df(map_summry_df)
+    if (print.all) print(map_summry_df) else myprint_df(map_summry_df)
 
 	# Works only for 1:1 mapping;
 	#	Use fill aesthetic to display n:m mappings ?
@@ -492,11 +570,15 @@ mycreate_date2daytype <- function (df, date_col_name) {
     new_df[, daytype_col_name] <- ifelse((new_df[, day_col_name] == "Saturday") |
                                              (new_df[, day_col_name] == "Sunday"),
                                          "weekend", "weekday")
-    count_df <- mycreate_xtab(new_df, c(date_col_name, "date.dytyp"))
+    count_df <- mycreate_xtab_df(new_df, c(date_col_name, "date.dytyp"))
     myprint_df(count_df)
     return(new_df)
 }
 #entity_agg_date_df <- mycreate_date2daytype(entity_agg_date_df, "date")
+
+mycount_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
+    sapply(str_vctr, function(str) sum(gregexpr(pattern, str, perl=perl)[[1]] > 0))
+
 
 ## 03.2		filter features
 #features_lst <- features_lst[features_lst != "price"]
@@ -603,8 +685,11 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
                 cor.y=cor(data.matrix(entity_df[, sel_feats]),
                             y=as.numeric( entity_df[, rsp_var]),
                             use="pairwise.complete.obs"))
-    feats_df <- mutate(feats_df, exclude.as.feat = ifelse(id %in% exclude_vars_as_features, 1, 0))
-	feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
+#     feats_df <- mutate(feats_df, exclude.as.feat =
+#                            ifelse(id %in% exclude_vars_as_features, 1, 0))
+    feats_df$exclude.as.feat <- sapply(feats_df$id, function(id)
+                           ifelse(id %in% exclude_vars_as_features, 1, 0))
+    feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
     return(feats_df)
 }
 
@@ -613,29 +698,42 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    id features / create feature combinations for highly correlated features
-myfind_cor_features <- function(feats_df, entity_df, rsp_var, checkConditionalX=FALSE) {
+myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
 	require(reshape2)
+    require(caret)
 
 	feats_df[, "cor.high.X"] <- NA
-    if (checkConditionalX) feats_df[, "is.ConditionalX.y"] <- NA
+    nzv_df <- nearZeroVar(entity_df[, setdiff(names(entity_df),
+                                              c(rsp_var, myfind_chr_cols_df(entity_df)))],
+                          saveMetrics=TRUE)
+    #nzv_df$id <- row.names(nzv_df)
+    feats_df <- merge(feats_df, nzv_df, by="row.names", all=TRUE)
+    row.names(feats_df) <- feats_df$id
+    feats_df <- subset(feats_df, select=-Row.names)
+    feats_df$myNearZV <- ifelse(feats_df$zeroVar |
+    	(feats_df$nzv & (feats_df$freqRatio > (nrow(subset(entity_df, .src == "Train")) / 4))),
+    							TRUE, FALSE)
+
     cor_threshold <- feats_df[feats_df$id == ".rnorm", "cor.y.abs"]
 	feats_df <- mutate(feats_df,
                        is.cor.y.abs.low=ifelse(cor.y.abs >= cor_threshold, FALSE, TRUE))
 	if (nrow(feats_df) == 1)
 		return(feats_df)
 
-	chk_feats <- subset(feats_df, (exclude.as.feat == 0))$id
-    if (checkConditionalX) {
-        require(caret)
-        empty_dstrb_feats <- sort(chk_feats[checkConditionalX(entity_df[, chk_feats],
-                                                         entity_df[, rsp_var])])
-        feats_df[feats_df$id %in% empty_dstrb_feats, "is.ConditionalX.y"] <- FALSE
-        chk_feats <- setdiff(chk_feats, empty_dstrb_feats)
-        feats_df[feats_df$id %in% chk_feats, "is.ConditionalX.y"] <- TRUE
-    }
+	chk_feats <- subset(feats_df, (exclude.as.feat == 0) & !zeroVar)$id
+#     if (checkConditionalX) {
+#         require(caret)
+#         empty_dstrb_feats <- sort(chk_feats[checkConditionalX(entity_df[, chk_feats],
+#                                                          entity_df[, rsp_var])])
+#         feats_df[feats_df$id %in% empty_dstrb_feats, "is.ConditionalX.y"] <- FALSE
+#         chk_feats <- setdiff(chk_feats, empty_dstrb_feats)
+#         feats_df[feats_df$id %in% chk_feats, "is.ConditionalX.y"] <- TRUE
+#     }
 	chk_feats <- sort(subset(feats_df, (exclude.as.feat == 0) &
 	                                   (!is.cor.y.abs.low) &
-                                       (is.ConditionalX.y))$id)
+                                       #(is.ConditionalX.y)
+                                       !zeroVar
+                             )$id)
     repeat {
     	if (length(chk_feats) == 1)
     		break
@@ -651,7 +749,7 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var, checkConditionalX=
         feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
         feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
         print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
-        print(myplot_scatter( entity_df, feat_1, feat_2))
+#         print(myplot_scatter( entity_df, feat_1, feat_2))
 
         print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_1,
              feats_df[feats_df$id == feat_1, "cor.y"]))
@@ -660,9 +758,9 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var, checkConditionalX=
              feats_df[feats_df$id == feat_2, "cor.y"]))
     #     print(myplot_scatter( entity_df, rsp_var, feat_2))
 
-        plot_df <- melt( entity_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
-        print(myplot_scatter(plot_df, rsp_var, "value",
-                             facet_colcol_name="variable", smooth=TRUE))
+#         plot_df <- melt( entity_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
+#         print(myplot_scatter(plot_df, rsp_var, "value",
+#                              facet_colcol_name="variable", smooth=TRUE))
 
 #         if ( id_var %in% c(feat_1, feat_2)) drop_feat <-  id_var else {
 #   	  if (intersect( id_vars, c(feat_1, feat_2)))
@@ -759,8 +857,8 @@ myprint_mdl <- function(mdl) {
 
 mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 
-	print(as.table(confusionMatrix(obs_df[, predct_var],
-								   obs_df[, actual_var])))
+# 	print(as.table(confusionMatrix(obs_df[, predct_var],
+# 								   obs_df[, actual_var])))
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
@@ -770,7 +868,7 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 		mrg_obs_xtab_df[, paste(predct_var, val, sep=".")] <- 0
 	#print(mrg_obs_xtab_df)
 
-	obs_xtab_df <- mycreate_xtab(obs_df, c(actual_var, predct_var))
+	obs_xtab_df <- mycreate_xtab_df(obs_df, c(actual_var, predct_var))
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 	#print(obs_xtab_df)
 
@@ -781,7 +879,7 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 
 	mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
 	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0
-	print(mrg_obs_xtab_df)
+# 	print(mrg_obs_xtab_df)
 	return(mrg_obs_xtab_df)
 }
 
@@ -859,11 +957,11 @@ mycreate_MFO_classfr <- function() {
 	}
 	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
 											submodels=NULL) {
-		print("in MFO.Classifier$predict")
+		print("entr MFO.Classifier$predict")
 		y <- factor(rep(modelFit$MFO.val, nrow(newdata)), levels=modelFit$unique.vals)
 		if ((length(unique(y)) > 1) | (unique(y) != as.character(modelFit$MFO.val)))
 			stop("this should not happen")
-
+		print("exit MFO.Classifier$predict")
 		return(y)
 	}
 	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
@@ -1052,7 +1150,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 				(df[, paste0(rsp_var_out, ".prob")] >=
 					prob_threshold) * 1 + 1], levels(df[, rsp_var]))
 
-		print(mycreate_xtab(df, c(rsp_var, rsp_var_out)))
+		print(mycreate_xtab_df(df, c(rsp_var, rsp_var_out)))
 		stats_df[ , paste0("max.f.score.", label)] <-
 			mycompute_classifier_f.score(mdl, df,
 										 prob_threshold,
@@ -1061,6 +1159,9 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 
 
     if (mdl$modelType == "Classification") {
+#         print("in mypredict_mdl: calling confusionMatrix...")
+#         print("    unique(df[, rsp_var_out]: "); print(unique(df[, rsp_var_out]))
+#         print("    unique(df[, rsp_var    ]: "); print(unique(df[, rsp_var    ]))
     	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
     	print(t(conf_lst$table))
     	print(conf_lst$overall)
@@ -1120,9 +1221,9 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 #     if (!(".rnorm" %in% indep_vars_vctr))
 #     	indep_vars_vctr <- union(indep_vars_vctr, ".rnorm")
 
-    # rpart does not like .rnorm
-    if ((model_method == "rpart") & (".rnorm" %in% indep_vars_vctr))
-    	indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
+#     # rpart does not like .rnorm
+#     if ((model_method == "rpart") & (".rnorm" %in% indep_vars_vctr))
+#     	indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
 
 	print(sprintf("    indep_vars: %s", paste(indep_vars_vctr, collapse=", ")))
     models_df$feats	<- paste(indep_vars_vctr, collapse=", ")
@@ -1163,11 +1264,16 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 
 	set.seed(111)
     methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
-    if (!inherits(model_method, "list") && (model_method == "rf"))
+    preProcess <- NULL
+    if (!inherits(model_method, "list") && (model_method == "rf")) {
     	 methodControl <- "oob"    # cv is not useful for rf
+    	 print("performing pca pre-processing for rf")
+    	 preProcess <- c("pca")
+    }
 
 	if (is.null(model_summaryFunction))
-		myControl <- trainControl(method=methodControl, number=n_cv_folds, verboseIter=TRUE) else
+		myControl <- trainControl(method=methodControl, number=n_cv_folds,
+									verboseIter=TRUE) else
 		myControl <- trainControl(method=methodControl, number=n_cv_folds,
                                   summaryFunction=model_summaryFunction, verboseIter=TRUE)
 
@@ -1178,11 +1284,12 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 
 	mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
 				 method=model_method, trControl=myControl,
+				 preProcess=preProcess,
+				 metric=model_metric,
+				 maximize=model_metric_maximize,
 				 tuneGrid=mytuneGrid,
 				 tuneLength=ifelse(n_cv_folds == 0, 1,
-				 					ifelse(!is.null(mytuneGrid), nrow(mytuneGrid), 3)),
-				 metric=model_metric,
-				 maximize=model_metric_maximize)
+				 					ifelse(!is.null(mytuneGrid), nrow(mytuneGrid), 3)))
 
 	#print(mdl$bestTune)
 	if ((nrow(mdl$results) > 1) & (mdl$bestTune[1, 1] != "none")) {
@@ -1204,15 +1311,18 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
     models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
 
 	# compute/gather fit & OOB prediction stats
+        print("    calling mypredict_mdl for fit:")
 		models_df <- merge(models_df, mypredict_mdl(mdl, df=fit_df,
 						rsp_var, rsp_var_out, model_id_method, label="fit",
 						model_summaryFunction, model_metric,
 						model_metric_maximize,ret_type="stats"), all.x=TRUE)
-	if (!is.null(OOB_df))
+	if (!is.null(OOB_df)) {
+	    print("    calling mypredict_mdl for OOB:")
 		models_df <- merge(models_df, mypredict_mdl(mdl, df=OOB_df,
 						rsp_var, rsp_var_out, model_id_method, label="OOB",
 						model_summaryFunction, model_metric,
 						model_metric_maximize,ret_type="stats"), all.x=TRUE)
+	}
 
     if (inherits(mdl$finalModel, c("list", "randomForest", "rpart"))) {
     	# list implies custom model
@@ -1284,6 +1394,8 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
 		#print(plot_vars_df)
     } else if (any(class( sel_mdl) %in% "train")) {
     	# mdl is caret::train
+        require(caret)
+
         if ((inherits(sel_mdl$finalModel, "randomForest")) &&
             (sel_mdl$modelType == "Regression")) {
             # varImp for randomForest regression crashes in caret version:6.0.41
@@ -1300,7 +1412,12 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
     } else stop("not implemented yet")
 
     plot_vars_df$id <- rownames(plot_vars_df)
-    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names( entity_df))
+    # Enhancement:
+        # Manage interaction terms: make.names() replaces ":" with "."
+        # 1. Term could be surrounded by "`"
+        # 2. Term could have ":" but be a factor value
+        # 3. Term contains interactions with one or more terms, separated by ":"
+    plot_vars_df$fit.feat <- (plot_vars_df$id %in% names(entity_df))
 
     if (nrow(dummy_vars_df <- subset(plot_vars_df, !fit.feat)) > 0) {
 		dummy_vars_df$root1.feat <- sapply(1:nrow(dummy_vars_df), function(row_ix)
@@ -1311,16 +1428,31 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
             ifelse((chrs <- unlist(strsplit(dummy_vars_df[row_ix, "root1.feat"], "")))[1] == "`",
                    paste0(tail(chrs, -1), collapse=""), dummy_vars_df[row_ix, "root1.feat"]))
 		#print(dummy_vars_df)
+        require(plyr)
 		dummy_vars_df <- mutate(dummy_vars_df,
 								vld.fit.feat=(root.feat %in% names( entity_df))
 								)
 		#print(dummy_vars_df)
 		if (nrow(subset(dummy_vars_df, !vld.fit.feat)) > 0)
 			stop("Dummy variables not recognized")
-
-		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")],
-									data.frame(id=unique(dummy_vars_df$root.feat),
-			importance=tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, max, na.rm=TRUE)))
+        dummy_imp_vctr <- tapply(dummy_vars_df$importance, dummy_vars_df$root.feat, max,
+                                 na.rm=TRUE)
+        vld_plot_vars_df <- merge(subset(plot_vars_df, fit.feat)[, c("id", "importance")],
+                                  data.frame(id=names(dummy_imp_vctr),
+                                             importance=dummy_imp_vctr),
+                                  by="id", all=TRUE)
+        row.names(vld_plot_vars_df) <- vld_plot_vars_df$id
+        if (length(grep("importance.x", names(vld_plot_vars_df), fixed=TRUE)) > 0) {
+            # dups caused by blank values in factor ?
+            vld_plot_vars_df$importance <- sapply(1:nrow(vld_plot_vars_df),
+                function(row_ix) max(vld_plot_vars_df[row_ix, "importance.x"],
+                                     vld_plot_vars_df[row_ix, "importance.y"],
+                                    na.rm=TRUE))
+            vld_plot_vars_df <- vld_plot_vars_df[, c("id", "importance")]
+        }
+# 		vld_plot_vars_df <- rbind(subset(plot_vars_df, fit.feat)[, c("id", "importance")],
+# 									data.frame(id=names(dummy_imp_vctr),
+# 			                                   importance=dummy_imp_vctr))
     } else vld_plot_vars_df <- plot_vars_df
 
     #print(orderBy(~ -importance, vld_plot_vars_df))
@@ -1328,8 +1460,11 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
 }
 
 mymerge_feats_importance <- function(feats_df, sel_mdl, entity_df) {
-    plot_vars_df <- myextract_mdl_feats( sel_mdl, entity_df)
-    return(orderBy(~ -importance, merge( feats_df, plot_vars_df[,c("id", "importance")], all=TRUE)))
+    plot_vars_df <- myextract_mdl_feats(sel_mdl, entity_df)
+    mrg_feats_df <- orderBy(~ -importance,
+        merge(feats_df, plot_vars_df[,c("id", "importance")], all.x=TRUE))
+    row.names(mrg_feats_df) <- mrg_feats_df$id
+    return(mrg_feats_df)
 }
 
 ## 11.	    predict results for new data

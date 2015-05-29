@@ -74,13 +74,11 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         stop("Multiple feats not implemented with x variable.",
              "\n  Consider using facet parameter instead.")
 
-    if (!is.null(xcol_name)) {
-        if (!is.factor(df[, xcol_name])) {
-            xcol_name_par <- xcol_name
-            xcol_name <- paste(xcol_name_par, "fctr", sep="_")
-            warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)
-            df[, xcol_name] <- as.factor(df[, xcol_name_par])
-        }
+    if (!is.null(xcol_name) && !is.factor(df[, xcol_name])) {
+        xcol_name_par <- xcol_name
+        xcol_name <- paste(xcol_name_par, "fctr", sep="_")
+        warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)
+        df[, xcol_name] <- as.factor(df[, xcol_name_par])
     }
 
     if (!is.null(facet_spec)) {
@@ -97,10 +95,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         } else {
 #             medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df,
 #                                     FUN=c(median), na.rm=TRUE)
-            medians_df <- mycompute_medians_df(df[, c(ycol_names, xcol_name)],
+            stats_df <- mycompute_stats_df(df=df[, c(ycol_names, xcol_name)],
                                                byvars_lst=xcol_name)
-#            medians_df[, xcol_name] <- rownames(medians_df)
-            medians_df[, xcol_name] <- levels(df[, xcol_name])
             g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
         }
     } else {
@@ -115,29 +111,33 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     g <- g + geom_boxplot(fill="grey80", color="blue") +
              stat_summary(fun.y=mean, pch=22, geom='point', color='red')
 
+    offset = 1.05; offset_str = paste0(" * ", sprintf("%f", offset), " ")
+    median_name <- grep(".median", names(stats_df), fixed=TRUE, value=TRUE)
+    mean_name <- grep(".mean", names(stats_df), fixed=TRUE, value=TRUE)
+    stats_df[, paste0(median_name, ".offset.mult")] <-
+        ifelse(stats_df[, median_name] >= stats_df[, mean_name], 1.05, 0.95)
+    sav_g <- g
     if (length(ycol_names) == 1) {
-        if (class(df[, ycol_names]) == "num") {
+        if (class(df[, ycol_names]) == "num")
             g <- g + scale_y_continuous(labels=myformat_number)
 
-            aes_str <- paste0("y=", ycol_names, ".median * 1.05",
-                              ", label=myformat_number(round(", ycol_names, ".median))")
-        } else
-            aes_str <- paste0("y=", ycol_names, ".median",
-                              ", label=", ycol_names, ".median")
-
+        aes_str <- paste0("y=", ycol_names, ".median", " * ",
+                          ycol_names, ".median.offset.mult ",
+                            ", label=myformat_number(round(", ycol_names, ".median))")
+#                           ", label=", ycol_names, ".median")
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-        g <- g + geom_text(data=medians_df,
+        g <- g + geom_text(data=stats_df,
                            mapping=aes_mapping
                            , color="NavyBlue", size=3.5)
     } else {
-        g <- g + geom_text(data=medians_df,
+        g <- g + geom_text(data=stats_df,
                            mapping=aes_string(x="variable",
-                                              y="value.median * 1.05",
+                                              y="value.median", offset_str,
                                               label="myformat_number(round(value.median))")
                            , color="NavyBlue", size=3.5)
     }
 
-    g
+    return(g)
 }
 
 myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL, ...)
@@ -272,7 +272,7 @@ myplot_plotly <- function(ggplot_obj) {
 }
 
 myplot_prediction_classification <- function(df, feat_x, feat_y,
-                                            rsp_var, rsp_var_out,  id_vars) {
+                                    rsp_var, rsp_var_out, id_vars, prob_threshold=NULL) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
@@ -285,6 +285,14 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     predct_accurate_var_name <- paste0(rsp_var_out, ".accurate")
     df[,  predct_accurate_var_name] <-
         (df[,rsp_var] == df[,rsp_var_out])
+    predct_error_var_name <- paste0(rsp_var_out, ".error")
+    df[, predct_error_var_name] <- 0
+    if (glb_is_binomial) {
+        predct_prob_var_name <- paste0(rsp_var_out, ".prob")
+        if (!all(is.na(df[, predct_accurate_var_name])))
+            df[!df[, predct_accurate_var_name],  predct_error_var_name] <-
+                df[!df[, predct_accurate_var_name], predct_prob_var_name] - prob_threshold
+    } else stop("Multinomials not yet coded")
 
     # Attach labels to to prediction errors
     df$.label <- ""
@@ -305,7 +313,13 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
                                 paste0(".", rownames(df)[row_ix]))
     }
 
-    myprint_df(subset(df, .label != ""))
+    dsp_vars <- c(id_vars, grep(rsp_var, names(df), value=TRUE))
+    print("Min/Max Boundaries: ")
+    myprint_df(orderBy(reformulate(predct_error_var_name),
+                       subset(df[, c(dsp_vars, ".label")], .label != "")))
+    print("Inaccurate: ")
+    myprint_df(orderBy(reformulate(predct_error_var_name),
+                       df[!df[, predct_accurate_var_name], c(dsp_vars)]))
 
     return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
             geom_point(aes_string(color=color_var,
@@ -459,6 +473,7 @@ myplot_radar <- function(radar_inp_df, instance_var=names(radar_inp_df)[1], face
                 data.frame(scale(radar_inp_df[, keep_cols, FALSE], scale=TRUE, center=FALSE)),
                             radar_inp_df[, ".facet", FALSE])
 
+    require(plyr)
     radarData <- ddply(radar_scld_df, .(.facet), radarFix)
 
     radar_tmp_df <- cbind(radar_inp_df[, ".instance", FALSE],
