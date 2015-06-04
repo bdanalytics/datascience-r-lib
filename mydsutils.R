@@ -141,7 +141,7 @@ map_event_grp <- function(evtype) {
     return(retval)
 }
 
-#subset(entity_df, select=-c(interval))
+#subset(obs_df, select=-c(interval))
 
 # sql <- "SELECT EVTYPE, SUM(FATALITIES) AS FATALITIES, SUM(INJURIES) AS INJURIES,
 #                SUM(FATALITIES + INJURIES) AS health_dmg, SUM(1) AS storms_n
@@ -192,7 +192,7 @@ myaggregate_numorlgcl <- function (df, by_names, func) {
 
     return(agg_df)
 }
-#entity_agg_date_df <- myaggregate_numorlgcl(subset(entity_df,
+#entity_agg_date_df <- myaggregate_numorlgcl(subset(obs_df,
 #                                                   select=-c(interval)),
 #                                            "date", sum)
 
@@ -428,9 +428,9 @@ mycreate_xtab_df <- function(df, xtab_col_names) {
 
     return(cast_df)
 
-#     print(xtabs(~ Month_fctr + Arrest, entity_df))
+#     print(xtabs(~ Month_fctr + Arrest, obs_df))
 #
-# 	print(prblm_3_2_xtb <- xtabs(~ Month + Arrest, entity_df))
+# 	print(prblm_3_2_xtb <- xtabs(~ Month + Arrest, obs_df))
 # 	print(prblm_3_2_df <- data.frame(dimnames(prblm_3_2_xtb)[[1]],
 #                                  prblm_3_2_xtb[, 1],
 #                                  prblm_3_2_xtb[, 2]))
@@ -439,7 +439,7 @@ mycreate_xtab_df <- function(df, xtab_col_names) {
 #     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][2], sep="."))
 # 	print(prblm_3_2_df)
 #
-# 	print(prblm_3_3_tbl <- table(entity_df$Year, entity_df$Arrest))
+# 	print(prblm_3_3_tbl <- table(obs_df$Year, obs_df$Arrest))
 # 	print(prblm_3_3_df <- data.frame(Year=dimnames(prblm_3_3_tbl)[[1]],
 #                                  Arrest_FALSE=prblm_3_3_tbl[, 1],
 #                                  Arrest_TRUE =prblm_3_3_tbl[, 2]))
@@ -475,7 +475,7 @@ myfind_chr_cols_df <- function(df) {
                    function(col) ifelse(inherits(df[, col], "character"), col, ""))
     return(cols[cols != ""])
 }
-#myfind_chr_cols_df(glb_entity_df)
+#myfind_chr_cols_df(glb_obs_df)
 
 myfind_dups_df <- function(df) { stop("use native duplicated R fn") }
 
@@ -500,8 +500,8 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 
 ## 02.2	    manage (impute/delete) missing data
 #require(plyr)
-#intersect(names(entity_df), names(entity_agg_intrvl_df))
-#entimptd_df <- join(entity_df, entity_agg_intrvl_df, by="interval")
+#intersect(names(obs_df), names(entity_agg_intrvl_df))
+#entimptd_df <- join(obs_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
@@ -591,25 +591,25 @@ mycount_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
 ## 04.1	    simple shuffle sample
 ## 04.2     stratified shuffle sample
 mypartition_data <- function(more_stratify_vars=NULL) {
-    print(" "); print(sprintf("nrow(entity_df): %s", format(nrow(entity_df), big.mark=',')))
+    print(" "); print(sprintf("nrow(obs_df): %s", format(nrow(obs_df), big.mark=',')))
     if (missing(more_stratify_vars)) {
-        print(table(entity_df[, response_varname]))
+        print(table(obs_df[, response_varname]))
         keep_cols <- response_varname
     } else {
-        entity_tbl <- table(entity_df[, response_varname],
-                            entity_df[, more_stratify_vars])
+        entity_tbl <- table(obs_df[, response_varname],
+                            obs_df[, more_stratify_vars])
         print(entity_tbl)
         keep_cols <- c(response_varname, more_stratify_vars)
     }
 
-    inTrainValidate <- createDataPartition(y=entity_df[, response_varname],
+    inTrainValidate <- createDataPartition(y=obs_df[, response_varname],
                                            p=0.8, list=FALSE)
-    train_validate_df <- entity_df[inTrainValidate, keep_cols]
+    train_validate_df <- obs_df[inTrainValidate, keep_cols]
 
-    inTest <- setdiff(seq(1:nrow(entity_df)), inTrainValidate)
+    inTest <- setdiff(seq(1:nrow(obs_df)), inTrainValidate)
     inTest <- matrix(inTest, nrow=length(inTest),
                      dimnames=dimnames(inTrainValidate))
-    test_df <- entity_df[inTest, keep_cols]
+    test_df <- obs_df[inTest, keep_cols]
 
     inTrain <- createDataPartition(y=train_validate_df[, response_varname],
                                    p=0.8, list=FALSE)
@@ -621,8 +621,8 @@ mypartition_data <- function(more_stratify_vars=NULL) {
     validate_df <- train_validate_df[inValidate, keep_cols]
 
     chk_nrow <- nrow(train_df) + nrow(validate_df) + nrow(test_df)
-    if (nrow(entity_df) != chk_nrow)
-        stop("entity_df not partitioned properly; nrow(entity_df): ",
+    if (nrow(obs_df) != chk_nrow)
+        stop("obs_df not partitioned properly; nrow(obs_df): ",
              format(nrow(train_df), big.mark=','),
              " nrow of train+validate+test_df:",
              format(chk_nrow, big.mark=','))
@@ -643,9 +643,9 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 }
 # mypartition_data_lst <- mypartition_data(more_stratify_vars="user_name")
 # keep_cols <- c(feats_df$feature, response_varname, id_varnames)
-# train_df <- entity_df[mypartition_data_lst$inTrain, keep_cols]
-# validate_df <- entity_df[mypartition_data_lst$inValidate, keep_cols]
-# test_df <- entity_df[mypartition_data_lst$inTest, keep_cols]
+# train_df <- obs_df[mypartition_data_lst$inTrain, keep_cols]
+# validate_df <- obs_df[mypartition_data_lst$inValidate, keep_cols]
+# test_df <- obs_df[mypartition_data_lst$inTest, keep_cols]
 
 # all.equal(train_save_df, train_df)
 # setdiff(union(names(train_save_df), names(train_df)), intersect(names(train_save_df), names(train_df)))
@@ -655,8 +655,8 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 
 ## 05.      select features
 #require(plyr)
-#intersect(names(entity_df), names(entity_agg_intrvl_df))
-#entimptd_df <- join(entity_df, entity_agg_intrvl_df, by="interval")
+#intersect(names(obs_df), names(entity_agg_intrvl_df))
+#entimptd_df <- join(obs_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
 #                                                        steps))
 
@@ -698,20 +698,20 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    id features / create feature combinations for highly correlated features
-myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
+myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
 	require(reshape2)
     require(caret)
 
 	feats_df[, "cor.high.X"] <- NA
-    nzv_df <- nearZeroVar(entity_df[, setdiff(names(entity_df),
-                                              c(rsp_var, myfind_chr_cols_df(entity_df)))],
+    nzv_df <- nearZeroVar(obs_df[, setdiff(names(obs_df),
+                                              c(rsp_var, myfind_chr_cols_df(obs_df)))],
                           saveMetrics=TRUE)
     #nzv_df$id <- row.names(nzv_df)
     feats_df <- merge(feats_df, nzv_df, by="row.names", all=TRUE)
     row.names(feats_df) <- feats_df$id
     feats_df <- subset(feats_df, select=-Row.names)
     feats_df$myNearZV <- ifelse(feats_df$zeroVar |
-    	(feats_df$nzv & (feats_df$freqRatio > (nrow(subset(entity_df, .src == "Train")) / 4))),
+    	(feats_df$nzv & (feats_df$freqRatio > (nrow(subset(obs_df, .src == "Train")) / 4))),
     							TRUE, FALSE)
 
     cor_threshold <- feats_df[feats_df$id == ".rnorm", "cor.y.abs"]
@@ -723,8 +723,8 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
 	chk_feats <- subset(feats_df, (exclude.as.feat == 0) & !zeroVar)$id
 #     if (checkConditionalX) {
 #         require(caret)
-#         empty_dstrb_feats <- sort(chk_feats[checkConditionalX(entity_df[, chk_feats],
-#                                                          entity_df[, rsp_var])])
+#         empty_dstrb_feats <- sort(chk_feats[checkConditionalX(obs_df[, chk_feats],
+#                                                          obs_df[, rsp_var])])
 #         feats_df[feats_df$id %in% empty_dstrb_feats, "is.ConditionalX.y"] <- FALSE
 #         chk_feats <- setdiff(chk_feats, empty_dstrb_feats)
 #         feats_df[feats_df$id %in% chk_feats, "is.ConditionalX.y"] <- TRUE
@@ -738,7 +738,7 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
     	if (length(chk_feats) == 1)
     		break
 
-        corxx_mtrx <- cor(data.matrix(entity_df[, chk_feats]),
+        corxx_mtrx <- cor(data.matrix(obs_df[, chk_feats]),
         						use="pairwise.complete.obs")
         abs_corxx_mtrx <- abs(corxx_mtrx); diag(abs_corxx_mtrx) <- 0
         #print(abs_corxx_mtrx)
@@ -749,16 +749,16 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
         feat_1 <- rownames(abs_corxx_mtrx)[row_ix]
         feat_2 <- rownames(abs_corxx_mtrx)[col_ix]
         print(sprintf("cor(%s, %s)=%0.4f", feat_1, feat_2, corxx_mtrx[row_ix, col_ix]))
-#         print(myplot_scatter( entity_df, feat_1, feat_2))
+#         print(myplot_scatter( obs_df, feat_1, feat_2))
 
         print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_1,
              feats_df[feats_df$id == feat_1, "cor.y"]))
-    #     print(myplot_scatter( entity_df, rsp_var, feat_2))
+    #     print(myplot_scatter( obs_df, rsp_var, feat_2))
         print(sprintf("cor(%s, %s)=%0.4f", rsp_var, feat_2,
              feats_df[feats_df$id == feat_2, "cor.y"]))
-    #     print(myplot_scatter( entity_df, rsp_var, feat_2))
+    #     print(myplot_scatter( obs_df, rsp_var, feat_2))
 
-#         plot_df <- melt( entity_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
+#         plot_df <- melt( obs_df, id.vars=rsp_var, measure.vars=c(feat_1, feat_2))
 #         print(myplot_scatter(plot_df, rsp_var, "value",
 #                              facet_colcol_name="variable", smooth=TRUE))
 
@@ -1267,11 +1267,12 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 	set.seed(111)
     methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
     preProcess <- NULL
-    if (!inherits(model_method, "list") && (model_method == "rf")) {
-    	 methodControl <- "oob"    # cv is not useful for rf
-    	 print("performing pca pre-processing for rf")
-    	 preProcess <- c("pca")
-    }
+    # Need to figure out how to handle glb_featsimp_df; has PC1:PCn as feature names
+#     if (!inherits(model_method, "list") && (model_method == "rf")) {
+#     	 methodControl <- "oob"    # cv is not useful for rf
+#     	 print("performing pca pre-processing for rf")
+#     	 preProcess <- c("pca")
+#     }
 
 	if (is.null(model_summaryFunction))
 		myControl <- trainControl(method=methodControl, number=n_cv_folds,
