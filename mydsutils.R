@@ -771,8 +771,9 @@ myfind_cor_features <- function(feats_df, entity_df, rsp_var) {
 					abs( feats_df[ feats_df$id == feat_2, "cor.y"]),
 									feat_2, feat_1)
                 if (drop_feat == feat_1)
-                    feats_df[feats_df$id == feat_2, "cor.high.X"] <- drop_feat else
-                    feats_df[feats_df$id == feat_1, "cor.high.X"] <- drop_feat
+                    feats_df[feats_df$id == feat_1, "cor.high.X"] <- feat_2 else
+                    feats_df[feats_df$id == feat_2, "cor.high.X"] <- feat_1
+				#feats_df[feats_df$id %in% c(feat_1, feat_2), ]
 # 			}
 # 		}
 #         }
@@ -1019,6 +1020,7 @@ mycreate_random_classfr <- function() {
 				prob_df[row_ix, max_col_ix] <- tmp
 			}
 		}
+		#myprint_df(prob_df)
 		return(prob_df)
 	}
 	algrthm$sort <- function(x) x
@@ -1350,7 +1352,9 @@ myfit_mdl <- function(model_id, model_method, model_type="classification",
 	}
 
 	print(models_df)
-	glb_models_df <<- myrbind_df(glb_models_df, models_df)
+    all_models_df <- myrbind_df(glb_models_df, models_df)
+    row.names(all_models_df) <- all_models_df$model_id
+	glb_models_df <<- all_models_df
 
     return(list("model"=mdl, "models_df"= models_df))
 }
@@ -1465,6 +1469,29 @@ mymerge_feats_importance <- function(feats_df, sel_mdl, entity_df) {
         merge(feats_df, plot_vars_df[,c("id", "importance")], all.x=TRUE))
     row.names(mrg_feats_df) <- mrg_feats_df$id
     return(mrg_feats_df)
+}
+
+require(caret)
+
+myget_feats_importance <- function(mdl, featsimp_df=NULL) {
+    if ((inherits(mdl$finalModel, "randomForest")) &&
+            (mdl$modelType == "Regression")) {
+        # varImp for randomForest regression crashes in caret version:6.0.41
+        #   randomForest::importance provided IncNodePurity but
+        #       caret is looking for %IncMSE
+        thisimp_df <- as.data.frame(importance(mdl$finalModel))
+        thisimp_df[, paste0(".scld.", names(thisimp_df)[1])] <- thisimp_df[, 1] * 100.0 / max(thisimp_df[, 1])
+        thisimp_df <- thisimp_df[, paste0(".scld.", names(thisimp_df)[1]), FALSE]
+        names(thisimp_df) <- "Overall"
+    } else thisimp_df <- varImp(mdl)$importance
+    names(thisimp_df)[length(names(thisimp_df))] <- "importance"
+    if (is.null(featsimp_df)) featsimp_df <- thisimp_df else {
+        featsimp_df <- merge(subset(featsimp_df, select=-importance), thisimp_df,
+                             by="row.names", all=TRUE)
+        row.names(featsimp_df) <- featsimp_df$Row.names
+        featsimp_df <- subset(featsimp_df, select=-Row.names)
+    }
+    return(orderBy(~ -importance, featsimp_df))
 }
 
 ## 11.	    predict results for new data
