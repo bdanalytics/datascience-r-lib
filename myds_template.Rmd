@@ -1,6 +1,6 @@
 ---
 # Get YAML keywords from myYAML_ref.Rmd
-title: "<Project name>: <rsp_var_raw> <regression/classification>: <script_name>"
+title: "<Project name>: <rsp_var_raw> <regression/classification>:: <script_name>"
 author: "bdanalytics"
 
 # Choose one:
@@ -114,7 +114,7 @@ suppressPackageStartupMessages(require(doMC))
 registerDoMC(4) # max(length(glb_txt_vars), glb_n_cv_folds) + 1
 #packageVersion("snow")
 
-#require(sos); findFn("pinv", maxPages=2, sortby="MaxScore")
+#require(sos); findFn("cosine", maxPages=2, sortby="MaxScore")
 
 # Analysis control global variables
 glb_trnng_url <- "<trnng_url>"
@@ -398,38 +398,6 @@ dsp_class_dstrb <- function(var) {
     print(xtab_df / rowSums(xtab_df, na.rm=TRUE))    
 }    
 
-dsp_problem_data <- function(df, terminate=FALSE) {
-    print(sprintf("numeric data missing in %s: ", 
-                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
-    numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)), 
-                                function(col) sum(is.na(df[, col])))
-    numeric_missing <- numeric_missing[numeric_missing > 0]
-    print(numeric_missing)
-    numeric_feats_missing <- setdiff(names(numeric_missing), glb_exclude_vars_as_features)
-    if ((length(numeric_feats_missing) > 0) && terminate)
-        stop("terminating due to missing values")
-    
-    print(sprintf("numeric data w/ 0s in %s: ", 
-                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
-    print(sapply(setdiff(names(df), myfind_chr_cols_df(df)), 
-                 function(col) sum(df[, col] == 0, na.rm=TRUE)))
-    
-    print(sprintf("numeric data w/ Infs in %s: ", 
-                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
-    print(sapply(setdiff(names(df), myfind_chr_cols_df(df)), 
-                 function(col) sum(df[, col] == Inf, na.rm=TRUE)))
-    
-    print(sprintf("numeric data w/ NaNs in %s: ", 
-                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
-    print(sapply(setdiff(names(df), myfind_chr_cols_df(df)), 
-                 function(col) sum(df[, col] == NaN, na.rm=TRUE)))
-    
-    print(sprintf("string data missing in %s: ", 
-                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
-    print(sapply(setdiff(myfind_chr_cols_df(df), ".src"), 
-                        function(col) sum(df[, col] == "")))
-}
-
 # Performed repeatedly in other chunks
 glb_chk_data <- function() {
     # Histogram of predictor in glb_trnobs_df & glb_newobs_df
@@ -438,7 +406,7 @@ glb_chk_data <- function() {
     if (glb_is_classification) 
         dsp_class_dstrb(var=ifelse(glb_rsp_var %in% names(glb_allobs_df), 
                                    glb_rsp_var, glb_rsp_var_raw))
-    dsp_problem_data(glb_allobs_df)
+    mycheck_problem_data(glb_allobs_df)
 }
 glb_chk_data()
 
@@ -666,16 +634,6 @@ add_new_diag_feats <- function(obs_df, ref_df=glb_allobs_df) {
         .rnorm=rnorm(n=nrow(obs_df))
                         )
 
-    if (!is.null(glb_log_vars)) {
-        stop("not implemented yet")
-        # Cycle thru glb_log_vars & create logs
-#         <col_name>.log=log(1 + <col.name>),  
-        # Add raw_vars to glb_exclude_vars_as_features
-        # Add WordCount.log since WordCount is not distributed normally -> automatically do ???
-        print("Replacing WordCount with WordCount.log in potential feature set")
-        glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, "WordCount")
-    }      
-        
     # If levels of a factor are different across obs_df & glb_newobs_df; predict.glm fails  
     # Transformations not handled by mutate
 #     obs_df$<col_name>.fctr.num <- sapply(1:nrow(obs_df), 
@@ -687,6 +645,17 @@ add_new_diag_feats <- function(obs_df, ref_df=glb_allobs_df) {
     return(obs_df)
 }
 glb_allobs_df <- add_new_diag_feats(glb_allobs_df)
+
+# Add logs of numerics that are not distributed normally ->  do automatically ???
+if (!is.null(glb_log_vars)) {
+    # Cycle thru glb_log_vars & create logs
+    #         <col_name>.log=log(1 + <col.name>),  
+    for (col in glb_log_vars) 
+        glb_allobs_df[, paste0(col, ".log")] <- log(1 + glb_allobs_df[, col])
+    
+    # Add raw_vars to glb_exclude_vars_as_features
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_log_vars)
+}      
 
 # Check distributions of newly transformed / extracted vars
 #   Enhancement: remove vars that were displayed ealier
@@ -752,15 +721,17 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cleanse.data", major.inc=FALSE)
 #   2. Fill missing numerics with a different algorithm
 #   3. Fill missing chars with data based on clusters 
 
-dsp_problem_data(glb_allobs_df)
+mycheck_problem_data(glb_allobs_df)
 
 if (!is.null(glb_force_0_to_NA_vars)) {
-    warning("Forcing ", nrow(subset(glb_allobs_df, WordCount.log == 0)),
-            " obs with WordCount.log 0s to NA")
-    glb_allobs_df[glb_allobs_df$WordCount.log == 0, "WordCount.log"] <- NA
+    for (feat in glb_force_0_to_NA_vars) {
+        warning("Forcing ", sum(glb_allobs_df[, feat] == 0),
+                " obs with ", feat, " 0s to NAs")
+        glb_allobs_df[glb_allobs_df[, feat] == 0, feat] <- NA
+    }
 }
 
-dsp_problem_data(glb_allobs_df)
+mycheck_problem_data(glb_allobs_df)
 
 dsp_catgs <- function() {
     print("NewsDesk:")
@@ -1044,7 +1015,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FAL
 # glb_newobs_df <- na.omit(glb_newobs_df)
 # df[is.na(df)] <- 0
 
-dsp_problem_data(glb_allobs_df)
+mycheck_problem_data(glb_allobs_df)
 
 # Not refactored into mydsutils.R since glb_*_df might be reassigned
 glb_impute_missing_data <- function() {
@@ -1073,7 +1044,7 @@ if (glb_impute_na_data &&
     }
 }    
     
-dsp_problem_data(glb_allobs_df, terminate = TRUE)
+mycheck_problem_data(glb_allobs_df, terminate = TRUE)
 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "encode.data", major.inc=FALSE)
 ```
@@ -1551,6 +1522,8 @@ if (!is.null(glb_txt_vars)) {
         txt_X_df[, paste0(txt_var_pfx, ".ratio.sum.TfIdf.nwrds")] <- 
             txt_X_df[, paste0(txt_var_pfx, ".sum.TfIdf")] / 
             (exp(txt_X_df[, paste0(txt_var_pfx, ".nwrds.log")]) - 1)
+        txt_X_df[is.nan(txt_X_df[, paste0(txt_var_pfx, ".ratio.sum.TfIdf.nwrds")]),
+                 paste0(txt_var_pfx, ".ratio.sum.TfIdf.nwrds")] <- 0
 
         # Create <txt_var>.nchrs.log
         txt_X_df[, paste0(txt_var_pfx, ".nchrs.log")] <- 
@@ -1768,6 +1741,8 @@ if (glb_cluster) {
     glb_exclude_vars_as_features <- c(glb_exclude_vars_as_features, 
                                       ".clusterid")
     glb_interaction_only_features["myCategory.fctr"] <- c(".clusterid.fctr")
+    glb_exclude_vars_as_features <- c(glb_exclude_vars_as_features, 
+                                      cluster_vars)
 }
 
 # Re-partition
@@ -1800,6 +1775,8 @@ if (!is.null(glb_interaction_only_features))
     glb_feats_df[glb_feats_df$id %in% glb_interaction_only_features, "interaction.feat"] <-
         names(glb_interaction_only_features) else
     glb_feats_df$interaction.feat <- NA        
+
+mycheck_problem_data(glb_allobs_df, terminate = TRUE)
 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc=TRUE)
 ```

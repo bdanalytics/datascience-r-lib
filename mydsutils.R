@@ -264,6 +264,53 @@ mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
 # mycheck_prime(7)
 # mycheck_prime(9)
 
+mycheck_problem_data <- function(df, terminate=FALSE) {
+    print(sprintf("numeric data missing in %s: ",
+                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                              function(col) sum(is.na(df[, col])))
+    numeric_missing <- numeric_missing[numeric_missing > 0]
+    print(numeric_missing)
+    numeric_feats_missing <- setdiff(names(numeric_missing),
+                                     c(glb_exclude_vars_as_features, glb_rsp_var))
+    if ((length(numeric_feats_missing) > 0) && terminate)
+        stop("terminating due to missing values in: ", numeric_feats_missing)
+
+    print(sprintf("numeric data w/ 0s in %s: ",
+                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    numeric_Zero <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                          function(col) sum(df[, col] == 0, na.rm=TRUE))
+    numeric_Zero <- numeric_Zero[numeric_Zero > 0]
+    print(numeric_Zero)
+
+    print(sprintf("numeric data w/ Infs in %s: ",
+                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    numeric_Inf <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                 function(col) sum(df[, col] == Inf, na.rm=TRUE))
+    numeric_Inf <- numeric_Inf[numeric_Inf > 0]
+    print(numeric_Inf)
+    numeric_feats_Inf <- setdiff(names(numeric_Inf),
+                                     c(glb_exclude_vars_as_features, glb_rsp_var))
+    if ((length(numeric_feats_Inf) > 0) && terminate)
+        stop("terminating due to Inf values in: ", numeric_feats_Inf)
+
+    print(sprintf("numeric data w/ NaNs in %s: ",
+                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    numeric_NaN <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                          function(col) sum(df[, col] == NaN, na.rm=TRUE))
+    numeric_NaN <- numeric_NaN[numeric_NaN > 0]
+    print(numeric_NaN)
+    numeric_feats_NaN <- setdiff(names(numeric_NaN),
+                                 c(glb_exclude_vars_as_features, glb_rsp_var))
+    if ((length(numeric_feats_NaN) > 0) && terminate)
+        stop("terminating due to NaN values in: ", numeric_feats_NaN)
+
+    print(sprintf("string data missing in %s: ",
+                  ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    print(sapply(setdiff(myfind_chr_cols_df(df), ".src"),
+                 function(col) sum(df[, col] == "")))
+}
+
 mycheck_validarg <- function(value) {
 	     if (is.null(value)) 	return(FALSE)
 	else if (is.na(value))   	return(FALSE)
@@ -829,7 +876,18 @@ myprint_mdl <- function(mdl) {
     	return(TRUE)
     }
 
-    	plot(lcl_mdl, ask=FALSE)
+    if (inherits(lcl_mdl, "bayesglm")) {
+        # plot crashes in certain conditions
+        require(Matrix)
+        mqr <- qr(lcl_mdl)
+        if (length(lcl_mdl$residuals) == as.integer(nrow(mqr$qr)))
+            plot(lcl_mdl, ask=FALSE)
+
+        print(summary(lcl_mdl))
+        return(TRUE)
+    }
+
+        plot(lcl_mdl, ask=FALSE)
     	print(summary(lcl_mdl))
     	return(TRUE)
 
