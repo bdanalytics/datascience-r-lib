@@ -96,7 +96,7 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 #             medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df,
 #                                     FUN=c(median), na.rm=TRUE)
             stats_df <- mycompute_stats_df(df=df[, c(ycol_names, xcol_name)],
-                                               byvars_lst=xcol_name)
+                                               byvars_vctr=xcol_name)
             g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
         }
     } else {

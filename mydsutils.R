@@ -264,9 +264,20 @@ mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
 # mycheck_prime(7)
 # mycheck_prime(9)
 
+myfind_numerics_missing <- function(df) {
+    numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                              function(col) sum(is.na(df[, col])))
+    numeric_missing <- numeric_missing[numeric_missing > 0]
+    print(numeric_missing)
+    numeric_feats_missing <- setdiff(names(numeric_missing),
+                                     c(glb_exclude_vars_as_features, glb_rsp_var))
+    return(numeric_feats_missing)
+}
+
 mycheck_problem_data <- function(df, terminate=FALSE) {
     print(sprintf("numeric data missing in %s: ",
                   ifelse(!is.null(df_name <- comment(df)), df_name, "")))
+    # refactor this code with myfind_numerics_missing
     numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
                               function(col) sum(is.na(df[, col])))
     numeric_missing <- numeric_missing[numeric_missing > 0]
@@ -274,7 +285,7 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     numeric_feats_missing <- setdiff(names(numeric_missing),
                                      c(glb_exclude_vars_as_features, glb_rsp_var))
     if ((length(numeric_feats_missing) > 0) && terminate)
-        stop("terminating due to missing values in: ", numeric_feats_missing)
+        stop("terminating due to missing values in: ", paste(numeric_feats_missing, collapse=", "))
 
     print(sprintf("numeric data w/ 0s in %s: ",
                   ifelse(!is.null(df_name <- comment(df)), df_name, "")))
@@ -292,23 +303,34 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     numeric_feats_Inf <- setdiff(names(numeric_Inf),
                                      c(glb_exclude_vars_as_features, glb_rsp_var))
     if ((length(numeric_feats_Inf) > 0) && terminate)
-        stop("terminating due to Inf values in: ", numeric_feats_Inf)
+        stop("terminating due to Inf values in: ", paste(numeric_feats_Inf, collapse=", "))
 
     print(sprintf("numeric data w/ NaNs in %s: ",
                   ifelse(!is.null(df_name <- comment(df)), df_name, "")))
     numeric_NaN <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
-                          function(col) sum(df[, col] == NaN, na.rm=TRUE))
+                          function(col) sum(is.nan(df[, col])))
     numeric_NaN <- numeric_NaN[numeric_NaN > 0]
     print(numeric_NaN)
     numeric_feats_NaN <- setdiff(names(numeric_NaN),
                                  c(glb_exclude_vars_as_features, glb_rsp_var))
     if ((length(numeric_feats_NaN) > 0) && terminate)
-        stop("terminating due to NaN values in: ", numeric_feats_NaN)
+        stop("terminating due to NaN values in: ", paste(numeric_feats_NaN, collapse=", "))
 
     print(sprintf("string data missing in %s: ",
                   ifelse(!is.null(df_name <- comment(df)), df_name, "")))
     print(sapply(setdiff(myfind_chr_cols_df(df), ".src"),
                  function(col) sum(df[, col] == "")))
+
+    length_fctrs <- sapply(setdiff(myfind_fctr_cols_df(df), glb_rsp_var),
+                           function(feat) length(unique(df[, feat])))
+    length_fctrs <- length_fctrs[length_fctrs > 20]
+    if (length(length_fctrs) > 0) {
+        print("factors with high number of unique values: ")
+        print(length_fctrs)
+        if (terminate)
+            stop("terminating script")
+    }
+
 }
 
 mycheck_validarg <- function(value) {
@@ -335,6 +357,13 @@ mycompute_median <- function(vector) {
 #     	return(as.Date(median(vector, na.rm=TRUE), origin="1970-01-01"))
 
     return(median(vector, na.rm=TRUE))
+}
+
+mycompute_stats <- function(vector, stats=median) {
+    if (is.factor(vector))
+        return(factor(levels(vector)[stats(as.numeric(vector), na.rm=TRUE)],
+                      levels(vector)))
+    return(stats(vector, na.rm=TRUE))
 }
 
 mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
@@ -395,50 +424,54 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
-mycompute_stats_df <- function(df, byvars_lst=factor(0)) {
+mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
     if (class(df) != "data.frame")
         stop("df argument is not a data.frame: it is ", class(df))
 
     ret_df <- data.frame()
+    stats_fns <- c(median, mean); names(stats_fns) <- c(".median", ".mean")
 
     # gather numeric vars
     num_lst <- sapply(names(df), function(col)
         if (is.numeric(df[, col]) || is.factor(df[, col])) return(col))
-    num_vctr <- setdiff(unlist(num_lst[!sapply(num_lst, is.null)]), byvars_lst)
-    if (length(num_vctr) > 0)
-        ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_lst)), data=df,
-                            FUN=c(median, mean))
+    num_vctr <- setdiff(unlist(num_lst[!sapply(num_lst, is.null)]), byvars_vctr)
+    if (length(num_vctr) > 0) {
+        # Requires hard-coding of FUN ???
+#         ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
+#                             FUN=stats_fns)
+        ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
+                            FUN=c(median, mean), na.rm=TRUE)
+        row.names(ret_df) <- ret_df[, byvars_vctr]
+    }
 
     # summaryBy does not compute stats for factor / Date class variables
     non_num_lst <- sapply(names(df), function(col)
         if (!is.numeric(df[, col]) && !is.factor(df[, col])) return(col))
     non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
-    non_num_vctr <- setdiff(non_num_vctr, byvars_lst)
+    non_num_vctr <- setdiff(non_num_vctr, byvars_vctr)
     for (var in non_num_vctr) {
         #print("var="); print(var)
 
-        if (nrow(ret_df) == 0) {
-            ret_df <- ifelse(byvars_lst == factor(0),
-                            as.data.frame(mycompute_stats(df[, var])),
-                            as.data.frame(tapply(df[, var], df[, byvars_lst],
-                                                        FUN=mycompute_stats)))
-            names(ret_df) <- new_name
-        }
-        else {
-            if (byvars_lst == factor(0)) {
-                ret_df[, new_name] <- mycompute_median(df[, var])
-            } else {
-                ret_df[, new_name] <- tapply(df[, var], df[, byvars_lst],
-                                             FUN=mycompute_median)
-            }
-        }
+        this_df <- data.frame()
+        for (stat in stats_fns)
+            this_df <- mycbind_df(this_df,
+                             if (byvars_vctr == factor(0))
+                                as.data.frame(mycompute_stats(df[, var])) else
+                                as.data.frame(tapply(df[, var], df[, byvars_vctr],
+                                                     FUN=mycompute_stats, stat=stat)))
+        names(this_df) <- paste(var, names(stats_fns), sep="")
 
         # tapply strips class info
-        if (class(df[, var]) == "Date")
-            ret_df[, new_name] <- as.Date(ret_df[, new_name], origin="1970-01-01")
+        if (inherits(class(df[, var]), "Date")) {
+            for (col in names(this_df))
+                this_df[, col] <- as.Date(this_df[, col], origin="1970-01-01")
+        }
+
+        ret_df <- mycbind_df(ret_df, this_df)
     }
 
-    if (nrow(ret_df) == 1) rownames(ret_df) <- "median"
+    if (nrow(ret_df) == 1) rownames(ret_df) <- "stats" else
+        ret_df[, byvars_vctr] <- row.names(ret_df)
 
     return(ret_df)
 }
@@ -523,6 +556,13 @@ myfind_chr_cols_df <- function(df) {
     return(cols[cols != ""])
 }
 #myfind_chr_cols_df(glb_obs_df)
+
+myfind_fctr_cols_df <- function(df) {
+    cols <- sapply(names(df),
+                   function(col) ifelse(inherits(df[, col], "factor"), col, ""))
+    return(cols[cols != ""])
+}
+#myfind_fctr_cols_df(glb_allobs_df)
 
 myfind_dups_df <- function(df) { stop("use native duplicated R fn") }
 
@@ -718,13 +758,14 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
     vars_tbl <- summary( entity_df)
     numeric_vars <- names( entity_df)[grep("^Min.", vars_tbl[1,])]
 
-	# Collect factor vars
+	# Collect factor & logical vars
 	class_vctr <- sapply(names(entity_df), function(col_name) class(entity_df[, col_name]))
 	factor_vars <- names(class_vctr[class_vctr == "factor"])
+	logical_vars <- names(class_vctr[class_vctr == "logical"])
 
     # Exclude rsp_var & user-specified features
     #   keep user-specified excl. features since their cor.y is useful later
-    sel_feats <- setdiff(union(numeric_vars, factor_vars),
+    sel_feats <- setdiff(c(numeric_vars, factor_vars, logical_vars),
 #    						union(rsp_var, exclude_vars_as_features))
 	                        rsp_var)
 
@@ -737,6 +778,7 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
     feats_df$exclude.as.feat <- sapply(feats_df$id, function(id)
                            ifelse(id %in% exclude_vars_as_features, 1, 0))
     feats_df <- orderBy(~ -cor.y.abs, mutate(feats_df, cor.y.abs=abs(cor.y)))
+    row.names(feats_df) <- feats_df$id
     return(feats_df)
 }
 
@@ -754,6 +796,8 @@ myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
                                               c(rsp_var, myfind_chr_cols_df(obs_df)))],
                           saveMetrics=TRUE)
     #nzv_df$id <- row.names(nzv_df)
+#     print(setdiff(union(row.names(feats_df), row.names(nzv_df)), intersect(row.names(feats_df), row.names(nzv_df))))
+    #print(row.names(feats_df))
     feats_df <- merge(feats_df, nzv_df, by="row.names", all=TRUE)
     row.names(feats_df) <- feats_df$id
     feats_df <- subset(feats_df, select=-Row.names)
@@ -980,6 +1024,16 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) /
 					((2 * mrg_obs_xtab_df[2,3]) +
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
+}
+
+mycbind_df <- function(df1, df2) {
+    if (ncol(df1) == 0) return(df2)
+    if (ncol(df2) == 0) return(df1)
+
+    if (nrow(df1) != nrow(df2))
+        stop("not implemented yet")
+
+    return(cbind(df1, df2))
 }
 
 myrbind_df <- function(df1, df2) {
