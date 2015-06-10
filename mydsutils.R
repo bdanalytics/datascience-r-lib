@@ -321,7 +321,8 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     print(sapply(setdiff(myfind_chr_cols_df(df), ".src"),
                  function(col) sum(df[, col] == "")))
 
-    length_fctrs <- sapply(setdiff(myfind_fctr_cols_df(df), glb_rsp_var),
+    length_fctrs <- sapply(setdiff(myfind_fctr_cols_df(df),
+                                   c(glb_rsp_var, glb_exclude_vars_as_features)),
                            function(feat) length(unique(df[, feat])))
     length_fctrs <- length_fctrs[length_fctrs > 20]
     if (length(length_fctrs) > 0) {
