@@ -147,6 +147,11 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
                              show_stats=TRUE, facet_frmla=NULL) {
     require(ggplot2)
 
+    if (inherits(df[, hst_col_name], "character")) {
+        warning("converting ", hst_col_name, " to class:factor")
+        df[, hst_col_name] <- as.factor(df[, hst_col_name])
+    }
+
     if (is.null(fill_col_name)) {
         # Fill with raw counts
         p <- ggplot(df, aes_string(x=hst_col_name))
@@ -287,12 +292,19 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
         (df[,rsp_var] == df[,rsp_var_out])
     predct_error_var_name <- paste0(rsp_var_out, ".error")
     df[, predct_error_var_name] <- 0
-    if (glb_is_binomial) {
-        predct_prob_var_name <- paste0(rsp_var_out, ".prob")
-        if (!all(is.na(df[, predct_accurate_var_name])))
+    predct_prob_var_name <- paste0(rsp_var_out, ".prob")
+    tmp_vars <- grep("All\\.X", names(df), value=TRUE)
+    head(df[, c(glb_id_var, tmp_vars)])
+    if (!all(is.na(df[, predct_accurate_var_name]))) {
+        if (glb_is_binomial) {
             df[!df[, predct_accurate_var_name],  predct_error_var_name] <-
-                df[!df[, predct_accurate_var_name], predct_prob_var_name] - prob_threshold
-    } else stop("Multinomials not yet coded")
+                df[!df[, predct_accurate_var_name], predct_prob_var_name] -
+                prob_threshold
+        } else {
+            df[!df[, predct_accurate_var_name],  predct_error_var_name] <-
+                1 - df[!df[, predct_accurate_var_name], predct_prob_var_name]
+        }
+    }
 
     # Attach labels to to prediction errors
     df$.label <- ""

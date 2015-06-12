@@ -442,7 +442,13 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
 #                             FUN=stats_fns)
         ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
                             FUN=c(median, mean), na.rm=TRUE)
-        row.names(ret_df) <- ret_df[, byvars_vctr]
+
+        if (inherits(ret_df[, byvars_vctr], "factor") &&
+            sum(is.na(ret_df[, byvars_vctr])) > 0) {
+            row_names <- as.character(ret_df[, byvars_vctr])
+            row_names[is.na(row_names)] <- "NA"
+            row.names(ret_df) <- row_names
+        } else row.names(ret_df) <- ret_df[, byvars_vctr]
     }
 
     # summaryBy does not compute stats for factor / Date class variables
@@ -471,8 +477,9 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
         ret_df <- mycbind_df(ret_df, this_df)
     }
 
-    if (nrow(ret_df) == 1) rownames(ret_df) <- "stats" else
-        ret_df[, byvars_vctr] <- row.names(ret_df)
+#     if (nrow(ret_df) == 1) rownames(ret_df) <- "stats" else
+#         ret_df[, byvars_vctr] <- row.names(ret_df)
+    if (nrow(ret_df) == 1) rownames(ret_df) <- "stats"
 
     return(ret_df)
 }

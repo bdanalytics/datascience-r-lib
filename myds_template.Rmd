@@ -125,7 +125,7 @@ glb_save_envir <- FALSE # or TRUE
 glb_is_separate_newent_dataset <- FALSE    # or TRUE
 glb_split_entity_newent_datasets <- TRUE   # or FALSE
 glb_split_newdata_method <- "sample"          # "condition" or "sample" or "copy"
-glb_split_newdata_condition <- "<col_name> <condition_operator> <value>"    # or NULL
+glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
 glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
 glb_split_sample.seed <- 123               # or any integer
 glb_drop_vars <- c(NULL) # or c("<col_name>")
@@ -139,18 +139,19 @@ glb_rsp_var_raw <- "<rsp_var_raw>"
 glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 
 # if the response factor is based on numbers/logicals e.g (0/1 OR TRUE/FALSE vs. "A"/"B"), 
+#   or contains spaces (e.g. "Not in Labor Force")
 #   caret predict(..., type="prob") crashes
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
     #relevel(factor(ifelse(raw == 1, "Y", "N")), as.factor(c("Y", "N")), ref="N")
     #as.factor(paste0("B", raw))
-    #as.factor(raw)    
+    #as.factor(gsub(" ", "\\.", raw))    
 #}
 #glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
     #as.numeric(var) - 1
     #as.numeric(var)
-    #levels(var)[as.numeric(var)]
+    #gsub("\\.", " ", levels(var)[as.numeric(var)])
     #c(" <=50K", " >50K")[as.numeric(var)]
     #c(FALSE, TRUE)[as.numeric(var)]
 #}
@@ -167,6 +168,16 @@ glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
 # If glb_id_var == NULL, ".rownames <- row.names()" is the default
 glb_id_var <- NULL # or c("<var1>")
 glb_category_vars <- NULL # or c("<var1>", "<var2>")
+
+glb_map_vars <- NULL # or c("<var1>", "<var2>")
+glb_map_urls <- list();
+# glb_map_urls[["<var1>"]] <- "<var1.url>"
+
+glb_assign_pairs_lst <- NULL; 
+# glb_assign_pairs_lst[["<var1>"]] <- list(from=c(NA),
+#                                            to=c("NA.my"))
+glb_assign_vars <- names(glb_assign_pairs_lst)
+
 glb_date_vars <- NULL # or c("<date_var>")
 glb_date_fmts <- list(); #glb_date_fmts[["<date_var>"]] <- "%m/%e/%y"
 glb_date_tzs <- list();  #glb_date_tzs[["<date_var>"]] <- "America/New_York"
@@ -203,21 +214,17 @@ glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>")
 if (glb_rsp_var_raw != glb_rsp_var)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                             glb_rsp_var_raw)
-if (!is.null(glb_txt_vars))
-    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-                                          glb_txt_vars)
 
 # List feats that shd be excluded due to known causation by prediction variable
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                       c(NULL)) # or c("<col_name>")
 
-glb_interaction_only_features <- NULL # or ???
-
-glb_force_0_to_NA_vars <- NULL # or c("<numeric_var1>", "<numeric_var2>")
 glb_impute_na_data <- FALSE # or TRUE
 glb_mice_complete.seed <- 144 # or any integer
 
 glb_cluster <- FALSE # or TRUE
+
+glb_interaction_only_features <- NULL # or ???
 
 glb_models_lst <- list(); glb_models_df <- data.frame()
 # Regression
@@ -368,6 +375,9 @@ if (glb_is_separate_newent_dataset) {
         str(glb_trnobs_df)        
     }
 }         
+
+if ((num_nas <- sum(is.na(glb_trnobs_df[, glb_rsp_var_raw]))) > 0)
+    stop("glb_trnobs_df$", glb_rsp_var_raw, " contains NAs for ", num_nas, " obs")
 
 if (nrow(glb_trnobs_df) == nrow(glb_allobs_df))
     warning("glb_trnobs_df same as glb_allobs_df")
@@ -811,11 +821,11 @@ dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glb_allobs_df),
 #                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5))
 
 rm(srt_allobs_df, last1, last10, last100, pd)
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "cleanse.data", major.inc=FALSE)
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "scrub.data", major.inc=FALSE)
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r cleanse.data, cache=FALSE}
+```{r scrub.data, cache=FALSE}
 # Options:
 #   1. Not fill missing vars
 #   2. Fill missing numerics with a different algorithm
@@ -823,13 +833,13 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cleanse.data", major.inc=FALSE)
 
 mycheck_problem_data(glb_allobs_df)
 
-if (!is.null(glb_force_0_to_NA_vars)) {
-    for (feat in glb_force_0_to_NA_vars) {
-        warning("Forcing ", sum(glb_allobs_df[, feat] == 0),
-                " obs with ", feat, " 0s to NAs")
-        glb_allobs_df[glb_allobs_df[, feat] == 0, feat] <- NA
-    }
-}
+# if (!is.null(glb_force_0_to_NA_vars)) {
+#     for (feat in glb_force_0_to_NA_vars) {
+#         warning("Forcing ", sum(glb_allobs_df[, feat] == 0),
+#                 " obs with ", feat, " 0s to NAs")
+#         glb_allobs_df[glb_allobs_df[, feat] == 0, feat] <- NA
+#     }
+# }
 
 mycheck_problem_data(glb_allobs_df)
 
@@ -842,11 +852,12 @@ dsp_catgs <- function() {
     print(table(glb_allobs_df$SubsectionName))
 }
 
-sel_obs <- function(Popular=NULL, 
-                    NewsDesk=NULL, SectionName=NULL, SubsectionName=NULL,
-        Headline.contains=NULL, Snippet.contains=NULL, Abstract.contains=NULL,
-        Headline.pfx=NULL, NewsDesk.nb=NULL, .clusterid=NULL, myCategory=NULL,
-        perl=FALSE) {
+# sel_obs <- function(Popular=NULL, 
+#                     NewsDesk=NULL, SectionName=NULL, SubsectionName=NULL,
+#         Headline.contains=NULL, Snippet.contains=NULL, Abstract.contains=NULL,
+#         Headline.pfx=NULL, NewsDesk.nb=NULL, .clusterid=NULL, myCategory=NULL,
+#         perl=FALSE) {
+sel_obs <- function(vars_lst) {
     tmp_df <- glb_allobs_df
     # Does not work for Popular == NAs ???
     if (!is.null(Popular)) {
@@ -1103,12 +1114,77 @@ dsp_chisq.test <- function(...) {
 # table(WordCount_0_df$Popular, WordCount_0_df$WordCount, useNA="ifany")
 # myprint_df(WordCount_0_df[, 
 #                 c("UniqueID", "Popular", "WordCount", "Headline")])
+```
 
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FALSE)
+### Step ``r mydsp_chunk(glb_chunks_df)``
+```{r encode.data, cache=FALSE}
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "encode.data", major.inc=FALSE)
+
+# map_<col_name>_df <- myimport_data(
+#     url="<map_url>", 
+#     comment="map_<col_name>_df", print_diagn=TRUE)
+# map_<col_name>_df <- read.csv(paste0(getwd(), "/data/<file_name>.csv"), strip.white=TRUE)
+
+# glb_trnobs_df <- mymap_codes(glb_trnobs_df, "<from_col_name>", "<to_col_name>", 
+#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
+#                           map_tgt_col_name="<to_col_name>")
+# glb_newobs_df <- mymap_codes(glb_newobs_df, "<from_col_name>", "<to_col_name>", 
+#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
+#                           map_tgt_col_name="<to_col_name>")
+    					
+# glb_trnobs_df$<col_name>.fctr <- factor(glb_trnobs_df$<col_name>, 
+#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
+# glb_newobs_df$<col_name>.fctr <- factor(glb_newobs_df$<col_name>, 
+#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
+
+#sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
+if (!is.null(glb_map_vars)) {
+    for (feat in glb_map_vars) {
+        map_df <- myimport_data(url=glb_map_urls[[feat]], 
+                                            comment="map_df", 
+                                           print_diagn=TRUE)
+        glb_allobs_df <- mymap_codes(glb_allobs_df, feat, names(map_df)[2], 
+                                     map_df, map_join_col_name=names(map_df)[1], 
+                                     map_tgt_col_name=names(map_df)[2])
+    }
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_map_vars)
+}
+
+#stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
+for (feat in glb_assign_vars) {
+    new_feat <- paste0(feat, ".my")
+    print(sprintf("Forced Assignments for: %s -> %s...", feat, new_feat))
+    glb_allobs_df[, new_feat] <- glb_allobs_df[, feat]
+    
+    pairs <- glb_assign_pairs_lst[[feat]]
+    for (pair_ix in 1:length(pairs$from)) {
+        if (is.na(pairs$from[pair_ix]))
+            nobs <- nrow(filter(glb_allobs_df, 
+                                is.na(eval(parse(text=feat),
+                                            envir=glb_allobs_df)))) else
+            nobs <- sum(glb_allobs_df[, feat] == pairs$from[pair_ix])
+        #nobs <- nrow(filter(glb_allobs_df, is.na(Married.fctr)))    ; print(nobs)
+        
+        if ((is.na(pairs$from[pair_ix])) && (is.na(pairs$to[pair_ix])))
+            stop("what are you trying to do ???")
+        if (is.na(pairs$from[pair_ix]))
+            glb_allobs_df[is.na(glb_allobs_df[, feat]), new_feat] <- 
+                pairs$to[pair_ix] else
+            glb_allobs_df[glb_allobs_df[, feat] == pairs$from[pair_ix], new_feat] <- 
+                pairs$to[pair_ix]
+                    
+        print(sprintf("    %s -> %s for %s obs", 
+                      pairs$from[pair_ix], pairs$to[pair_ix], format(nobs, big.mark=",")))
+    }
+
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_assign_vars)
+}
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r manage.missing.data, cache=FALSE}
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FALSE)
+
 # print(sapply(names(glb_trnobs_df), function(col) sum(is.na(glb_trnobs_df[, col]))))
 # print(sapply(names(glb_newobs_df), function(col) sum(is.na(glb_newobs_df[, col]))))
 # glb_trnobs_df <- na.omit(glb_trnobs_df)
@@ -1148,34 +1224,12 @@ if (glb_impute_na_data &&
     
 mycheck_problem_data(glb_allobs_df, terminate = TRUE)
 
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "encode.data", major.inc=FALSE)
-```
-
-### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r encode.data, cache=FALSE}
-# map_<col_name>_df <- myimport_data(
-#     url="<map_url>", 
-#     comment="map_<col_name>_df", print_diagn=TRUE)
-# map_<col_name>_df <- read.csv(paste0(getwd(), "/data/<file_name>.csv"), strip.white=TRUE)
-
-# glb_trnobs_df <- mymap_codes(glb_trnobs_df, "<from_col_name>", "<to_col_name>", 
-#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
-#                           map_tgt_col_name="<to_col_name>")
-# glb_newobs_df <- mymap_codes(glb_newobs_df, "<from_col_name>", "<to_col_name>", 
-#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
-#                           map_tgt_col_name="<to_col_name>")
-    					
-# glb_trnobs_df$<col_name>.fctr <- factor(glb_trnobs_df$<col_name>, 
-#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
-# glb_newobs_df$<col_name>.fctr <- factor(glb_newobs_df$<col_name>, 
-#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
-
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features", major.inc=TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r extract.features, cache=FALSE}
 #```{r extract_features, cache=FALSE, eval=!is.null(glb_txt_vars)}
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features", major.inc=TRUE)
 extract.features_chunk_df <- myadd_chunk(NULL, "extract.features_bgn")
 
 # Options:
@@ -1206,6 +1260,7 @@ extract.features_chunk_df <- myadd_chunk(NULL, "extract.features_bgn")
 extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "factorize.str.vars"), major.inc=TRUE)
 
+#stop(here"); sav_allobs_df <- glb_allobs_df; #glb_allobs_df <- sav_allobs_df
 print(str_vars <- myfind_chr_cols_df(glb_allobs_df))
 if (length(str_vars <- setdiff(str_vars, 
                                glb_exclude_vars_as_features)) > 0) {
@@ -1736,6 +1791,8 @@ if (!is.null(glb_txt_vars)) {
 #     print(summary(glb_newobs_df))
 #     print(sapply(names(glb_newobs_df), function(col) sum(is.na(glb_newobs_df[, col]))))
 
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                          glb_txt_vars)
     rm(log_X_df, txt_X_df)
 }
 
@@ -1883,6 +1940,9 @@ if (!is.null(glb_interaction_only_features))
     glb_feats_df$interaction.feat <- NA        
 
 mycheck_problem_data(glb_allobs_df, terminate = TRUE)
+# glb_allobs_df %>% filter(is.na(Married.fctr)) %>% tbl_df()
+# glb_allobs_df %>% count(Married.fctr)
+# levels(glb_allobs_df$Married.fctr)
 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc=TRUE)
 ```
@@ -2597,6 +2657,8 @@ glb_get_predictions <- function(df, mdl_id, rsp_var_out, prob_threshold_def=NULL
     
     if (glb_is_classification && !glb_is_binomial) {
         df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
+        df[, paste0(rsp_var_out, ".prob")] <- 
+            predict(mdl, newdata=df, type="prob")
     }
 
     return(df)
