@@ -113,7 +113,6 @@ source("~/Dropbox/datascience/R/myplclust.R")
 suppressPackageStartupMessages(require(doMC))
 registerDoMC(4) # max(length(glb_txt_vars), glb_n_cv_folds) + 1
 #packageVersion("snow")
-
 #require(sos); findFn("cosine", maxPages=2, sortby="MaxScore")
 
 # Analysis control global variables
@@ -131,7 +130,8 @@ glb_split_sample.seed <- 123               # or any integer
 glb_drop_vars <- c(NULL) # or c("<col_name>")
 
 glb_max_fitent_obs <- NULL # or any integer                         
-glb_is_regression <- FALSE; glb_is_classification <- TRUE; glb_is_binomial <- TRUE
+glb_is_regression <- TRUE; glb_is_classification <- !glb_is_regression; 
+glb_is_binomial <- NULL # or TRUE or FALSE
 
 glb_rsp_var_raw <- "<rsp_var_raw>"
 
@@ -179,15 +179,16 @@ glb_assign_pairs_lst <- NULL;
 glb_assign_vars <- names(glb_assign_pairs_lst)
 
 glb_transform_lst <- NULL;
-glb_transform_lst[["<var>"]] <- list(
-    mapfn=function(raw) { tfr_raw <- as.character(raw); tfr_raw[is.na(tfr_raw)] <- "NA.my";
-                            return(as.factor(tfr_raw)) }
-    , sfx=".my.fctr")
-glb_transform_lst[["<var>"]] <- list(
-    mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
-                          tfr_raw[is.na(tfr_raw)] <- "NA.my";
-                          return(as.factor(tfr_raw)) }
-    , sfx=".my.fctr")
+# glb_transform_lst[["<var>"]] <- list(
+#     mapfn=function(raw) { tfr_raw <- as.character(raw); 
+#                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
+#                           return(as.factor(tfr_raw)) }
+#     , sfx=".my.fctr")
+# glb_transform_lst[["<var>"]] <- list(
+#     mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
+#                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
+#                           return(as.factor(tfr_raw)) }
+#     , sfx=".my.fctr")
 # mapfn(glb_allobs_df$<var>)
 # Add logs of numerics that are not distributed normally ->  do automatically ???
 glb_transform_vars <- names(glb_transform_lst)
@@ -2271,35 +2272,6 @@ for (method in glb_models_method_vctr) {
         model_id <- paste0(model_id_pfx, ".no.rnorm")
     } else model_id <- model_id_pfx
     
-    if (method %in% c("glm")) # for a "robust" glm model
-        indep_vars_vctr <- setdiff(indep_vars_vctr, c(NULL
-                                    ,"A.nchrs.log"      # correlated to "S.*"                                                      
-                                    ,"A.ndgts.log"      # correlated to "S.*"
-                                    ,"A.nuppr.log"      # correlated to "S.*"
-                                    ,"A.npnct01.log" # identical  to "S.npnct01.log"
-                                    ,"A.npnct03.log" # correlated to "S.npnct03.log"
-                                    ,"A.npnct04.log" # correlated to "S.npnct04.log"
-                                    ,"A.npnct06.log" # identical  to "S.npnct06.log"
-                                    ,"A.npnct07.log" # identical  to "S.npnct07.log"
-                                    ,"A.npnct08.log" # correlated to "S.npnct08.log"
-                                    ,"A.npnct11.log" # correlated to "S.*"
-                                    ,"A.npnct12.log" # correlated to "S.*"
-                                    ,"S.npnct14.log" # correlated to "A.*"
-                                    ,"A.npnct15.log" # correlated to "S.npnct15.log"
-                                    ,"A.npnct16.log" # correlated to "S.npnct16.log"
-                                    ,"A.npnct19.log" # correlated to "S.*"
-                                    ,"A.npnct20.log" # identical  to "S.npnct20.log"
-                                    ,"A.npnct21.log" # correlated to "S.npnct21.log"
-                                    ,"A.P.daily.clip.report" # identical  to "S.*"
-                                    ,"S.P.daily.clip.report" # identical  to "H.*"
-                                    ,"A.P.http" # correlated  to "A.npnct14.log"
-                                    ,"A.P.fashion.week" # identical  to "S.*"
-                                    ,"H.P.first.draft" # correlated  to "H.T.first"
-                                    ,"A.P.first.draft" # identical  to "S.*"
-                                    ,"A.P.metropolitan.diary.colon" # identical  to "S.*"
-                                    ,"A.P.year.colon" # identical  to "S.P.year.colon"
-                                                      ))
-    
     ret_lst <- myfit_mdl(model_id=model_id, model_method=method,
                             indep_vars_vctr=indep_vars_vctr,
                             model_type=glb_model_type,
@@ -2346,6 +2318,9 @@ for (method in glb_models_method_vctr) {
 }
 
 # User specified
+# sav_models_lst <- glb_models_lst; sav_models_df <- glb_models_df; sav_featsimp_df <- glb_featsimp_df
+# glb_models_lst <- sav_models_lst; glb_models_df <- sav_models_df; glm_featsimp_df <- sav_featsimp_df
+
     # easier to exclude features
 #model_id_pfx <- "";
 # indep_vars_vctr <- setdiff(names(glb_fitobs_df), 
@@ -2354,9 +2329,6 @@ for (method in glb_models_method_vctr) {
 # method <- ""                                
 
     # easier to include features
-# sav_models_lst <- glb_models_lst; sav_models_df <- glb_models_df; sav_featsimp_df <- glb_featsimp_df
-# glb_models_lst <- sav_models_lst; glb_models_df <- sav_models_df; glm_featsimp_df <- sav_featsimp_df
-#table(glb_allobs_df$myCategory, glb_allobs_df$H.P.readers.respond, glb_allobs_df[, glb_rsp_var], useNA="ifany")
 #model_id <- "Rank9.2"; indep_vars_vctr <- c(NULL
 #    ,"<feat1>"
 #    ,"<feat1>*<feat2>"
@@ -2942,6 +2914,41 @@ print(sprintf("glb_sel_mdl_id: %s", glb_sel_mdl_id))
 print(sprintf("glb_fin_mdl_id: %s", glb_fin_mdl_id))
 print(dim(glb_fitobs_df))
 print(dsp_models_df)
+if (glb_is_regression) {
+    print(sprintf("%s OOB RMSE: %0.4f", glb_sel_mdl_id,
+                  glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "min.RMSE.OOB"]))
+
+    if (!is.null(glb_category_vars)) {
+        stop("not implemented yet")
+        tmp_OOBobs_df <- glb_OOBobs_df[, c(glb_category_vars, predct_accurate_var_name)]
+        names(tmp_OOBobs_df)[length(names(tmp_OOBobs_df))] <- "accurate.OOB"
+        aOOB_ctgry_df <- mycreate_xtab_df(tmp_OOBobs_df, names(tmp_OOBobs_df)) 
+        aOOB_ctgry_df[is.na(aOOB_ctgry_df)] <- 0
+        aOOB_ctgry_df <- mutate(aOOB_ctgry_df, 
+                                .n.OOB = accurate.OOB.FALSE + accurate.OOB.TRUE,
+                                max.accuracy.OOB = accurate.OOB.TRUE / .n.OOB)
+        #intersect(names(glb_ctgry_df), names(aOOB_ctgry_df))
+        glb_ctgry_df <- merge(glb_ctgry_df, aOOB_ctgry_df, all=TRUE)
+        print(orderBy(~-accurate.OOB.FALSE, glb_ctgry_df))
+    }
+    
+    if ((glb_rsp_var %in% names(glb_newobs_df)) &&
+        !(any(is.na(glb_newobs_df[, glb_rsp_var])))) {
+            pred_stats_df <- 
+                mypredict_mdl(mdl=glb_models_lst[[glb_fin_mdl_id]], 
+                              df=glb_newobs_df, 
+                              rsp_var=glb_rsp_var, 
+                              rsp_var_out=glb_rsp_var_out, 
+                              model_id_method=glb_fin_mdl_id, 
+                              label="new",
+						      model_summaryFunction=glb_sel_mdl$control$summaryFunction, 
+						      model_metric=glb_sel_mdl$metric,
+						      model_metric_maximize=glb_sel_mdl$maximize,
+						      ret_type="stats")        
+            print(sprintf("%s prediction stats for glb_newobs_df:", glb_fin_mdl_id))
+            print(pred_stats_df)
+    }    
+}    
 if (glb_is_classification) {
     print(sprintf("%s OOB confusion matrix & accuracy: ", glb_sel_mdl_id))
     print(t(confusionMatrix(glb_OOBobs_df[, paste0(glb_rsp_var_out, glb_sel_mdl_id)], 
