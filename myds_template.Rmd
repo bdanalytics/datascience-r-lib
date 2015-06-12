@@ -178,6 +178,20 @@ glb_assign_pairs_lst <- NULL;
 #                                            to=c("NA.my"))
 glb_assign_vars <- names(glb_assign_pairs_lst)
 
+glb_transform_lst <- NULL;
+glb_transform_lst[["<var>"]] <- list(
+    mapfn=function(raw) { tfr_raw <- as.character(raw); tfr_raw[is.na(tfr_raw)] <- "NA.my";
+                            return(as.factor(tfr_raw)) }
+    , sfx=".my.fctr")
+glb_transform_lst[["<var>"]] <- list(
+    mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
+                          tfr_raw[is.na(tfr_raw)] <- "NA.my";
+                          return(as.factor(tfr_raw)) }
+    , sfx=".my.fctr")
+# mapfn(glb_allobs_df$<var>)
+# Add logs of numerics that are not distributed normally ->  do automatically ???
+glb_transform_vars <- names(glb_transform_lst)
+
 glb_date_vars <- NULL # or c("<date_var>")
 glb_date_fmts <- list(); #glb_date_fmts[["<date_var>"]] <- "%m/%e/%y"
 glb_date_tzs <- list();  #glb_date_tzs[["<date_var>"]] <- "America/New_York"
@@ -207,10 +221,8 @@ glb_sprs_thresholds <- NULL # or c(0.988, 0.970, 0.970) # Generates 29, 22, 22 t
 #       numrows(glb_OOBobs_df) = 1.1 * numrows(glb_newobs_df)
 names(glb_sprs_thresholds) <- glb_txt_vars
 
-glb_log_vars <- NULL # or c("<numeric_var1>", "<numeric_var2>")
-
-# List transformed vars  
-glb_exclude_vars_as_features <- c(NULL) # or c("<var_name>") 
+# User-specified exclusions  
+glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
 if (glb_rsp_var_raw != glb_rsp_var)
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
                                             glb_rsp_var_raw)
@@ -747,17 +759,6 @@ require(dplyr)
 # #                     grepl("STORE", <descriptor>.my)))
 # glb_exclude_vars_as_features <- c(glb_exclude_vars_as_features, "<descriptor>")
 
-# Add logs of numerics that are not distributed normally ->  do automatically ???
-if (!is.null(glb_log_vars)) {
-    # Cycle thru glb_log_vars & create logs
-    #         <col_name>.log=log(1 + <col.name>),  
-    for (col in glb_log_vars) 
-        glb_allobs_df[, paste0(col, ".log")] <- log(1 + glb_allobs_df[, col])
-    
-    # Add raw_vars to glb_exclude_vars_as_features
-    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_log_vars)
-}      
-
 # Check distributions of newly transformed / extracted vars
 #   Enhancement: remove vars that were displayed ealier
 dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glb_allobs_df), 
@@ -1117,26 +1118,10 @@ dsp_chisq.test <- function(...) {
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r encode.data, cache=FALSE}
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "encode.data", major.inc=FALSE)
+```{r transform.data, cache=FALSE}
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "transform.data", major.inc=FALSE)
 
-# map_<col_name>_df <- myimport_data(
-#     url="<map_url>", 
-#     comment="map_<col_name>_df", print_diagn=TRUE)
-# map_<col_name>_df <- read.csv(paste0(getwd(), "/data/<file_name>.csv"), strip.white=TRUE)
-
-# glb_trnobs_df <- mymap_codes(glb_trnobs_df, "<from_col_name>", "<to_col_name>", 
-#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
-#                           map_tgt_col_name="<to_col_name>")
-# glb_newobs_df <- mymap_codes(glb_newobs_df, "<from_col_name>", "<to_col_name>", 
-#     map_<to_col_name>_df, map_join_col_name="<map_join_col_name>", 
-#                           map_tgt_col_name="<to_col_name>")
-    					
-# glb_trnobs_df$<col_name>.fctr <- factor(glb_trnobs_df$<col_name>, 
-#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
-# glb_newobs_df$<col_name>.fctr <- factor(glb_newobs_df$<col_name>, 
-#                     as.factor(union(glb_trnobs_df$<col_name>, glb_newobs_df$<col_name>)))
-
+### Mapping dictionary
 #sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
 if (!is.null(glb_map_vars)) {
     for (feat in glb_map_vars) {
@@ -1150,6 +1135,7 @@ if (!is.null(glb_map_vars)) {
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_map_vars)
 }
 
+### Forced Assignments
 #stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
 for (feat in glb_assign_vars) {
     new_feat <- paste0(feat, ".my")
@@ -1178,6 +1164,16 @@ for (feat in glb_assign_vars) {
     }
 
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_assign_vars)
+}
+
+### Transformations using mapping functions
+#stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
+for (feat in glb_transform_vars) {
+    new_feat <- paste0(feat, glb_transform_lst[[feat]]$sfx)
+    print(sprintf("Applying mapping function for: %s -> %s...", feat, new_feat))
+    glb_allobs_df[, new_feat] <- glb_transform_lst[[feat]]$mapfn(glb_allobs_df[, feat])
+
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_transform_vars)
 }
 ```
 
