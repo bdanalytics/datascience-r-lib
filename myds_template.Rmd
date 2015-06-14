@@ -180,16 +180,12 @@ glb_assign_vars <- names(glb_assign_pairs_lst)
 
 glb_transform_lst <- NULL;
 # glb_transform_lst[["<var>"]] <- list(
-#     mapfn=function(raw) { tfr_raw <- as.character(raw); 
-#                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
-#                           return(as.factor(tfr_raw)) }
-#     , sfx=".my.fctr")
-# glb_transform_lst[["<var>"]] <- list(
 #     mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
 #                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
 #                           return(as.factor(tfr_raw)) }
 #     , sfx=".my.fctr")
 # mapfn(glb_allobs_df$<var>)
+# glb_transform_lst[["<var1>"]] <- glb_transform_lst[["<var2>"]]
 # Add logs of numerics that are not distributed normally ->  do automatically ???
 glb_transform_vars <- names(glb_transform_lst)
 
@@ -332,6 +328,8 @@ glb_chunks_df <- myadd_chunk(NULL, "import.data")
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 #### chunk option: eval=<r condition>
 ```{r import.data, cache=FALSE} 
+#glb_chunks_df <- myadd_chunk(NULL, "import.data")
+
 glb_trnobs_df <- myimport_data(url=glb_trnng_url, comment="glb_trnobs_df", 
                                 force_header=TRUE)
 
@@ -343,6 +341,9 @@ glb_trnobs_df <- myimport_data(url=glb_trnng_url, comment="glb_trnobs_df",
 #     sym_trnobs_df$Symbol <- symbol
 #     glb_trnobs_df <- myrbind_df(glb_trnobs_df, sym_trnobs_df)
 # }
+                                
+# glb_trnobs_df <- 
+#     glb_trnobs_df %>% dplyr::filter(Year >= 1999)
                                 
 if (glb_is_separate_newent_dataset) {
     glb_newobs_df <- myimport_data(url=glb_newdt_url, comment="glb_newobs_df", 
@@ -820,7 +821,8 @@ dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glb_allobs_df),
 # print(myplot_scatter(glb_allobs_df, "<col1_name>", "<col2_name>", smooth=TRUE))
 # print(myplot_scatter(glb_allobs_df, "<col1_name>", "<col2_name>", colorcol_name="<Pred.fctr>") + 
 #         geom_point(data=subset(glb_allobs_df, <condition>), 
-#                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5))
+#                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5) +
+#         geom_vline(xintercept=84))
 
 rm(srt_allobs_df, last1, last10, last100, pd)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "scrub.data", major.inc=FALSE)
@@ -2344,6 +2346,7 @@ for (method in glb_models_method_vctr) {
 # #     csm_mdl_id <- paste0(model_id, ".", method)
 # #     csm_featsimp_df <- myget_feats_importance(glb_models_lst[[paste0(model_id, ".", method)]]);         print(head(csm_featsimp_df))
 # }
+#print(dsp_models_df <- orderBy(model_sel_frmla, glb_models_df)[, dsp_models_cols])
 #csm_featsimp_df[grepl("H.npnct19.log", row.names(csm_featsimp_df)), , FALSE]
 #csm_OOBobs_df <- glb_get_predictions(glb_OOBobs_df, mdl_id=csm_mdl_id, rsp_var_out=glb_rsp_var_out, prob_threshold_def=glb_models_df[glb_models_df$model_id == csm_mdl_id, "opt.prob.threshold.OOB"])
 #print(sprintf("%s OOB confusion matrix & accuracy: ", csm_mdl_id)); print(t(confusionMatrix(csm_OOBobs_df[, paste0(glb_rsp_var_out, csm_mdl_id)], csm_OOBobs_df[, glb_rsp_var])$table))
@@ -3059,6 +3062,13 @@ dsp_hdlpfx_results <- function(hdlpfx) {
 #     c("zeroVar", "nzv", "myNearZV", 
 #       grep("importance", names(glb_feats_df), fixed=TRUE, value=TRUE))])
 print(orderBy(as.formula(paste0("~ -", glb_sel_mdl_id, ".importance")), glb_featsimp_df))
+
+# players_df <- data.frame(id=c("Chavez", "Giambi", "Menechino", "Myers", "Pena"),
+#                          OBP=c(0.338, 0.391, 0.369, 0.313, 0.361),
+#                          SLG=c(0.540, 0.450, 0.374, 0.447, 0.500),
+#                         cost=c(1400000, 1065000, 295000, 800000, 300000))
+# players_df$RS.predict <- predict(glb_models_lst[[csm_mdl_id]], players_df)
+# print(orderBy(~ -RS.predict, players_df))
 
 print(setdiff(names(glb_trnobs_df), names(glb_allobs_df)))
 for (col in setdiff(names(glb_trnobs_df), names(glb_allobs_df)))

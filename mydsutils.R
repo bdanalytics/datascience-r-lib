@@ -1595,6 +1595,8 @@ mymerge_feats_importance <- function(feats_df, sel_mdl, entity_df) {
 require(caret)
 
 myget_feats_importance <- function(mdl, featsimp_df=NULL) {
+    # For some models, if there is only one feature, varImp returns NaN due to bug in scaling
+
     if ((inherits(mdl$finalModel, "randomForest")) &&
             (mdl$modelType == "Regression")) {
         # varImp for randomForest regression crashes in caret version:6.0.41
