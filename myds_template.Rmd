@@ -38,6 +38,16 @@ setwd("~/Documents/Work/<path>")
 
 Based on analysis utilizing <> techniques, <conclusion heading>:  
 
+Regression results:
+First run:
+    <glb_sel_mdl_id>: 
+        OOB_RMSE=<0.4f>; new_RMSE=<0.4f>; <feat1>=<imp>; <feat2>=<imp>
+
+Classification results:
+First run:
+    <glb_sel_mdl_id>: 
+        OOB_conf_mtrx=[NY, YN]=<sum>; <feat1>=<imp>; <feat2>=<imp>
+
 ### ![](<filename>.png)
 
 ## Potential next steps include:
@@ -121,17 +131,16 @@ glb_newdt_url <- "<newdt_url>"
 glb_out_pfx <- "<script_name>_"
 glb_save_envir <- FALSE # or TRUE
 
-glb_is_separate_newent_dataset <- FALSE    # or TRUE
-glb_split_entity_newent_datasets <- TRUE   # or FALSE
-glb_split_newdata_method <- "sample"          # "condition" or "sample" or "copy"
-glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
-glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
-glb_split_sample.seed <- 123               # or any integer
-glb_drop_vars <- c(NULL) # or c("<col_name>")
+glb_is_separate_newobs_dataset <- FALSE    # or TRUE
+    glb_split_entity_newobs_datasets <- TRUE   # or FALSE
+    glb_split_newdata_method <- "sample"          # "condition" or "sample" or "copy"
+    glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
+    glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
+    glb_split_sample.seed <- 123               # or any integer
 
 glb_max_fitent_obs <- NULL # or any integer                         
 glb_is_regression <- TRUE; glb_is_classification <- !glb_is_regression; 
-glb_is_binomial <- NULL # or TRUE or FALSE
+    glb_is_binomial <- NULL # or TRUE or FALSE
 
 glb_rsp_var_raw <- "<rsp_var_raw>"
 
@@ -142,20 +151,20 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 #   or contains spaces (e.g. "Not in Labor Force")
 #   caret predict(..., type="prob") crashes
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
-    #relevel(factor(ifelse(raw == 1, "Y", "N")), as.factor(c("Y", "N")), ref="N")
-    #as.factor(paste0("B", raw))
-    #as.factor(gsub(" ", "\\.", raw))    
-#}
-#glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
+#     relevel(factor(ifelse(raw == 1, "Y", "N")), as.factor(c("Y", "N")), ref="N")
+#     #as.factor(paste0("B", raw))
+#     #as.factor(gsub(" ", "\\.", raw))    
+# }
+# glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
-    #as.numeric(var) - 1
-    #as.numeric(var)
-    #gsub("\\.", " ", levels(var)[as.numeric(var)])
-    #c(" <=50K", " >50K")[as.numeric(var)]
-    #c(FALSE, TRUE)[as.numeric(var)]
-#}
-#glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0)))
+#     as.numeric(var) - 1
+#     #as.numeric(var)
+#     #gsub("\\.", " ", levels(var)[as.numeric(var)])
+#     #c(" <=50K", " >50K")[as.numeric(var)]
+#     #c(FALSE, TRUE)[as.numeric(var)]
+# }
+# glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0)))
 
 if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
     stop("glb_map_rsp_raw_to_var function expected")
@@ -168,6 +177,7 @@ glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
 # If glb_id_var == NULL, ".rownames <- row.names()" is the default
 glb_id_var <- NULL # or c("<var1>")
 glb_category_vars <- NULL # or c("<var1>", "<var2>")
+glb_drop_vars <- c(NULL) # or c("<col_name>")
 
 glb_map_vars <- NULL # or c("<var1>", "<var2>")
 glb_map_urls <- list();
@@ -217,6 +227,15 @@ glb_sprs_thresholds <- NULL # or c(0.988, 0.970, 0.970) # Generates 29, 22, 22 t
 #   Select terms that appear in at least 0.2 * O(FP/FN(glb_OOBobs_df))
 #       numrows(glb_OOBobs_df) = 1.1 * numrows(glb_newobs_df)
 names(glb_sprs_thresholds) <- glb_txt_vars
+
+# Derived features (consolidate this with transform features ???)
+glb_derive_lst <- NULL;
+# glb_derive_lst[["PTS.diff"]] <- list(
+#     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
+#     , args=c("PTS", "oppPTS"))
+# args_lst <- NULL; for (arg in glb_derive_lst[["PTS.diff"]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; do.call(mapfn, args_lst)
+# glb_derive_lst[["<var1>"]] <- glb_derive_lst[["<var2>"]]
+glb_derive_vars <- names(glb_derive_lst)
 
 # User-specified exclusions  
 glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
@@ -345,7 +364,7 @@ glb_trnobs_df <- myimport_data(url=glb_trnng_url, comment="glb_trnobs_df",
 # glb_trnobs_df <- 
 #     glb_trnobs_df %>% dplyr::filter(Year >= 1999)
                                 
-if (glb_is_separate_newent_dataset) {
+if (glb_is_separate_newobs_dataset) {
     glb_newobs_df <- myimport_data(url=glb_newdt_url, comment="glb_newobs_df", 
                                    force_header=TRUE)
     
@@ -354,7 +373,7 @@ if (glb_is_separate_newent_dataset) {
     comment(glb_allobs_df) <- "glb_allobs_df"
 } else {
     glb_allobs_df <- glb_trnobs_df; comment(glb_allobs_df) <- "glb_allobs_df"
-    if (!glb_split_entity_newent_datasets) {
+    if (!glb_split_entity_newobs_datasets) {
         stop("Not implemented yet") 
         glb_newobs_df <- glb_trnobs_df[sample(1:nrow(glb_trnobs_df),
                                           max(2, nrow(glb_trnobs_df) / 1000)),]                    
@@ -384,7 +403,7 @@ if (glb_is_separate_newent_dataset) {
     myprint_df(glb_newobs_df)
     str(glb_newobs_df)
 
-    if (glb_split_entity_newent_datasets) {
+    if (glb_split_entity_newobs_datasets) {
         myprint_df(glb_trnobs_df)
         str(glb_trnobs_df)        
     }
@@ -418,7 +437,7 @@ if (sum(duplicated(glb_allobs_df[, glb_id_var, FALSE])) > 0)
     stop(glb_id_var, " duplicated in glb_allobs_df")
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_id_var)
 
-# Combine trnent & newent into glb_allobs_df for easier manipulation
+# Combine trnent & newobs into glb_allobs_df for easier manipulation
 glb_trnobs_df$.src <- "Train"; glb_newobs_df$.src <- "Test"; 
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, ".src")
 glb_allobs_df <- myrbind_df(glb_trnobs_df, glb_newobs_df)
@@ -1177,6 +1196,16 @@ for (feat in glb_transform_vars) {
     glb_allobs_df[, new_feat] <- glb_transform_lst[[feat]]$mapfn(glb_allobs_df[, feat])
 
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_transform_vars)
+}
+
+### Derivations using mapping functions
+#stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
+for (new_feat in glb_derive_vars) {
+    print(sprintf("Creating new feature: %s...", new_feat))
+    args_lst <- NULL 
+    for (arg in glb_derive_lst[[new_feat]]$args) 
+        args_lst[[arg]] <- glb_allobs_df[, arg]
+    glb_allobs_df[, new_feat] <- do.call(glb_derive_lst[[new_feat]]$mapfn, args_lst)
 }
 ```
 
@@ -1990,11 +2019,11 @@ dsp_class_dstrb <- function(obs_df, location_var, partition_var) {
 if (!is.null(glb_category_vars)) {
     if (glb_is_classification)
         dsp_class_dstrb(glb_allobs_df, ".lcn", glb_rsp_var_raw)
-    newent_ctgry_df <- mycreate_sqlxtab_df(subset(glb_allobs_df, .src == "Test"), 
+    newobs_ctgry_df <- mycreate_sqlxtab_df(subset(glb_allobs_df, .src == "Test"), 
                                            glb_category_vars)
     OOBobs_ctgry_df <- mycreate_sqlxtab_df(subset(glb_allobs_df, .lcn == "OOB"), 
                                            glb_category_vars)
-    glb_ctgry_df <- merge(newent_ctgry_df, OOBobs_ctgry_df, by=glb_category_vars
+    glb_ctgry_df <- merge(newobs_ctgry_df, OOBobs_ctgry_df, by=glb_category_vars
                           , all=TRUE, suffixes=c(".Tst", ".OOB"))
     glb_ctgry_df$.freqRatio.Tst <- glb_ctgry_df$.n.Tst / sum(glb_ctgry_df$.n.Tst, na.rm=TRUE)
     glb_ctgry_df$.freqRatio.OOB <- glb_ctgry_df$.n.OOB / sum(glb_ctgry_df$.n.OOB, na.rm=TRUE)
@@ -2320,6 +2349,7 @@ for (method in glb_models_method_vctr) {
 }
 
 # User specified
+#   Ensure at least 2 vars in each regression; else varImp crashes
 # sav_models_lst <- glb_models_lst; sav_models_df <- glb_models_df; sav_featsimp_df <- glb_featsimp_df
 # glb_models_lst <- sav_models_lst; glb_models_df <- sav_models_df; glm_featsimp_df <- sav_featsimp_df
 
@@ -2343,9 +2373,10 @@ for (method in glb_models_method_vctr) {
 #                                 rsp_var=glb_rsp_var, rsp_var_out=glb_rsp_var_out,
 #                                 fit_df=glb_fitobs_df, OOB_df=glb_OOBobs_df,
 #                     n_cv_folds=glb_n_cv_folds, tune_models_df=glb_tune_models_df)
-# #     csm_mdl_id <- paste0(model_id, ".", method)
-# #     csm_featsimp_df <- myget_feats_importance(glb_models_lst[[paste0(model_id, ".", method)]]);         print(head(csm_featsimp_df))
+#     csm_mdl_id <- paste0(model_id, ".", method)
+#     csm_featsimp_df <- myget_feats_importance(glb_models_lst[[paste0(model_id, ".", method)]]);         print(head(csm_featsimp_df))
 # }
+
 #print(dsp_models_df <- orderBy(model_sel_frmla, glb_models_df)[, dsp_models_cols])
 #csm_featsimp_df[grepl("H.npnct19.log", row.names(csm_featsimp_df)), , FALSE]
 #csm_OOBobs_df <- glb_get_predictions(glb_OOBobs_df, mdl_id=csm_mdl_id, rsp_var_out=glb_rsp_var_out, prob_threshold_def=glb_models_df[glb_models_df$model_id == csm_mdl_id, "opt.prob.threshold.OOB"])
@@ -2429,18 +2460,13 @@ if (!is.null(glb_model_metric_smmry)) {
     }
     stats_df <- merge(stats_df, stats_mdl_df, all.x=TRUE)
     
-#     tmp_models_df <- orderBy(~model_id, glb_models_df)
-#     rownames(tmp_models_df) <- seq(1, nrow(tmp_models_df))
-#     all.equal(subset(tmp_models_df[, names(stats_df)], model_id != "Random.myrandom_classfr"),
-#               subset(stats_df, model_id != "Random.myrandom_classfr"))
-#     print(subset(tmp_models_df[, names(stats_df)], model_id != "Random.myrandom_classfr")[, c("model_id", "max.Accuracy.fit")])
-#     print(subset(stats_df, model_id != "Random.myrandom_classfr")[, c("model_id", "max.Accuracy.fit")])
-
     print("Merging following data into glb_models_df:")
     print(stats_mrg_df <- stats_df[, c(1, grep(glb_model_metric, names(stats_df)))])
-    print(tmp_models_df <- orderBy(~model_id, glb_models_df[, c("model_id", grep(glb_model_metric, names(stats_df), value=TRUE))]))
+    print(tmp_models_df <- orderBy(~model_id, glb_models_df[, c("model_id",
+                                    grep(glb_model_metric, names(stats_df), value=TRUE))]))
 
-    tmp2_models_df <- glb_models_df[, c("model_id", setdiff(names(glb_models_df), grep(glb_model_metric, names(stats_df), value=TRUE)))]
+    tmp2_models_df <- glb_models_df[, c("model_id", setdiff(names(glb_models_df),
+                                    grep(glb_model_metric, names(stats_df), value=TRUE)))]
     tmp3_models_df <- merge(tmp2_models_df, stats_mrg_df, all.x=TRUE, sort=FALSE)
     print(tmp3_models_df)
     print(names(tmp3_models_df))
@@ -2522,9 +2548,6 @@ for (row_ix in 1:nrow(mltdCI_models_df)) {
         }
     }    
 }
-#print(mltdCI_models_df)
-# castCI_models_df <- dcast(mltdCI_models_df, value ~ type, fun.aggregate=sum)
-# print(castCI_models_df)
 wideCI_models_df <- reshape(subset(mltdCI_models_df, select=-variable), 
                             timevar="type", 
         idvar=setdiff(names(mltdCI_models_df), c("type", "value", "variable")), 
@@ -2641,11 +2664,12 @@ glb_OOBobs_df[, predct_accurate_var_name] <-
                     (glb_OOBobs_df[, glb_rsp_var] == 
                      glb_OOBobs_df[, paste0(glb_rsp_var_out, glb_sel_mdl_id)])
 
-#stop(here"); sav_models_lst <- glb_models_lst; sav_models_df <- glb_models_df
+#stop(here"); #sav_models_lst <- glb_models_lst; sav_models_df <- glb_models_df
 glb_featsimp_df <- 
     myget_feats_importance(mdl=glb_sel_mdl, featsimp_df=NULL)
 glb_featsimp_df[, paste0(glb_sel_mdl_id, ".importance")] <- glb_featsimp_df$importance
 print(glb_featsimp_df)
+
 # Used again in fit.data.training & predict.data.new chunks
 glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
     featsimp_df <- glb_featsimp_df
@@ -2663,12 +2687,14 @@ glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
         warning("Limiting important feature scatter plots to 5 out of ", nrow(featsimp_df))
         featsimp_df <- head(featsimp_df, 5)
     }
+    
 #     if (!all(is.na(featsimp_df$feat.interact)))
 #         stop("not implemented yet")
     rsp_var_out <- paste0(glb_rsp_var_out, mdl_id)
     for (var in featsimp_df$feat) {
         plot_df <- melt(obs_df, id.vars=var, 
                         measure.vars=c(glb_rsp_var, rsp_var_out))
+
 #         if (var == "<feat_name>") print(myplot_scatter(plot_df, var, "value", 
 #                                              facet_colcol_name="variable") + 
 #                       geom_vline(xintercept=<divider_val>, linetype="dotted")) else     
@@ -2720,13 +2746,13 @@ if (glb_is_classification && glb_is_binomial)
 #                                      glb_rsp_var_out)
 # print(t(confusionMatrix(glb_OOBobs_df[, paste0(glb_rsp_var_out, mdl_id)], 
 #                         glb_OOBobs_df[, glb_rsp_var])$table))
-FN_OOB_ids <- c(4721, 4020, 693, 92)
-print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                    grep(glb_rsp_var, names(glb_OOBobs_df), value=TRUE)])
-print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                    glb_feats_df$id[1:5]])
-print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                    glb_txt_vars])
+# FN_OOB_ids <- c(4721, 4020, 693, 92)
+# print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                     grep(glb_rsp_var, names(glb_OOBobs_df), value=TRUE)])
+# print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                     glb_feats_df$id[1:5]])
+# print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                     glb_txt_vars])
 write.csv(glb_OOBobs_df[, c(glb_id_var, 
                 grep(glb_rsp_var, names(glb_OOBobs_df), fixed=TRUE, value=TRUE))], 
     paste0(gsub(".", "_", paste0(glb_out_pfx, glb_sel_mdl_id), fixed=TRUE), 
@@ -2745,6 +2771,10 @@ write.csv(glb_OOBobs_df[, c(glb_id_var,
 # print(mycreate_tbl_df(df=glb_allobs_df[sel_obs(Headline.contains="[Ee]bola") ,], c("Popular")))
 # print(mycreate_tbl_df(df=glb_allobs_df[sel_obs(Headline.contains="[Ee]bola") ,], 
 #                       tbl_col_names=c("Popular", "NewsDesk")))
+
+# write.csv(glb_chunks_df, paste0(glb_out_pfx, tail(glb_chunks_df, 1)$label, "_",
+#                                 tail(glb_chunks_df, 1)$step_minor,  "_chunks1.csv"),
+#           row.names=FALSE)
 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc=FALSE)
 ```
@@ -2854,8 +2884,8 @@ for(var in grep(".importance", names(glb_feats_df), fixed=TRUE, value=TRUE))
     dsp_feats_vctr <- union(dsp_feats_vctr, 
                             glb_feats_df[!is.na(glb_feats_df[, var]), "id"])
 
-print(glb_trnobs_df[glb_trnobs_df$UniqueID %in% FN_OOB_ids, 
-                    grep(glb_rsp_var, names(glb_trnobs_df), value=TRUE)])
+# print(glb_trnobs_df[glb_trnobs_df$UniqueID %in% FN_OOB_ids, 
+#                     grep(glb_rsp_var, names(glb_trnobs_df), value=TRUE)])
 
 print(setdiff(names(glb_trnobs_df), names(glb_allobs_df)))
 for (col in setdiff(names(glb_trnobs_df), names(glb_allobs_df)))
@@ -2969,6 +2999,14 @@ if (glb_is_classification) {
         glb_ctgry_df <- merge(glb_ctgry_df, aOOB_ctgry_df, all=TRUE)
         print(orderBy(~-accurate.OOB.FALSE, glb_ctgry_df))
     }
+    
+    if ((glb_rsp_var %in% names(glb_newobs_df)) &&
+        !(any(is.na(glb_newobs_df[, glb_rsp_var])))) {
+        print(sprintf("%s new confusion matrix & accuracy: ", glb_fin_mdl_id))
+        print(t(confusionMatrix(glb_newobs_df[, paste0(glb_rsp_var_out, glb_fin_mdl_id)], 
+                                glb_newobs_df[, glb_rsp_var])$table))
+    }    
+
 }    
 
 dsp_myCategory_conf_mtrx <- function(myCategory) {
@@ -3006,17 +3044,17 @@ dsp_myCategory_conf_mtrx <- function(myCategory) {
 #dsp_myCategory_conf_mtrx(myCategory="Business#Business Day#Dealbook")
 #dsp_myCategory_conf_mtrx(myCategory="##")
 
-if (glb_is_classification) {
-    print("FN_OOB_ids:")
-    print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                        grep(glb_rsp_var, names(glb_OOBobs_df), value=TRUE)])
-    print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                        glb_txt_vars])
-    print(dsp_vctr <- colSums(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
-                        setdiff(grep("[HSA].", names(glb_OOBobs_df), value=TRUE),
-                                union(myfind_chr_cols_df(glb_OOBobs_df),
-                    grep(".fctr", names(glb_OOBobs_df), fixed=TRUE, value=TRUE)))]))
-}
+# if (glb_is_classification) {
+#     print("FN_OOB_ids:")
+#     print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                         grep(glb_rsp_var, names(glb_OOBobs_df), value=TRUE)])
+#     print(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                         glb_txt_vars])
+#     print(dsp_vctr <- colSums(glb_OOBobs_df[glb_OOBobs_df$UniqueID %in% FN_OOB_ids, 
+#                         setdiff(grep("[HSA].", names(glb_OOBobs_df), value=TRUE),
+#                                 union(myfind_chr_cols_df(glb_OOBobs_df),
+#                     grep(".fctr", names(glb_OOBobs_df), fixed=TRUE, value=TRUE)))]))
+# }
 
 dsp_hdlpfx_results <- function(hdlpfx) {
     print(hdlpfx)
@@ -3070,18 +3108,23 @@ print(orderBy(as.formula(paste0("~ -", glb_sel_mdl_id, ".importance")), glb_feat
 # players_df$RS.predict <- predict(glb_models_lst[[csm_mdl_id]], players_df)
 # print(orderBy(~ -RS.predict, players_df))
 
-print(setdiff(names(glb_trnobs_df), names(glb_allobs_df)))
+if (length(diff <- setdiff(names(glb_trnobs_df), names(glb_allobs_df))) > 0)   
+    print(diff)
 for (col in setdiff(names(glb_trnobs_df), names(glb_allobs_df)))
     # Merge or cbind ?
     glb_allobs_df[glb_allobs_df$.src == "Train", col] <- glb_trnobs_df[, col]
 
-print(setdiff(names(glb_fitobs_df), names(glb_allobs_df)))
-print(setdiff(names(glb_OOBobs_df), names(glb_allobs_df)))
+if (length(diff <- setdiff(names(glb_fitobs_df), names(glb_allobs_df))) > 0)   
+    print(diff)
+if (length(diff <- setdiff(names(glb_OOBobs_df), names(glb_allobs_df))) > 0)   
+    print(diff)
+
 for (col in setdiff(names(glb_OOBobs_df), names(glb_allobs_df)))
     # Merge or cbind ?
     glb_allobs_df[glb_allobs_df$.lcn == "OOB", col] <- glb_OOBobs_df[, col]
     
-print(setdiff(names(glb_newobs_df), names(glb_allobs_df)))
+if (length(diff <- setdiff(names(glb_newobs_df), names(glb_allobs_df))) > 0)   
+    print(diff)
 
 if (glb_save_envir)
     save(glb_feats_df, glb_allobs_df, 
@@ -3126,6 +3169,7 @@ We reject the null hypothesis i.e. we have evidence to conclude that am_fctr imp
 #                    m=k_fold, seed=12345, printit=TRUE)
 
 myplt_chunk(glb_chunks_df)
-myplt_chunk(fit.models_1_chunk_df)
+if (sum(fit.models_1_chunk_df$elapsed, na.rm=TRUE) >= 300) # 5 mins
+    myplt_chunk(fit.models_1_chunk_df)
 sessionInfo()
 ```
