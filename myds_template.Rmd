@@ -226,32 +226,9 @@ glb_transform_lst <- NULL;
 #         mod_raw <- gsub("&#[[:digit:]]{3};", " ", mod_raw);
 #         # Modifications for this exercise only
 #         mod_raw <- gsub("\\bgoodIn ", "good In", mod_raw);
-#         mod_raw <- gsub("\\b[Ii]nternational [Dd]istrict\\b", "InternationalDistrict", mod_raw);
-#         mod_raw <- gsub("\\bI\\.D\\.([ ,\\!])", "InternationalDistrict\\1", mod_raw);        
-#         mod_raw <- gsub("\\bI\\.D\\.$", "InternationalDistrict", mod_raw);
-#         mod_raw <- gsub("\\bJ\\.P\\. Patches", "JPPatches", mod_raw);
-#         mod_raw <- gsub("MindyP.S.", "Mindy P.S.", mod_raw); 
-#         mod_raw <- gsub("\\bitOkay,", "it okay,", mod_raw);        
-#         mod_raw <- gsub("\\bOK-", "okay ", mod_raw);        
-#         mod_raw <- gsub("\\bOKGood ", "okay Good ", mod_raw);
-#         mod_raw <- gsub("\\bOKGot ", "okay Got ", mod_raw);
-#         mod_raw <- gsub("\\bOkie.", "okay.", mod_raw);        
-#         mod_raw <- gsub("\\bOKService ", "okay Service ", mod_raw);        
-#         mod_raw <- gsub("\\bOOOOOKAAAAAYYYYY ", "okay ", mod_raw);   
-#         mod_raw <- gsub("\\bpriceGood ", "price Good ", mod_raw);                
-#         mod_raw <- gsub("\\bR\\.B\\. ", "RanchoBravo ", mod_raw);        
-#         mod_raw <- gsub("\\bS\\.O\\.S([ \\.])", "shitonashingle\\1", mod_raw);
-#         mod_raw <- gsub("\\bserviceReasonable ", "service Reasonable ", mod_raw);        
-#         mod_raw <- gsub("\\bshit on a shingle", "shitonashingle", mod_raw);        
-#         mod_raw <- gsub("\\bT\\.T\\.(\\B)", "Tamarind Tree\\1", mod_raw);        
-#         mod_raw <- gsub("\\bT\\.V\\.HUGE", "T.V. HUGE", mod_raw);
-#         mod_raw <- gsub("textureok,", "texture ok,", mod_raw);        
-#         mod_raw <- gsub("\\bU\\.W\\. ", "UniversityOfWashington ", mod_raw);
-#         mod_raw <- gsub("winnersok,", "winners ok,", mod_raw);        
 #                           return(mod_raw)
 #                         }
 #     , sfx=".my")
-# raw <- paste(unlist(strsplit(glb_trnobs_df[1, "review"], split=""))[2000:3000], collapse=""); print(raw)
 # mapfn(glb_allobs_df$review[739])
 # mapfn(glb_allobs_df$review[740])
 # ret_lst <- regexec("&#[[:digit:]]{3};", raw, ignore.case=FALSE); ret_lst <- regmatches(raw, ret_lst); ret_vctr <- sapply(1:length(ret_lst), function(pos_ix) ifelse(length(ret_lst[[pos_ix]]) > 0, ret_lst[[pos_ix]], "")); print(ret_vctr <- ret_vctr[ret_vctr != ""])
@@ -298,12 +275,12 @@ glb_derive_lst <- NULL;
 # glb_derive_lst[["PTS.diff"]] <- list(
 #     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
 #     , args=c("PTS", "oppPTS"))
-glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
-    mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
-                        match_num_vctr <- unlist(lapply(match_lst, 
-                                                        function(elem) length(elem)))
-                        return(log(1 + match_num_vctr)) }
-    , args=c("<txt_var>"))
+# glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
+#     mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
+#                         match_num_vctr <- unlist(lapply(match_lst, 
+#                                                         function(elem) length(elem)))
+#                         return(log(1 + match_num_vctr)) }
+#     , args=c("<txt_var>"))
 
 # args_lst <- NULL; for (arg in glb_derive_lst[["PTS.diff"]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; do.call(mapfn, args_lst)
 
@@ -2435,6 +2412,8 @@ for (method in glb_models_method_vctr) {
 #     csm_mdl_id <- paste0(model_id, ".", method)
 #     csm_featsimp_df <- myget_feats_importance(glb_models_lst[[paste0(model_id, ".", method)]]);         print(head(csm_featsimp_df))
 # }
+
+# Ntv.1.lm <- lm(reformulate(indep_vars_vctr, glb_rsp_var), glb_trnobs_df); print(summary(Ntv.1.lm))
 
 #print(dsp_models_df <- orderBy(model_sel_frmla, glb_models_df)[, dsp_models_cols])
 #csm_featsimp_df[grepl("H.npnct19.log", row.names(csm_featsimp_df)), , FALSE]
