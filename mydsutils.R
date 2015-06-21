@@ -833,6 +833,8 @@ myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
                                        #(is.ConditionalX.y)
                                        !zeroVar
                              )$id)
+	if (length(chk_feats) > 100)
+		stop("Number of feats to check for correlation: ",  length(chk_feats), " exceeds 100")                             
     repeat {
     	if (length(chk_feats) == 1)
     		break

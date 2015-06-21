@@ -4,16 +4,18 @@
 title: <<Topic Name>>
 author: bdanalytics
 date: `r format(Sys.time(), "%a %b %d, %Y")`
-output:
-    html_document:
-        toc: true
-        theme: united
-        
-    pdf_document:
-        toc: true
-        highlight: zenburn    
-        
-output: pdf_document
+
+#These don't work for .Rpres
+# output:
+#     html_document:
+#         toc: true
+#         theme: united
+#         
+#     pdf_document:
+#         toc: true
+#         highlight: zenburn    
+#         
+# output: pdf_document
 
 # To embed a shiny widget (interactive components), refer to 
 #   http://rmarkdown.rstudio.com/authoring_shiny_widgets.html        

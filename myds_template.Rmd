@@ -45,8 +45,36 @@ First run:
 
 Classification results:
 First run:
-    <glb_sel_mdl_id>: 
-        OOB_conf_mtrx=[NY, YN]=<sum>; <feat1>=<imp>; <feat2>=<imp>
+    <glb_sel_mdl_id>: Leaderboard: <accuracy>
+        newobs_tbl=[0=, 1=]; submit_filename=
+        OOB_conf_mtrx=[YN=, NY=]=; max.Accuracy.OOB=; opt.prob.threshold.OOB=
+            <feat1>=<imp>; <feat1>=<imp>; <feat1>=<imp>; 
+            <txt.feat1>=<imp>; <txt.feat1>=<imp>; <txt.feat1>=<imp>; 
+
+### Prediction Accuracy Enhancement Options:
+- import.data chunk:
+    - which obs should be in fit vs. OOB (currently dirty.0 vs .1 is split 50%)
+    
+- inspect.data chunk:
+    - For date variables
+        - Appropriate factors ?
+        - Different / More last* features ?
+        
+- scrub.data chunk:        
+- transform.data chunk:
+    - derive features from multiple features
+    
+- manage.missing.data chunk:
+    - Not fill missing vars
+    - Fill missing numerics with a different algorithm
+    - Fill missing chars with data based on clusters 
+    
+- extract.features chunk:
+    - Text variables: move to date extraction chunk ???
+        - Mine acronyms
+        - Mine places
+
+- Review set_global_options chunk after features are finalized
 
 ### ![](<filename>.png)
 
@@ -138,7 +166,7 @@ glb_is_separate_newobs_dataset <- FALSE    # or TRUE
     glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
     glb_split_sample.seed <- 123               # or any integer
 
-glb_max_fitent_obs <- NULL # or any integer                         
+glb_max_fitobs <- NULL # or any integer                         
 glb_is_regression <- TRUE; glb_is_classification <- !glb_is_regression; 
     glb_is_binomial <- NULL # or TRUE or FALSE
 
@@ -151,7 +179,7 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 #   or contains spaces (e.g. "Not in Labor Force")
 #   caret predict(..., type="prob") crashes
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
-#     relevel(factor(ifelse(raw == 1, "Y", "N")), as.factor(c("Y", "N")), ref="N")
+#     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
 #     #as.factor(paste0("B", raw))
 #     #as.factor(gsub(" ", "\\.", raw))    
 # }
@@ -161,7 +189,7 @@ glb_map_rsp_var_to_raw <- NULL # or function(var) {
 #     as.numeric(var) - 1
 #     #as.numeric(var)
 #     #gsub("\\.", " ", levels(var)[as.numeric(var)])
-#     #c(" <=50K", " >50K")[as.numeric(var)]
+#     c("<=50K", " >50K")[as.numeric(var)]
 #     #c(FALSE, TRUE)[as.numeric(var)]
 # }
 # glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0)))
@@ -194,6 +222,43 @@ glb_transform_lst <- NULL;
 #                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
 #                           return(as.factor(tfr_raw)) }
 #     , sfx=".my.fctr")
+#     mapfn=function(raw) { mod_raw <- raw;
+#         mod_raw <- gsub("&#[[:digit:]]{3};", " ", mod_raw);
+#         # Modifications for this exercise only
+#         mod_raw <- gsub("\\bgoodIn ", "good In", mod_raw);
+#         mod_raw <- gsub("\\b[Ii]nternational [Dd]istrict\\b", "InternationalDistrict", mod_raw);
+#         mod_raw <- gsub("\\bI\\.D\\.([ ,\\!])", "InternationalDistrict\\1", mod_raw);        
+#         mod_raw <- gsub("\\bI\\.D\\.$", "InternationalDistrict", mod_raw);
+#         mod_raw <- gsub("\\bJ\\.P\\. Patches", "JPPatches", mod_raw);
+#         mod_raw <- gsub("MindyP.S.", "Mindy P.S.", mod_raw); 
+#         mod_raw <- gsub("\\bitOkay,", "it okay,", mod_raw);        
+#         mod_raw <- gsub("\\bOK-", "okay ", mod_raw);        
+#         mod_raw <- gsub("\\bOKGood ", "okay Good ", mod_raw);
+#         mod_raw <- gsub("\\bOKGot ", "okay Got ", mod_raw);
+#         mod_raw <- gsub("\\bOkie.", "okay.", mod_raw);        
+#         mod_raw <- gsub("\\bOKService ", "okay Service ", mod_raw);        
+#         mod_raw <- gsub("\\bOOOOOKAAAAAYYYYY ", "okay ", mod_raw);   
+#         mod_raw <- gsub("\\bpriceGood ", "price Good ", mod_raw);                
+#         mod_raw <- gsub("\\bR\\.B\\. ", "RanchoBravo ", mod_raw);        
+#         mod_raw <- gsub("\\bS\\.O\\.S([ \\.])", "shitonashingle\\1", mod_raw);
+#         mod_raw <- gsub("\\bserviceReasonable ", "service Reasonable ", mod_raw);        
+#         mod_raw <- gsub("\\bshit on a shingle", "shitonashingle", mod_raw);        
+#         mod_raw <- gsub("\\bT\\.T\\.(\\B)", "Tamarind Tree\\1", mod_raw);        
+#         mod_raw <- gsub("\\bT\\.V\\.HUGE", "T.V. HUGE", mod_raw);
+#         mod_raw <- gsub("textureok,", "texture ok,", mod_raw);        
+#         mod_raw <- gsub("\\bU\\.W\\. ", "UniversityOfWashington ", mod_raw);
+#         mod_raw <- gsub("winnersok,", "winners ok,", mod_raw);        
+#                           return(mod_raw)
+#                         }
+#     , sfx=".my")
+# raw <- paste(unlist(strsplit(glb_trnobs_df[1, "review"], split=""))[2000:3000], collapse=""); print(raw)
+# mapfn(glb_allobs_df$review[739])
+# mapfn(glb_allobs_df$review[740])
+# ret_lst <- regexec("&#[[:digit:]]{3};", raw, ignore.case=FALSE); ret_lst <- regmatches(raw, ret_lst); ret_vctr <- sapply(1:length(ret_lst), function(pos_ix) ifelse(length(ret_lst[[pos_ix]]) > 0, ret_lst[[pos_ix]], "")); print(ret_vctr <- ret_vctr[ret_vctr != ""])
+# ret_lst <- gregexpr("&#[[:digit:]]{3};", raw, ignore.case=FALSE); print(ret_lst); print(length(ret_lst[[1]]))
+# mapfn(glb_allobs_df$review)
+# mapfn(glb_allobs_df$review[739:740])
+
 # mapfn(glb_allobs_df$<var>)
 # glb_transform_lst[["<var1>"]] <- glb_transform_lst[["<var2>"]]
 # Add logs of numerics that are not distributed normally ->  do automatically ???
@@ -233,8 +298,24 @@ glb_derive_lst <- NULL;
 # glb_derive_lst[["PTS.diff"]] <- list(
 #     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
 #     , args=c("PTS", "oppPTS"))
+glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
+    mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
+                        match_num_vctr <- unlist(lapply(match_lst, 
+                                                        function(elem) length(elem)))
+                        return(log(1 + match_num_vctr)) }
+    , args=c("<txt_var>"))
+
 # args_lst <- NULL; for (arg in glb_derive_lst[["PTS.diff"]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; do.call(mapfn, args_lst)
+
 # glb_derive_lst[["<var1>"]] <- glb_derive_lst[["<var2>"]]
+
+#         # Create user-specified pattern vectors 
+# #sum(mycount_pattern_occ("Metropolitan Diary:", glb_allobs_df$Abstract) > 0)
+#         if (txt_var %in% c("Snippet", "Abstract")) {
+#             txt_X_df[, paste0(txt_var_pfx, ".P.metropolitan.diary.colon")] <-
+#                 as.integer(0 + mycount_pattern_occ("Metropolitan Diary:", 
+#                                                    glb_allobs_df[, txt_var]))
+#summary(glb_allobs_df[ ,grep("P.on.this.day", names(glb_allobs_df), value=TRUE)])
 glb_derive_vars <- names(glb_derive_lst)
 
 # User-specified exclusions  
@@ -351,6 +432,12 @@ glb_chunks_df <- myadd_chunk(NULL, "import.data")
 
 glb_trnobs_df <- myimport_data(url=glb_trnng_url, comment="glb_trnobs_df", 
                                 force_header=TRUE)
+# glb_trnobs_df <- read.delim("data/hygiene.txt", header=TRUE, fill=TRUE, sep="\t",
+#                             fileEncoding='iso-8859-1')
+# glb_trnobs_df <- read.table("data/hygiene.dat.labels", col.names=c("dirty"),
+#                             na.strings="[none]")
+# glb_trnobs_df$review <- readLines("data/hygiene.dat", n =-1)
+# comment(glb_trnobs_df) <- "glb_trnobs_df"                                
 
 # glb_trnobs_df <- data.frame()
 # for (symbol in c("Boeing", "CocaCola", "GE", "IBM", "ProcterGamble")) {
@@ -843,27 +930,12 @@ dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glb_allobs_df),
 #                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5) +
 #         geom_vline(xintercept=84))
 
-rm(srt_allobs_df, last1, last10, last100, pd)
+rm(last1, last10, last100)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "scrub.data", major.inc=FALSE)
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r scrub.data, cache=FALSE}
-# Options:
-#   1. Not fill missing vars
-#   2. Fill missing numerics with a different algorithm
-#   3. Fill missing chars with data based on clusters 
-
-mycheck_problem_data(glb_allobs_df)
-
-# if (!is.null(glb_force_0_to_NA_vars)) {
-#     for (feat in glb_force_0_to_NA_vars) {
-#         warning("Forcing ", sum(glb_allobs_df[, feat] == 0),
-#                 " obs with ", feat, " 0s to NAs")
-#         glb_allobs_df[glb_allobs_df[, feat] == 0, feat] <- NA
-#     }
-# }
-
 mycheck_problem_data(glb_allobs_df)
 
 dsp_catgs <- function() {
@@ -1291,7 +1363,7 @@ extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df,
 #stop(here"); sav_allobs_df <- glb_allobs_df; #glb_allobs_df <- sav_allobs_df
 print(str_vars <- myfind_chr_cols_df(glb_allobs_df))
 if (length(str_vars <- setdiff(str_vars, 
-                               glb_exclude_vars_as_features)) > 0) {
+                               c(glb_exclude_vars_as_features, glb_txt_vars))) > 0) {
     for (var in str_vars) {
         warning("Creating factors of string variable: ", var, 
                 ": # of unique values: ", length(unique(glb_allobs_df[, var])))
@@ -1314,36 +1386,39 @@ if (!is.null(glb_txt_vars)) {
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "process.text"), major.inc=TRUE)
     
-    chk_pattern_freq <- function(re_str, ignore.case=TRUE) {
-        match_mtrx <- str_extract_all(txt_vctr, regex(re_str, ignore_case=ignore.case), 
+    chk_pattern_freq <- function(rex_str, ignore.case=TRUE) {
+        match_mtrx <- str_extract_all(txt_vctr, regex(rex_str, ignore_case=ignore.case), 
                                       simplify=TRUE)
         match_df <- as.data.frame(match_mtrx[match_mtrx != ""])
         names(match_df) <- "pattern"
         return(mycreate_sqlxtab_df(match_df, "pattern"))        
     }
-    #tmp_freq_df <- chk_pattern_freq("\\bNew (\\w)+", ignore.case=FALSE)
-    #subset(chk_pattern_freq("\\bNew (\\w)+", ignore.case=FALSE), grepl("New [[:upper:]]", pattern))
-    #chk_pattern_freq("\\bnew (\\W)+")
 
-    chk_subfn <- function(pos_ix) {
-        re_str <- gsubfn_args_lst[["re_str"]][[pos_ix]]
-        print("re_str:"); print(re_str)
-        rp_frmla <- gsubfn_args_lst[["rp_frmla"]][[pos_ix]]        
-        print("rp_frmla:"); print(rp_frmla, showEnv=FALSE)
-        tmp_vctr <- grep(re_str, txt_vctr, value=TRUE, ignore.case=TRUE)[1:5]
-        print("Before:")
-        print(tmp_vctr)
-        print("After:")            
-        print(gsubfn(re_str, rp_frmla, tmp_vctr, ignore.case=TRUE))
+#     match_lst <- gregexpr("\\bok(?!ay)", txt_vctr[746], ignore.case = FALSE, perl=TRUE); print(match_lst)
+    dsp_pattern <- function(rex_str, ignore.case=TRUE, print.all=TRUE) {
+        match_lst <- gregexpr(rex_str, txt_vctr, ignore.case = ignore.case, perl=TRUE)
+        match_lst <- regmatches(txt_vctr, match_lst)
+        match_df <- data.frame(matches=sapply(match_lst, 
+                                              function (elems) paste(elems, collapse="#")))
+        match_df <- subset(match_df, matches != "")
+        if (print.all)
+            print(match_df)
+        return(match_df)
     }
-    #chk_subfn(1)
+    
+    dsp_matches <- function(rex_str, ix) {
+        print(match_pos <- gregexpr(rex_str, txt_vctr[ix], perl=TRUE))
+        print(str_sub(txt_vctr[ix], (match_pos[[1]] / 100) *  99 +   0, 
+                                    (match_pos[[1]] / 100) * 100 + 100))        
+    }
 
     myapply_gsub <- function(...) {
         if ((length_lst <- length(names(gsub_map_lst))) == 0)
             return(txt_vctr)
         for (ptn_ix in 1:length_lst) {
-            print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
-                            length(names(gsub_map_lst)), names(gsub_map_lst)[ptn_ix]))
+            if ((ptn_ix %% 10) == 0)
+                print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
+                                length(names(gsub_map_lst)), names(gsub_map_lst)[ptn_ix]))
             txt_vctr <- gsub(names(gsub_map_lst)[ptn_ix], gsub_map_lst[[ptn_ix]], 
                                txt_vctr, ...)
         }
@@ -1353,8 +1428,9 @@ if (!is.null(glb_txt_vars)) {
     myapply_txtmap <- function(txt_vctr, ...) {
         nrows <- nrow(glb_txt_map_df)
         for (ptn_ix in 1:nrows) {
-            print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
-                            nrows, glb_txt_map_df[ptn_ix, "rex_str"]))
+            if ((ptn_ix %% 10) == 0)
+                print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
+                                nrows, glb_txt_map_df[ptn_ix, "rex_str"]))
             txt_vctr <- gsub(glb_txt_map_df[ptn_ix, "rex_str"], 
                              glb_txt_map_df[ptn_ix, "rpl_str"], 
                                txt_vctr, ...)
@@ -1363,7 +1439,8 @@ if (!is.null(glb_txt_vars)) {
     }    
 
     chk.equal <- function(bgn, end) {
-        print(all.equal(sav_txt_lst[["Headline"]][bgn:end], glb_txt_lst[["Headline"]][bgn:end]))
+        print(all.equal(sav_txt_lst[["Headline"]][bgn:end], 
+                        glb_txt_lst[["Headline"]][bgn:end]))
     }    
     dsp.equal <- function(bgn, end) {
         print(sav_txt_lst[["Headline"]][bgn:end])
@@ -1371,19 +1448,7 @@ if (!is.null(glb_txt_vars)) {
     }    
 #sav_txt_lst <- glb_txt_lst; all.equal(sav_txt_lst, glb_txt_lst)
 #all.equal(sav_txt_lst[["Headline"]][1:4200], glb_txt_lst[["Headline"]][1:4200])
-#all.equal(sav_txt_lst[["Headline"]][1:2000], glb_txt_lst[["Headline"]][1:2000])
-#all.equal(sav_txt_lst[["Headline"]][1:1000], glb_txt_lst[["Headline"]][1:1000])
-#all.equal(sav_txt_lst[["Headline"]][1:500], glb_txt_lst[["Headline"]][1:500])
-#all.equal(sav_txt_lst[["Headline"]][1:200], glb_txt_lst[["Headline"]][1:200])
-#all.equal(sav_txt_lst[["Headline"]][1:100], glb_txt_lst[["Headline"]][1:100])
 #chk.equal( 1, 100)
-#chk.equal(51, 100)
-#chk.equal(81, 100)
-#chk.equal(81,  90)
-#chk.equal(81,  85)
-#chk.equal(86,  90)
-#chk.equal(96, 100)
-
 #dsp.equal(86, 90)
     
     glb_txt_map_df <- read.csv("mytxt_map.csv", comment.char="#", strip.white=TRUE)
@@ -1396,6 +1461,7 @@ if (!is.null(glb_txt_vars)) {
         # myapply_txtmap shd be created as a tm_map::content_transformer ?
         #print(glb_txt_map_df)
         #txt_var=glb_txt_vars[3]; txt_vctr <- glb_txt_lst[[txt_var]]
+        #print(rex_str <- glb_txt_map_df[163, "rex_str"])
         #print(rex_str <- glb_txt_map_df[glb_txt_map_df$rex_str == "\\bWall St\\.", "rex_str"])
         #print(rex_str <- glb_txt_map_df[grepl("du Pont", glb_txt_map_df$rex_str), "rex_str"])        
         #print(rex_str <- glb_txt_map_df[glb_txt_map_df$rpl_str == "versus", "rex_str"])             
@@ -1409,9 +1475,51 @@ if (!is.null(glb_txt_vars)) {
     names(glb_txt_lst) <- glb_txt_vars
 
     for (txt_var in glb_txt_vars) {
+        print(sprintf("Remaining OK in %s:", txt_var))
+        txt_vctr <- glb_txt_lst[[txt_var]]
+        
+        print(chk_pattern_freq(rex_str <- "(?<!(BO|HO|LO))OK(?!(E\\!|ED|IE|IN|S ))",
+                               ignore.case=FALSE))
+        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+        for (row in row.names(match_df))
+            dsp_matches(rex_str, ix=as.numeric(row))
+
+        print(chk_pattern_freq(rex_str <- "Ok(?!(a\\.|ay|in|ra|um))", ignore.case=FALSE))
+        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+        for (row in row.names(match_df))
+            dsp_matches(rex_str, ix=as.numeric(row))
+
+        print(chk_pattern_freq(rex_str <- "(?<!( b| B| c| C| g| G| j| M| p| P| w| W| r| Z|\\(b|ar|bo|Bo|co|Co|Ew|gk|go|ho|ig|jo|kb|ke|Ke|ki|lo|Lo|mo|mt|no|No|po|ra|ro|sm|Sm|Sp|to|To))ok(?!(ay|bo|e |e\\)|e,|e\\.|eb|ed|el|en|er|es|ey|i |ie|in|it|ka|ke|ki|ly|on|oy|ra|st|u |uc|uy|yl|yo))",
+                               ignore.case=FALSE))
+        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+        for (row in row.names(match_df))
+            dsp_matches(rex_str, ix=as.numeric(row))
+    }    
+    # txt_vctr <- glb_txt_lst[[glb_txt_vars[1]]]
+    # print(chk_pattern_freq(rex_str <- "(?<!( b| c| C| p|\\(b|bo|co|lo|Lo|Sp|to|To))ok(?!(ay|e |e\\)|e,|e\\.|ed|el|en|es|ey|ie|in|on|ra))", ignore.case=FALSE))
+    # print(chk_pattern_freq(rex_str <- "ok(?!(ay|el|on|ra))", ignore.case=FALSE))
+    # dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+    # dsp_matches(rex_str, ix=8)
+    # substr(txt_vctr[86], 5613, 5620)
+    # substr(glb_allobs_df[301, "review"], 550, 650)
+
+#stop(here"); sav_txt_lst <- glb_txt_lst    
+    for (txt_var in glb_txt_vars) {
         print(sprintf("Remaining Acronyms in %s:", txt_var))
         txt_vctr <- glb_txt_lst[[txt_var]]
-        print(tmp_vctr <- grep("[[:upper:]]\\.", txt_vctr, value=TRUE, ignore.case=FALSE))
+        
+        print(chk_pattern_freq(rex_str <- "([[:upper:]]\\.( *)){2,}", ignore.case=FALSE))
+        
+        # Check for names
+        print(subset(chk_pattern_freq(rex_str <- "(([[:upper:]]+)\\.( *)){1}",
+                                      ignore.case=FALSE),
+                     .n > 1))
+        # dsp_pattern(rex_str="(OK\\.( *)){1}", ignore.case=FALSE)
+        # dsp_matches(rex_str="(OK\\.( *)){1}", ix=557)
+        #dsp_matches(rex_str="\\bR\\.I\\.P(\\.*)(\\B)", ix=461)
+        #dsp_matches(rex_str="\\bR\\.I\\.P(\\.*)", ix=461)        
+        #print(str_sub(txt_vctr[676], 10100, 10200))
+        #print(str_sub(txt_vctr[74], 1, -1))        
     }
 
     for (txt_var in glb_txt_vars) {
@@ -1425,6 +1533,7 @@ if (!is.null(glb_txt_vars)) {
         #grep("St\\. Wins", txt_vctr, value=TRUE, ignore.case=FALSE)
     }        
         
+#stop(here"); sav_txt_lst <- glb_txt_lst    
     for (txt_var in glb_txt_vars) {
         re_str <- "\\b(N|S|E|W|C)( |\\.)(\\w)+"
         print(sprintf("Remaining #%s# terms in %s: ", re_str, txt_var))        
@@ -1754,56 +1863,6 @@ if (!is.null(glb_txt_vars)) {
         txt_X_df[, paste(txt_var_pfx, ".P.http", sep="")] <- 
             as.integer(0 + mycount_pattern_occ("http", glb_allobs_df[, txt_var]))    
     
-        # Create user-specified pattern vectors 
-        #   <txt_var>.P.year.colon
-        txt_X_df[, paste0(txt_var_pfx, ".P.year.colon")] <-
-            as.integer(0 + mycount_pattern_occ("[0-9]{4}:", glb_allobs_df[, txt_var]))
-        txt_X_df[, paste0(txt_var_pfx, ".P.daily.clip.report")] <-
-            as.integer(0 + mycount_pattern_occ("Daily Clip Report", glb_allobs_df[, txt_var]))
-        txt_X_df[, paste0(txt_var_pfx, ".P.fashion.week")] <-
-            as.integer(0 + mycount_pattern_occ("Fashion Week", glb_allobs_df[, txt_var]))
-        txt_X_df[, paste0(txt_var_pfx, ".P.first.draft")] <-
-            as.integer(0 + mycount_pattern_occ("First Draft", glb_allobs_df[, txt_var]))
-
-#sum(mycount_pattern_occ("Metropolitan Diary:", glb_allobs_df$Abstract) > 0)
-        if (txt_var %in% c("Snippet", "Abstract")) {
-            txt_X_df[, paste0(txt_var_pfx, ".P.metropolitan.diary.colon")] <-
-                as.integer(0 + mycount_pattern_occ("Metropolitan Diary:", 
-                                                   glb_allobs_df[, txt_var]))
-        }
-
-#sum(mycount_pattern_occ("[0-9]{4}:", glb_allobs_df$Headline) > 0)
-#sum(mycount_pattern_occ("Quandary(.*)(?=:)", glb_allobs_df$Headline, perl=TRUE) > 0)
-#sum(mycount_pattern_occ("No Comment(.*):", glb_allobs_df$Headline) > 0)
-#sum(mycount_pattern_occ("Friday Night Music:", glb_allobs_df$Headline) > 0)
-        if (txt_var %in% c("Headline")) {
-            txt_X_df[, paste0(txt_var_pfx, ".P.facts.figures")] <-
-                as.integer(0 + mycount_pattern_occ("Facts & Figures:", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.friday.night.music")] <-
-                as.integer(0 + mycount_pattern_occ("Friday Night Music", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.no.comment.colon")] <-
-                as.integer(0 + mycount_pattern_occ("No Comment(.*):", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.on.this.day")] <-
-                as.integer(0 + mycount_pattern_occ("On This Day", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.quandary")] <-
-                as.integer(0 + mycount_pattern_occ("Quandary(.*)(?=:)", glb_allobs_df[, txt_var], perl=TRUE))
-            txt_X_df[, paste0(txt_var_pfx, ".P.readers.respond")] <-
-                as.integer(0 + mycount_pattern_occ("Readers Respond", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.recap.colon")] <-
-                as.integer(0 + mycount_pattern_occ("Recap:", glb_allobs_df[, txt_var]))
-            txt_X_df[, paste0(txt_var_pfx, ".P.s.notebook")] <-
-                as.integer(0 + mycount_pattern_occ("s Notebook", glb_allobs_df[, txt_var]))
-            txt_X_df[, paste0(txt_var_pfx, ".P.today.in.politic")] <-
-                as.integer(0 + mycount_pattern_occ("Today in Politic", glb_allobs_df[, txt_var]))            
-            txt_X_df[, paste0(txt_var_pfx, ".P.today.in.smallbusiness")] <-
-                as.integer(0 + mycount_pattern_occ("Today in Small Business:", glb_allobs_df[, txt_var]))
-            txt_X_df[, paste0(txt_var_pfx, ".P.verbatim.colon")] <-
-                as.integer(0 + mycount_pattern_occ("Verbatim:", glb_allobs_df[, txt_var]))
-            txt_X_df[, paste0(txt_var_pfx, ".P.what.we.are")] <-
-                as.integer(0 + mycount_pattern_occ("What We're", glb_allobs_df[, txt_var]))
-        }
-
-#summary(glb_allobs_df[ ,grep("P.on.this.day", names(glb_allobs_df), value=TRUE)])
         txt_X_df <- subset(txt_X_df, select=-.rnorm)
         txt_X_df <- txt_X_df[, -grep(glb_id_var, names(txt_X_df), fixed=TRUE), FALSE]
         #glb_allobs_df <- cbind(glb_allobs_df, txt_X_df)
@@ -1991,14 +2050,14 @@ if (all(is.na(glb_newobs_df[, glb_rsp_var]))) {
     glb_fitobs_df <- glb_trnobs_df; glb_OOBobs_df <- glb_newobs_df
 }
 
-if (!is.null(glb_max_fitent_obs) && (nrow(glb_fitobs_df) > glb_max_fitent_obs)) {
-    warning("glb_fitobs_df restricted to glb_max_fitent_obs: ", 
-            format(glb_max_fitent_obs, big.mark=","))
-    org_fitent_df <- glb_fitobs_df
+if (!is.null(glb_max_fitobs) && (nrow(glb_fitobs_df) > glb_max_fitobs)) {
+    warning("glb_fitobs_df restricted to glb_max_fitobs: ", 
+            format(glb_max_fitobs, big.mark=","))
+    org_fitobs_df <- glb_fitobs_df
     glb_fitobs_df <- 
-        org_fitent_df[split <- sample.split(org_fitent_df[, glb_rsp_var_raw], 
-                                            SplitRatio=glb_max_fitent_obs), ]
-    org_fitent_df <- NULL
+        org_fitobs_df[split <- sample.split(org_fitobs_df[, glb_rsp_var_raw], 
+                                            SplitRatio=glb_max_fitobs), ]
+    org_fitobs_df <- NULL
 }
 
 glb_allobs_df$.lcn <- ""
@@ -2932,11 +2991,18 @@ if (glb_is_classification && glb_is_binomial) {
     submit_df <- glb_newobs_df[, c(glb_id_var, 
                                    paste0(glb_rsp_var_out, glb_fin_mdl_id, ".prob"))]
     names(submit_df)[2] <- "Probability1"
+#     submit_df <- glb_newobs_df[, c(paste0(glb_rsp_var_out, glb_fin_mdl_id)), FALSE]
+#     names(submit_df)[1] <- "BDscience"
+#     submit_df$BDscience <- as.numeric(submit_df$BDscience) - 1
+#     #submit_df <-rbind(submit_df, data.frame(bdanalytics=c(" ")))
+#     print("Submission Stats:")
+#     print(table(submit_df$BDscience, useNA = "ifany"))
 } else submit_df <- glb_newobs_df[, c(glb_id_var, 
                                    paste0(glb_rsp_var_out, glb_fin_mdl_id))]
-write.csv(submit_df, 
-    paste0(gsub(".", "_", paste0(glb_out_pfx, glb_fin_mdl_id), fixed=TRUE), 
-           "_submit.csv"), row.names=FALSE)
+submit_fname <- paste0(gsub(".", "_", paste0(glb_out_pfx, glb_fin_mdl_id), fixed=TRUE), 
+                    "_submit.csv")
+write.csv(submit_df, submit_fname, quote=FALSE, row.names=FALSE)
+#cat(" ", "\n", file=submit_fn, append=TRUE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("model_id", 
 #             "max.auc.OOB", "max.Accuracy.OOB")]))
