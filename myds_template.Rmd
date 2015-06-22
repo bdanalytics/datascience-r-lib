@@ -489,23 +489,24 @@ if (length(glb_drop_vars) > 0) {
 }
 
 #stop(here"); sav_allobs_df <- glb_allobs_df # glb_allobs_df <- sav_allobs_df
+# Combine trnent & newobs into glb_allobs_df for easier manipulation
+glb_trnobs_df$.src <- "Train"; glb_newobs_df$.src <- "Test"; 
+glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, ".src")
+glb_allobs_df <- myrbind_df(glb_trnobs_df, glb_newobs_df)
+comment(glb_allobs_df) <- "glb_allobs_df"
+
 # Check for duplicates in glb_id_var
 if (length(glb_id_var) == 0) {
     warning("using .rownames as identifiers for observations")
     glb_allobs_df$.rownames <- rownames(glb_allobs_df)
-    glb_trnobs_df$.rownames <- rownames(glb_trnobs_df)
-    glb_newobs_df$.rownames <- rownames(glb_newobs_df)    
+    glb_trnobs_df$.rownames <- rownames(subset(glb_allobs_df, .src == "Train"))
+    glb_newobs_df$.rownames <- rownames(subset(glb_allobs_df, .src == "Test"))    
     glb_id_var <- ".rownames"
 }
 if (sum(duplicated(glb_allobs_df[, glb_id_var, FALSE])) > 0)
     stop(glb_id_var, " duplicated in glb_allobs_df")
 glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_id_var)
 
-# Combine trnent & newobs into glb_allobs_df for easier manipulation
-glb_trnobs_df$.src <- "Train"; glb_newobs_df$.src <- "Test"; 
-glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, ".src")
-glb_allobs_df <- myrbind_df(glb_trnobs_df, glb_newobs_df)
-comment(glb_allobs_df) <- "glb_allobs_df"
 glb_allobs_df <- orderBy(reformulate(glb_id_var), glb_allobs_df)
 glb_trnobs_df <- glb_newobs_df <- NULL
 
@@ -1269,6 +1270,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FAL
 # df[is.na(df)] <- 0
 
 mycheck_problem_data(glb_allobs_df)
+# glb_allobs_df <- na.omit(glb_allobs_df)
 
 # Not refactored into mydsutils.R since glb_*_df might be reassigned
 glb_impute_missing_data <- function() {
@@ -1344,12 +1346,9 @@ if (length(str_vars <- setdiff(str_vars,
     for (var in str_vars) {
         warning("Creating factors of string variable: ", var, 
                 ": # of unique values: ", length(unique(glb_allobs_df[, var])))
-        glb_allobs_df[, paste0(var, ".fctr")] <- factor(glb_allobs_df[, var], 
-                        as.factor(unique(glb_allobs_df[, var])))
-#         glb_trnobs_df[, paste0(var, ".fctr")] <- factor(glb_trnobs_df[, var], 
-#                         as.factor(unique(glb_allobs_df[, var])))
-#         glb_newobs_df[, paste0(var, ".fctr")] <- factor(glb_newobs_df[, var], 
-#                         as.factor(unique(glb_allobs_df[, var])))
+        glb_allobs_df[, paste0(var, ".fctr")] <- 
+            relevel(factor(glb_allobs_df[, var]),
+                    names(which.max(table(glb_allobs_df[, var], useNA = "ifany"))))
     }
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, str_vars)
 }
@@ -2390,11 +2389,9 @@ for (method in glb_models_method_vctr) {
 # glb_models_lst <- sav_models_lst; glb_models_df <- sav_models_df; glm_featsimp_df <- sav_featsimp_df
 
     # easier to exclude features
-#model_id_pfx <- "";
-# indep_vars_vctr <- setdiff(names(glb_fitobs_df), 
-#                         union(union(glb_rsp_var, glb_exclude_vars_as_features), 
-#                                 c("<feat1_name>", "<feat2_name>")))
-# method <- ""                                
+#model_id <- "";
+# indep_vars_vctr <- head(subset(glb_models_df, grepl("All\\.X\\.", model_id), select=feats), 1)
+# indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
 
     # easier to include features
 #model_id <- "Rank9.2"; indep_vars_vctr <- c(NULL
