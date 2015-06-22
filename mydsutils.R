@@ -627,10 +627,15 @@ mycheck_map_results <- function(mapd_df, from_col_name, to_col_name, print.all=F
 	#	Use fill aesthetic to display n:m mappings ?
 	#		Create a variable that contains n:m ratio for each value of to_col_name ?
 
-	print(ggplot(map_summry_df, aes_string(x=to_col_name, y=".n",
-                                       fill=paste0("factor(", from_col_name, ")"))) +
-                 geom_bar(stat="identity") + coord_flip())
-# 	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
+    if (".n" %in% names(map_summry_df)) {
+    	print(ggplot(map_summry_df, aes_string(x=to_col_name, y=".n",
+                                           fill=paste0("factor(", from_col_name, ")"))) +
+                     geom_bar(stat="identity") + coord_flip())
+    # 	print(myplot_hbar(map_summry_df[1:min(nrow(map_summry_df), 10),], to_col_name, "_n"))
+    } else {
+        # Continous distribution
+        print(myplot_scatter(map_summry_df, from_col_name, to_col_name))
+    }
 }
 
 # mymap <- function(df, from_col_name, to_col_name, map_func) {
@@ -674,6 +679,139 @@ mycreate_date2daytype <- function (df, date_col_name) {
 mycount_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
     sapply(str_vctr, function(str) sum(gregexpr(pattern, str, perl=perl)[[1]] > 0))
 
+myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
+    keep_feats <- c(NULL)
+    dates_df            <- df[, id_vars, FALSE]
+    dates_df[, rsp_var] <- df[, rsp_var, FALSE]
+
+    for (var in vars) {
+        #dates_df <- data.frame(.date=strptime(df[, var], "%Y-%m-%d %H:%M:%S"))
+        dates_df <- cbind(dates_df,
+                          data.frame(.date=strptime(df[, var],
+                                                    glb_date_fmts[[var]],
+                                                    tz=glb_date_tzs[[var]])))
+        #         print(dates_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", ".date")])
+        #         print(glb_allobs_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])
+        #         print(head(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), c("ID", "Arrest.fctr", "Date")]))
+        #         print(head(strptime(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), "Date"], "%m/%e/%y %H:%M"))
+        # Wrong data during EST->EDT transition
+        #         tmp <- strptime("4/7/02 2:00","%m/%e/%y %H:%M:%S"); print(tmp); print(is.na(tmp))
+        #         dates_df[dates_df$ID == 2068197, .date] <- tmp
+        #         grep("(.*?) 2:(.*)", glb_allobs_df[is.na(dates_df$.date), "Date"], value=TRUE)
+        #         dates_df[is.na(dates_df$.date), ".date"] <-
+        #             data.frame(.date=strptime(gsub("(.*?) 2:(.*)", "\\1 3:\\2",
+        #                 glb_allobs_df[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
+        if (sum(is.na(dates_df$.date)) > 0) {
+            stop("NA POSIX dates for ", var)
+            print(df[is.na(dates_df$.date), c(id_vars, rsp_var, var)])
+        }
+
+        .date <- dates_df$.date
+        dates_df[, paste0(var, ".POSIX")] <- .date
+        dates_df[, paste0(var, ".year")] <- as.numeric(format(.date, "%Y"))
+        dates_df[, paste0(var, ".year.fctr")] <- as.factor(format(.date, "%Y"))
+        dates_df[, paste0(var, ".month")] <- as.numeric(format(.date, "%m"))
+        dates_df[, paste0(var, ".month.fctr")] <- as.factor(format(.date, "%m"))
+        dates_df[, paste0(var, ".date")] <- as.numeric(format(.date, "%d"))
+        dates_df[, paste0(var, ".date.fctr")] <-
+            cut(as.numeric(format(.date, "%d")), 5) # by month week
+        dates_df[, paste0(var, ".juliandate")] <- as.numeric(format(.date, "%j"))
+
+        # wkday Sun=0; Mon=1; ...; Sat=6
+        dates_df[, paste0(var, ".wkday")] <- as.numeric(format(.date, "%w"))
+        dates_df[, paste0(var, ".wkday.fctr")] <- as.factor(format(.date, "%w"))
+
+        # Get US Federal Holidays for relevant years
+        require(XML)
+        doc.html = htmlTreeParse('http://about.usps.com/news/events-calendar/2012-federal-holidays.htm', useInternal = TRUE)
+
+        #         # Extract all the paragraphs (HTML tag is p, starting at
+        #         # the root of the document). Unlist flattens the list to
+        #         # create a character vector.
+        #         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
+        #         # Replace all \n by spaces
+        #         doc.text = gsub('\\n', ' ', doc.text)
+        #         # Join all the elements of the character vector into a single
+        #         # character string, separated by spaces
+        #         doc.text = paste(doc.text, collapse = ' ')
+
+        # parse the tree by tables
+        txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
+        # do some clean up with regular expressions
+        txt <- grep("day, ", txt, value=TRUE)
+        txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
+        #         txt <- gsub("\t","",txt)
+        #         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
+        #         txt <- txt[!(txt %in% c("", "|"))]
+        hldays <- strptime(paste(txt, ", 2012", sep=""), "%B %e, %Y")
+        dates_df[, paste0(var, ".hlday")] <-
+            ifelse(format(.date, "%Y-%m-%d") %in% hldays, 1, 0)
+
+        # NYState holidays 1.9., 13.10., 11.11., 27.11., 25.12.
+
+        dates_df[, paste0(var, ".wkend")] <- as.numeric(
+            (dates_df[, paste0(var, ".wkday")] %in% c(0, 6)) |
+                dates_df[, paste0(var, ".hlday")] )
+
+        dates_df[, paste0(var, ".hour")] <- as.numeric(format(.date, "%H"))
+        dates_df[, paste0(var, ".hour.fctr")] <-
+            if (length(unique(vals <- as.numeric(format(.date, "%H")))) <= 1)
+                vals else cut(vals, 3) # by work-shift
+        dates_df[, paste0(var, ".minute")] <- as.numeric(format(.date, "%M"))
+        dates_df[, paste0(var, ".minute.fctr")] <-
+            if (length(unique(vals <- as.numeric(format(.date, "%M")))) <= 1)
+                vals else cut(vals, 4) # by quarter-hours
+        dates_df[, paste0(var, ".second")] <- as.numeric(format(.date, "%S"))
+        dates_df[, paste0(var, ".second.fctr")] <-
+            if (length(unique(vals <- as.numeric(format(.date, "%S")))) <= 1)
+                vals else cut(vals, 4) # by quarter-minutes
+
+        dates_df[, paste0(var, ".day.minutes")] <-
+            60 * dates_df[, paste0(var, ".hour")] +
+            dates_df[, paste0(var, ".minute")]
+        if ((unq_vals_n <- length(unique(dates_df[, paste0(var, ".day.minutes")]))) > 1) {
+            max_degree <- min(unq_vals_n, 5)
+            dates_df[, paste0(var, ".day.minutes.poly.", 1:max_degree)] <-
+                as.matrix(poly(dates_df[, paste0(var, ".day.minutes")], max_degree))
+        } else max_degree <- 0
+
+        #         print(gp <- myplot_box(df=dates_df, ycol_names="PubDate.day.minutes",
+        #                                xcol_name=rsp_var))
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name=".rownames",
+        #                         ycol_name="PubDate.day.minutes", colorcol_name=rsp_var))
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate",
+        #                         ycol_name="PubDate.day.minutes.poly.1", colorcol_name=rsp_var))
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.day.minutes",
+        #                         ycol_name="PubDate.day.minutes.poly.4", colorcol_name=rsp_var))
+        #
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate",
+        #                         ycol_name="PubDate.day.minutes", colorcol_name=rsp_var, smooth=TRUE))
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate",
+        #                         ycol_name="PubDate.day.minutes.poly.4", colorcol_name=rsp_var, smooth=TRUE))
+        #         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate",
+        #                         ycol_name=c("PubDate.day.minutes", "PubDate.day.minutes.poly.4"),
+        #                         colorcol_name=rsp_var))
+
+        #         print(gp <- myplot_scatter(df=subset(dates_df, Popular.fctr=="Y"),
+        #                                    xcol_name=paste0(var, ".juliandate"),
+        #                         ycol_name=paste0(var, ".day.minutes", colorcol_name=rsp_var))
+        #         print(gp <- myplot_box(df=dates_df, ycol_names=paste0(var, ".hour"),
+        #                                xcol_name=rsp_var))
+        #         print(gp <- myplot_bar(df=dates_df, ycol_names=paste0(var, ".hour.fctr"),
+        #                                xcol_name=rsp_var,
+        #                                colorcol_name=paste0(var, ".hour.fctr")))
+        keep_feats <- union(keep_feats, paste(var,
+            c(".POSIX", ".year.fctr", ".month.fctr", ".date.fctr", ".wkday.fctr", ".wkend",
+              ".hour.fctr", ".minute.fctr", ".second.fctr"),
+                                                sep=""))
+        if (max_degree > 0)
+            keep_feats <- union(keep_feats, paste(var,
+                                    paste0(".day.minutes.poly.", 1:max_degree), sep=""))
+        keep_feats <- intersect(keep_feats, names(dates_df))
+    }
+    #myprint_df(dates_df)
+    return(dates_df[, keep_feats])
+}
 
 ## 03.2		filter features
 #features_lst <- features_lst[features_lst != "price"]
@@ -834,7 +972,7 @@ myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
                                        !zeroVar
                              )$id)
 	if (length(chk_feats) > 100)
-		stop("Number of feats to check for correlation: ",  length(chk_feats), " exceeds 100")                             
+		stop("Number of feats to check for correlation: ",  length(chk_feats), " exceeds 100")
     repeat {
     	if (length(chk_feats) == 1)
     		break

@@ -179,6 +179,7 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 #   or contains spaces (e.g. "Not in Labor Force")
 #   caret predict(..., type="prob") crashes
 glb_map_rsp_raw_to_var <- NULL # or function(raw) {
+#     return(log(raw))
 #     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
 #     #as.factor(paste0("B", raw))
 #     #as.factor(gsub(" ", "\\.", raw))    
@@ -186,6 +187,7 @@ glb_map_rsp_raw_to_var <- NULL # or function(raw) {
 # glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
+#     return(exp(var))
 #     as.numeric(var) - 1
 #     #as.numeric(var)
 #     #gsub("\\.", " ", levels(var)[as.numeric(var)])
@@ -216,30 +218,58 @@ glb_assign_pairs_lst <- NULL;
 #                                            to=c("NA.my"))
 glb_assign_vars <- names(glb_assign_pairs_lst)
 
-glb_transform_lst <- NULL;
-# glb_transform_lst[["<var>"]] <- list(
+# Derived features
+glb_derive_lst <- NULL;
+# glb_derive_lst[["Week.bgn"]] <- list(
+#     mapfn=function(Week) { return(substr(Week, 1, 10)) }
+#     , args=c("Week"))
+
+# require(zoo)
+# # If glb_allobs_df is not sorted in the desired manner
+# glb_derive_lst[["ILI.2.lag"]] <- list(
+#     mapfn=function(Week) { return(coredata(lag(zoo(orderBy(~Week, glb_allobs_df)$ILI), -2, na.pad=TRUE))) }
+#     , args=c("Week"))
+# glb_derive_lst[["ILI.2.lag"]] <- list(
+#     mapfn=function(ILI) { return(coredata(lag(zoo(ILI), -2, na.pad=TRUE))) }
+#     , args=c("ILI"))
+# glb_derive_lst[["ILI.2.lag.log"]] <- list(
+#     mapfn=function(ILI.2.lag) { return(log(ILI.2.lag)) }
+#     , args=c("ILI.2.lag"))
+
+#     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
+#     , args=c("PTS", "oppPTS"))
+
+# Add logs of numerics that are not distributed normally ->  do automatically ???
+
 #     mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
 #                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
 #                           return(as.factor(tfr_raw)) }
-#     , sfx=".my.fctr")
+
+# glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
+#     mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
+#                         match_num_vctr <- unlist(lapply(match_lst, 
+#                                                         function(elem) length(elem)))
+#                         return(log(1 + match_num_vctr)) }
+#     , args=c("<txt_var>"))
+
 #     mapfn=function(raw) { mod_raw <- raw;
 #         mod_raw <- gsub("&#[[:digit:]]{3};", " ", mod_raw);
 #         # Modifications for this exercise only
 #         mod_raw <- gsub("\\bgoodIn ", "good In", mod_raw);
 #                           return(mod_raw)
-#                         }
-#     , sfx=".my")
-# mapfn(glb_allobs_df$review[739])
-# mapfn(glb_allobs_df$review[740])
-# ret_lst <- regexec("&#[[:digit:]]{3};", raw, ignore.case=FALSE); ret_lst <- regmatches(raw, ret_lst); ret_vctr <- sapply(1:length(ret_lst), function(pos_ix) ifelse(length(ret_lst[[pos_ix]]) > 0, ret_lst[[pos_ix]], "")); print(ret_vctr <- ret_vctr[ret_vctr != ""])
-# ret_lst <- gregexpr("&#[[:digit:]]{3};", raw, ignore.case=FALSE); print(ret_lst); print(length(ret_lst[[1]]))
-# mapfn(glb_allobs_df$review)
-# mapfn(glb_allobs_df$review[739:740])
 
-# mapfn(glb_allobs_df$<var>)
-# glb_transform_lst[["<var1>"]] <- glb_transform_lst[["<var2>"]]
-# Add logs of numerics that are not distributed normally ->  do automatically ???
-glb_transform_vars <- names(glb_transform_lst)
+#         # Create user-specified pattern vectors 
+# #sum(mycount_pattern_occ("Metropolitan Diary:", glb_allobs_df$Abstract) > 0)
+#         if (txt_var %in% c("Snippet", "Abstract")) {
+#             txt_X_df[, paste0(txt_var_pfx, ".P.metropolitan.diary.colon")] <-
+#                 as.integer(0 + mycount_pattern_occ("Metropolitan Diary:", 
+#                                                    glb_allobs_df[, txt_var]))
+#summary(glb_allobs_df[ ,grep("P.on.this.day", names(glb_allobs_df), value=TRUE)])
+
+# args_lst <- NULL; for (arg in glb_derive_lst[["Week.bgn"]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; do.call(mapfn, args_lst)
+
+# glb_derive_lst[["<var1>"]] <- glb_derive_lst[["<var2>"]]
+glb_derive_vars <- names(glb_derive_lst)
 
 glb_date_vars <- NULL # or c("<date_var>")
 glb_date_fmts <- list(); #glb_date_fmts[["<date_var>"]] <- "%m/%e/%y"
@@ -269,31 +299,6 @@ glb_sprs_thresholds <- NULL # or c(0.988, 0.970, 0.970) # Generates 29, 22, 22 t
 #   Select terms that appear in at least 0.2 * O(FP/FN(glb_OOBobs_df))
 #       numrows(glb_OOBobs_df) = 1.1 * numrows(glb_newobs_df)
 names(glb_sprs_thresholds) <- glb_txt_vars
-
-# Derived features (consolidate this with transform features ???)
-glb_derive_lst <- NULL;
-# glb_derive_lst[["PTS.diff"]] <- list(
-#     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
-#     , args=c("PTS", "oppPTS"))
-# glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
-#     mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
-#                         match_num_vctr <- unlist(lapply(match_lst, 
-#                                                         function(elem) length(elem)))
-#                         return(log(1 + match_num_vctr)) }
-#     , args=c("<txt_var>"))
-
-# args_lst <- NULL; for (arg in glb_derive_lst[["PTS.diff"]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; do.call(mapfn, args_lst)
-
-# glb_derive_lst[["<var1>"]] <- glb_derive_lst[["<var2>"]]
-
-#         # Create user-specified pattern vectors 
-# #sum(mycount_pattern_occ("Metropolitan Diary:", glb_allobs_df$Abstract) > 0)
-#         if (txt_var %in% c("Snippet", "Abstract")) {
-#             txt_X_df[, paste0(txt_var_pfx, ".P.metropolitan.diary.colon")] <-
-#                 as.integer(0 + mycount_pattern_occ("Metropolitan Diary:", 
-#                                                    glb_allobs_df[, txt_var]))
-#summary(glb_allobs_df[ ,grep("P.on.this.day", names(glb_allobs_df), value=TRUE)])
-glb_derive_vars <- names(glb_derive_lst)
 
 # User-specified exclusions  
 glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
@@ -548,224 +553,6 @@ if (!is.null(glb_map_rsp_raw_to_var)) {
     if (glb_is_classification) dsp_class_dstrb(glb_rsp_var)
 }
 
-#   Convert dates to numbers 
-#       typically, dates come in as chars; 
-#           so this must be done before converting chars to factors
-
-myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
-    keep_feats <- c(NULL)
-    for (var in vars) {
-        dates_df            <- df[, id_vars, FALSE]        
-        dates_df[, rsp_var] <- df[, rsp_var, FALSE]
-        #dates_df <- data.frame(.date=strptime(df[, var], "%Y-%m-%d %H:%M:%S"))
-        dates_df <- cbind(dates_df, data.frame(.date=strptime(df[, var], 
-            glb_date_fmts[[var]], tz=glb_date_tzs[[var]])))
-#         print(dates_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", ".date")])
-#         print(glb_allobs_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])     
-#         print(head(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), c("ID", "Arrest.fctr", "Date")]))
-#         print(head(strptime(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), "Date"], "%m/%e/%y %H:%M"))
-        # Wrong data during EST->EDT transition
-#         tmp <- strptime("4/7/02 2:00","%m/%e/%y %H:%M:%S"); print(tmp); print(is.na(tmp))
-#         dates_df[dates_df$ID == 2068197, .date] <- tmp
-#         grep("(.*?) 2:(.*)", glb_allobs_df[is.na(dates_df$.date), "Date"], value=TRUE)
-#         dates_df[is.na(dates_df$.date), ".date"] <- 
-#             data.frame(.date=strptime(gsub("(.*?) 2:(.*)", "\\1 3:\\2",
-#                 glb_allobs_df[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
-        if (sum(is.na(dates_df$.date)) > 0) {
-            stop("NA POSIX dates for ", var)
-            print(df[is.na(dates_df$.date), c(id_vars, rsp_var, var)])
-        }    
-        
-        .date <- dates_df$.date
-        dates_df[, paste0(var, ".POSIX")] <- .date
-        dates_df[, paste0(var, ".year")] <- as.numeric(format(.date, "%Y"))
-        dates_df[, paste0(var, ".year.fctr")] <- as.factor(format(.date, "%Y")) 
-        dates_df[, paste0(var, ".month")] <- as.numeric(format(.date, "%m"))
-        dates_df[, paste0(var, ".month.fctr")] <- as.factor(format(.date, "%m"))
-        dates_df[, paste0(var, ".date")] <- as.numeric(format(.date, "%d"))
-        dates_df[, paste0(var, ".date.fctr")] <- 
-            cut(as.numeric(format(.date, "%d")), 5) # by month week  
-        dates_df[, paste0(var, ".juliandate")] <- as.numeric(format(.date, "%j"))        
-        
-        # wkday Sun=0; Mon=1; ...; Sat=6
-        dates_df[, paste0(var, ".wkday")] <- as.numeric(format(.date, "%w"))
-        dates_df[, paste0(var, ".wkday.fctr")] <- as.factor(format(.date, "%w"))
-        
-        # Get US Federal Holidays for relevant years
-        require(XML)
-        doc.html = htmlTreeParse('http://about.usps.com/news/events-calendar/2012-federal-holidays.htm', useInternal = TRUE)
-        
-#         # Extract all the paragraphs (HTML tag is p, starting at
-#         # the root of the document). Unlist flattens the list to
-#         # create a character vector.
-#         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
-#         # Replace all \n by spaces
-#         doc.text = gsub('\\n', ' ', doc.text)
-#         # Join all the elements of the character vector into a single
-#         # character string, separated by spaces
-#         doc.text = paste(doc.text, collapse = ' ')
-        
-        # parse the tree by tables
-        txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
-        # do some clean up with regular expressions
-        txt <- grep("day, ", txt, value=TRUE)
-        txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
-#         txt <- gsub("\t","",txt)
-#         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
-#         txt <- txt[!(txt %in% c("", "|"))]
-        hldays <- strptime(paste(txt, ", 2012", sep=""), "%B %e, %Y")
-        dates_df[, paste0(var, ".hlday")] <- 
-            ifelse(format(.date, "%Y-%m-%d") %in% hldays, 1, 0)
-        
-        # NYState holidays 1.9., 13.10., 11.11., 27.11., 25.12.
-        
-        dates_df[, paste0(var, ".wkend")] <- as.numeric(
-            (dates_df[, paste0(var, ".wkday")] %in% c(0, 6)) | 
-            dates_df[, paste0(var, ".hlday")] )
-        
-        dates_df[, paste0(var, ".hour")] <- as.numeric(format(.date, "%H"))
-        dates_df[, paste0(var, ".hour.fctr")] <- 
-            if (length(unique(vals <- as.numeric(format(.date, "%H")))) <= 1)
-                   vals else cut(vals, 3) # by work-shift    
-        dates_df[, paste0(var, ".minute")] <- as.numeric(format(.date, "%M")) 
-        dates_df[, paste0(var, ".minute.fctr")] <- 
-            if (length(unique(vals <- as.numeric(format(.date, "%M")))) <= 1)
-                   vals else cut(vals, 4) # by quarter-hours    
-        dates_df[, paste0(var, ".second")] <- as.numeric(format(.date, "%S")) 
-        dates_df[, paste0(var, ".second.fctr")] <- 
-            if (length(unique(vals <- as.numeric(format(.date, "%S")))) <= 1)
-                   vals else cut(vals, 4) # by quarter-minutes
-
-        dates_df[, paste0(var, ".day.minutes")] <- 
-            60 * dates_df[, paste0(var, ".hour")] + 
-                 dates_df[, paste0(var, ".minute")]
-        if ((unq_vals_n <- length(unique(dates_df[, paste0(var, ".day.minutes")]))) > 1) {
-            max_degree <- min(unq_vals_n, 5)
-            dates_df[, paste0(var, ".day.minutes.poly.", 1:max_degree)] <- 
-                as.matrix(poly(dates_df[, paste0(var, ".day.minutes")], max_degree))
-        } else max_degree <- 0   
-        
-#         print(gp <- myplot_box(df=dates_df, ycol_names="PubDate.day.minutes", 
-#                                xcol_name=rsp_var))
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name=".rownames", 
-#                         ycol_name="PubDate.day.minutes", colorcol_name=rsp_var))
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate", 
-#                         ycol_name="PubDate.day.minutes.poly.1", colorcol_name=rsp_var))
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.day.minutes", 
-#                         ycol_name="PubDate.day.minutes.poly.4", colorcol_name=rsp_var))
-# 
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate", 
-#                         ycol_name="PubDate.day.minutes", colorcol_name=rsp_var, smooth=TRUE))
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate", 
-#                         ycol_name="PubDate.day.minutes.poly.4", colorcol_name=rsp_var, smooth=TRUE))
-#         print(gp <- myplot_scatter(df=dates_df, xcol_name="PubDate.juliandate", 
-#                         ycol_name=c("PubDate.day.minutes", "PubDate.day.minutes.poly.4"), 
-#                         colorcol_name=rsp_var))
-        
-#         print(gp <- myplot_scatter(df=subset(dates_df, Popular.fctr=="Y"), 
-#                                    xcol_name=paste0(var, ".juliandate"), 
-#                         ycol_name=paste0(var, ".day.minutes", colorcol_name=rsp_var))
-#         print(gp <- myplot_box(df=dates_df, ycol_names=paste0(var, ".hour"), 
-#                                xcol_name=rsp_var))
-#         print(gp <- myplot_bar(df=dates_df, ycol_names=paste0(var, ".hour.fctr"), 
-#                                xcol_name=rsp_var, 
-#                                colorcol_name=paste0(var, ".hour.fctr")))                
-        keep_feats <- paste(var, 
-            c(".POSIX", ".year.fctr", ".month.fctr", ".date.fctr", ".wkday.fctr", 
-              ".wkend", ".hour.fctr", ".minute.fctr", ".second.fctr"), sep="")
-        if (max_degree > 0)
-            keep_feats <- union(keep_feats, paste(var, 
-              paste0(".day.minutes.poly.", 1:max_degree), sep=""))
-        keep_feats <- intersect(keep_feats, names(dates_df))        
-    }
-    #myprint_df(dates_df)
-    return(dates_df[, keep_feats])
-}
-
-if (!is.null(glb_date_vars)) {
-    glb_allobs_df <- cbind(glb_allobs_df, 
-        myextract_dates_df(df=glb_allobs_df, vars=glb_date_vars, 
-                           id_vars=glb_id_var, rsp_var=glb_rsp_var))
-    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-                                          paste(glb_date_vars, c("", ".POSIX"), sep=""))
-
-    for (feat in glb_date_vars) {
-        glb_allobs_df <- orderBy(reformulate(paste0(feat, ".POSIX")), glb_allobs_df)
-#         print(myplot_scatter(glb_allobs_df, xcol_name=paste0(feat, ".POSIX"),
-#                              ycol_name=glb_rsp_var, colorcol_name=glb_rsp_var))
-        print(myplot_scatter(glb_allobs_df[glb_allobs_df[, paste0(feat, ".POSIX")] >=
-                                               strptime("2012-12-01", "%Y-%m-%d"), ], 
-                             xcol_name=paste0(feat, ".POSIX"),
-                             ycol_name=glb_rsp_var, colorcol_name=paste0(feat, ".wkend")))
-
-        # Create features that measure the gap between previous timestamp in the data
-        require(zoo)
-        z <- zoo(as.numeric(as.POSIXlt(glb_allobs_df[, paste0(feat, ".POSIX")])))
-        glb_allobs_df[, paste0(feat, ".zoo")] <- z
-        print(head(glb_allobs_df[, c(glb_id_var, feat, paste0(feat, ".zoo"))]))
-        print(myplot_scatter(glb_allobs_df[glb_allobs_df[,  paste0(feat, ".POSIX")] >
-                                            strptime("2012-10-01", "%Y-%m-%d"), ], 
-                            xcol_name=paste0(feat, ".zoo"), ycol_name=glb_rsp_var,
-                            colorcol_name=glb_rsp_var))
-        b <- zoo(, seq(nrow(glb_allobs_df)))
-        
-        last1 <- as.numeric(merge(z-lag(z, -1), b, all=TRUE)); last1[is.na(last1)] <- 0
-        glb_allobs_df[, paste0(feat, ".last1.log")] <- log(1 + last1)
-        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
-                                                    paste0(feat, ".last1.log")] > 0, ], 
-                               ycol_names=paste0(feat, ".last1.log"), 
-                               xcol_name=glb_rsp_var))
-        
-        last10 <- as.numeric(merge(z-lag(z, -10), b, all=TRUE)); last10[is.na(last10)] <- 0
-        glb_allobs_df[, paste0(feat, ".last10.log")] <- log(1 + last10)
-        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
-                                                    paste0(feat, ".last10.log")] > 0, ], 
-                               ycol_names=paste0(feat, ".last10.log"), 
-                               xcol_name=glb_rsp_var))
-        
-        last100 <- as.numeric(merge(z-lag(z, -100), b, all=TRUE)); last100[is.na(last100)] <- 0
-        glb_allobs_df[, paste0(feat, ".last100.log")] <- log(1 + last100)
-        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
-                                                    paste0(feat, ".last100.log")] > 0, ], 
-                               ycol_names=paste0(feat, ".last100.log"), 
-                               xcol_name=glb_rsp_var))
-        
-        glb_allobs_df <- orderBy(reformulate(glb_id_var), glb_allobs_df)
-        glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
-                                                c(paste0(feat, ".zoo")))
-        # all2$last3 = as.numeric(merge(z-lag(z, -3), b, all = TRUE))
-        # all2$last5 = as.numeric(merge(z-lag(z, -5), b, all = TRUE))
-        # all2$last10 = as.numeric(merge(z-lag(z, -10), b, all = TRUE))
-        # all2$last20 = as.numeric(merge(z-lag(z, -20), b, all = TRUE))
-        # all2$last50 = as.numeric(merge(z-lag(z, -50), b, all = TRUE))
-        # 
-        # 
-        # # order table
-        # all2 = all2[order(all2$id),]
-        # 
-        # ## fill in NAs
-        # # count averages
-        # na.avg = all2 %>% group_by(weekend, hour) %>% dplyr::summarise(
-        #     last1=mean(last1, na.rm=TRUE),
-        #     last3=mean(last3, na.rm=TRUE),
-        #     last5=mean(last5, na.rm=TRUE),
-        #     last10=mean(last10, na.rm=TRUE),
-        #     last20=mean(last20, na.rm=TRUE),
-        #     last50=mean(last50, na.rm=TRUE)
-        # )
-        # 
-        # # fill in averages
-        # na.merge = merge(all2, na.avg, by=c("weekend","hour"))
-        # na.merge = na.merge[order(na.merge$id),]
-        # for(i in c("last1", "last3", "last5", "last10", "last20", "last50")) {
-        #     y = paste0(i, ".y")
-        #     idx = is.na(all2[[i]])
-        #     all2[idx,][[i]] <- na.merge[idx,][[y]]
-        # }
-        # rm(na.avg, na.merge, b, i, idx, n, pd, sec, sh, y, z)
-    }
-}
-
 # check distribution of all numeric data
 dsp_numeric_feats_dstrb <- function(feats_vctr) {
     for (feat in feats_vctr) {
@@ -908,7 +695,6 @@ dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glb_allobs_df),
 #                     mapping=aes(x=<x_var>, y=<y_var>), color="red", shape=4, size=5) +
 #         geom_vline(xintercept=84))
 
-rm(last1, last10, last100)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "scrub.data", major.inc=FALSE)
 ```
 
@@ -1238,16 +1024,6 @@ for (feat in glb_assign_vars) {
     glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_assign_vars)
 }
 
-### Transformations using mapping functions
-#stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
-for (feat in glb_transform_vars) {
-    new_feat <- paste0(feat, glb_transform_lst[[feat]]$sfx)
-    print(sprintf("Applying mapping function for: %s -> %s...", feat, new_feat))
-    glb_allobs_df[, new_feat] <- glb_transform_lst[[feat]]$mapfn(glb_allobs_df[, feat])
-
-    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, glb_transform_vars)
-}
-
 ### Derivations using mapping functions
 #stop(here"); sav_allobs_df <- glb_allobs_df; glb_allobs_df <- sav_allobs_df
 for (new_feat in glb_derive_vars) {
@@ -1257,52 +1033,6 @@ for (new_feat in glb_derive_vars) {
         args_lst[[arg]] <- glb_allobs_df[, arg]
     glb_allobs_df[, new_feat] <- do.call(glb_derive_lst[[new_feat]]$mapfn, args_lst)
 }
-```
-
-### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r manage.missing.data, cache=FALSE}
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FALSE)
-
-# print(sapply(names(glb_trnobs_df), function(col) sum(is.na(glb_trnobs_df[, col]))))
-# print(sapply(names(glb_newobs_df), function(col) sum(is.na(glb_newobs_df[, col]))))
-# glb_trnobs_df <- na.omit(glb_trnobs_df)
-# glb_newobs_df <- na.omit(glb_newobs_df)
-# df[is.na(df)] <- 0
-
-mycheck_problem_data(glb_allobs_df)
-# glb_allobs_df <- na.omit(glb_allobs_df)
-
-# Not refactored into mydsutils.R since glb_*_df might be reassigned
-glb_impute_missing_data <- function() {
-    
-    require(mice)
-    set.seed(glb_mice_complete.seed)
-    inp_impent_df <- glb_allobs_df[, setdiff(names(glb_allobs_df), 
-                                union(glb_exclude_vars_as_features, glb_rsp_var))]
-    print("Summary before imputation: ")
-    print(summary(inp_impent_df))
-    out_impent_df <- complete(mice(inp_impent_df))
-    print(summary(out_impent_df))
-    
-    # complete(mice()) changes attributes of factors even though values don't change
-    ret_vars <- sapply(names(out_impent_df), 
-                       function(col) ifelse(!identical(out_impent_df[, col], inp_impent_df[, col]), 
-                                            col, ""))
-    ret_vars <- ret_vars[ret_vars != ""]
-    return(out_impent_df[, ret_vars])
-}
-
-if (glb_impute_na_data && 
-    (length(myfind_numerics_missing(glb_allobs_df)) > 0) &&
-    (ncol(nonna_df <- glb_impute_missing_data()) > 0)) {
-    for (col in names(nonna_df)) {
-        glb_allobs_df[, paste0(col, ".nonNA")] <- nonna_df[, col]
-        glb_exclude_vars_as_features <- c(glb_exclude_vars_as_features, col)        
-    }
-}    
-    
-mycheck_problem_data(glb_allobs_df, terminate = TRUE)
-
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -1334,6 +1064,105 @@ extract.features_chunk_df <- myadd_chunk(NULL, "extract.features_bgn")
 # 
 # glb_newobs_df <- mutate(glb_newobs_df,
 #                     )
+
+#   Convert dates to numbers 
+#       typically, dates come in as chars; 
+#           so this must be done before converting chars to factors
+
+#stop(here"); sav_allobs_df <- glb_allobs_df #; glb_allobs_df <- sav_allobs_df
+if (!is.null(glb_date_vars)) {
+    glb_allobs_df <- cbind(glb_allobs_df, 
+        myextract_dates_df(df=glb_allobs_df, vars=glb_date_vars, 
+                           id_vars=glb_id_var, rsp_var=glb_rsp_var))
+    for (sfx in c("", ".POSIX"))
+        glb_exclude_vars_as_features <- 
+            union(glb_exclude_vars_as_features, 
+                    paste(glb_date_vars, sfx, sep=""))
+
+    for (feat in glb_date_vars) {
+        glb_allobs_df <- orderBy(reformulate(paste0(feat, ".POSIX")), glb_allobs_df)
+#         print(myplot_scatter(glb_allobs_df, xcol_name=paste0(feat, ".POSIX"),
+#                              ycol_name=glb_rsp_var, colorcol_name=glb_rsp_var))
+        print(myplot_scatter(glb_allobs_df[glb_allobs_df[, paste0(feat, ".POSIX")] >=
+                                               strptime("2012-12-01", "%Y-%m-%d"), ], 
+                             xcol_name=paste0(feat, ".POSIX"),
+                             ycol_name=glb_rsp_var, colorcol_name=paste0(feat, ".wkend")))
+
+        # Create features that measure the gap between previous timestamp in the data
+        require(zoo)
+        z <- zoo(as.numeric(as.POSIXlt(glb_allobs_df[, paste0(feat, ".POSIX")])))
+        glb_allobs_df[, paste0(feat, ".zoo")] <- z
+        print(head(glb_allobs_df[, c(glb_id_var, feat, paste0(feat, ".zoo"))]))
+        print(myplot_scatter(glb_allobs_df[glb_allobs_df[,  paste0(feat, ".POSIX")] >
+                                            strptime("2012-10-01", "%Y-%m-%d"), ], 
+                            xcol_name=paste0(feat, ".zoo"), ycol_name=glb_rsp_var,
+                            colorcol_name=glb_rsp_var))
+        b <- zoo(, seq(nrow(glb_allobs_df)))
+        
+        last1 <- as.numeric(merge(z-lag(z, -1), b, all=TRUE)); last1[is.na(last1)] <- 0
+        glb_allobs_df[, paste0(feat, ".last1.log")] <- log(1 + last1)
+        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
+                                                    paste0(feat, ".last1.log")] > 0, ], 
+                               ycol_names=paste0(feat, ".last1.log"), 
+                               xcol_name=glb_rsp_var))
+        
+        last2 <- as.numeric(merge(z-lag(z, -2), b, all=TRUE)); last2[is.na(last2)] <- 0
+        glb_allobs_df[, paste0(feat, ".last2.log")] <- log(1 + last2)
+        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
+                                                    paste0(feat, ".last2.log")] > 0, ], 
+                               ycol_names=paste0(feat, ".last2.log"), 
+                               xcol_name=glb_rsp_var))
+        
+        last10 <- as.numeric(merge(z-lag(z, -10), b, all=TRUE)); last10[is.na(last10)] <- 0
+        glb_allobs_df[, paste0(feat, ".last10.log")] <- log(1 + last10)
+        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
+                                                    paste0(feat, ".last10.log")] > 0, ], 
+                               ycol_names=paste0(feat, ".last10.log"), 
+                               xcol_name=glb_rsp_var))
+        
+        last100 <- as.numeric(merge(z-lag(z, -100), b, all=TRUE)); last100[is.na(last100)] <- 0
+        glb_allobs_df[, paste0(feat, ".last100.log")] <- log(1 + last100)
+        print(gp <- myplot_box(df=glb_allobs_df[glb_allobs_df[, 
+                                                    paste0(feat, ".last100.log")] > 0, ], 
+                               ycol_names=paste0(feat, ".last100.log"), 
+                               xcol_name=glb_rsp_var))
+        
+        glb_allobs_df <- orderBy(reformulate(glb_id_var), glb_allobs_df)
+        glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                                c(paste0(feat, ".zoo")))
+        # all2$last3 = as.numeric(merge(z-lag(z, -3), b, all = TRUE))
+        # all2$last5 = as.numeric(merge(z-lag(z, -5), b, all = TRUE))
+        # all2$last10 = as.numeric(merge(z-lag(z, -10), b, all = TRUE))
+        # all2$last20 = as.numeric(merge(z-lag(z, -20), b, all = TRUE))
+        # all2$last50 = as.numeric(merge(z-lag(z, -50), b, all = TRUE))
+        # 
+        # 
+        # # order table
+        # all2 = all2[order(all2$id),]
+        # 
+        # ## fill in NAs
+        # # count averages
+        # na.avg = all2 %>% group_by(weekend, hour) %>% dplyr::summarise(
+        #     last1=mean(last1, na.rm=TRUE),
+        #     last3=mean(last3, na.rm=TRUE),
+        #     last5=mean(last5, na.rm=TRUE),
+        #     last10=mean(last10, na.rm=TRUE),
+        #     last20=mean(last20, na.rm=TRUE),
+        #     last50=mean(last50, na.rm=TRUE)
+        # )
+        # 
+        # # fill in averages
+        # na.merge = merge(all2, na.avg, by=c("weekend","hour"))
+        # na.merge = na.merge[order(na.merge$id),]
+        # for(i in c("last1", "last3", "last5", "last10", "last20", "last50")) {
+        #     y = paste0(i, ".y")
+        #     idx = is.na(all2[[i]])
+        #     all2[idx,][[i]] <- na.merge[idx,][[y]]
+        # }
+        # rm(na.avg, na.merge, b, i, idx, n, pd, sec, sh, y, z)
+    }
+}
+rm(last1, last10, last100)
 
 #   Create factors of string variables
 extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
@@ -1881,6 +1710,51 @@ replay.petrisim(pn=glb_analytics_pn,
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
         "data.training.all","data.new")), flip_coord=TRUE)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc=TRUE)
+```
+
+### Step ``r mydsp_chunk(glb_chunks_df)``
+```{r manage.missing.data, cache=FALSE}
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc=FALSE)
+
+# print(sapply(names(glb_trnobs_df), function(col) sum(is.na(glb_trnobs_df[, col]))))
+# print(sapply(names(glb_newobs_df), function(col) sum(is.na(glb_newobs_df[, col]))))
+# glb_trnobs_df <- na.omit(glb_trnobs_df)
+# glb_newobs_df <- na.omit(glb_newobs_df)
+# df[is.na(df)] <- 0
+
+mycheck_problem_data(glb_allobs_df)
+# glb_allobs_df <- na.omit(glb_allobs_df)
+
+# Not refactored into mydsutils.R since glb_*_df might be reassigned
+glb_impute_missing_data <- function() {
+    
+    require(mice)
+    set.seed(glb_mice_complete.seed)
+    inp_impent_df <- glb_allobs_df[, setdiff(names(glb_allobs_df), 
+                                union(glb_exclude_vars_as_features, glb_rsp_var))]
+    print("Summary before imputation: ")
+    print(summary(inp_impent_df))
+    out_impent_df <- complete(mice(inp_impent_df))
+    print(summary(out_impent_df))
+    
+    # complete(mice()) changes attributes of factors even though values don't change
+    ret_vars <- sapply(names(out_impent_df), 
+                       function(col) ifelse(!identical(out_impent_df[, col], inp_impent_df[, col]), 
+                                            col, ""))
+    ret_vars <- ret_vars[ret_vars != ""]
+    return(out_impent_df[, ret_vars])
+}
+
+if (glb_impute_na_data && 
+    (length(myfind_numerics_missing(glb_allobs_df)) > 0) &&
+    (ncol(nonna_df <- glb_impute_missing_data()) > 0)) {
+    for (col in names(nonna_df)) {
+        glb_allobs_df[, paste0(col, ".nonNA")] <- nonna_df[, col]
+        glb_exclude_vars_as_features <- c(glb_exclude_vars_as_features, col)        
+    }
+}    
+    
+mycheck_problem_data(glb_allobs_df, terminate = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -2952,6 +2826,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "predict.data.new", major.inc=TRUE)
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r predict.data.new, cache=FALSE}
 # Compute final model predictions
+# sav_newobs_df <- glb_newobs_df
 glb_newobs_df <- glb_get_predictions(glb_newobs_df, mdl_id=glb_fin_mdl_id, 
                                      rsp_var_out=glb_rsp_var_out,
     prob_threshold_def=ifelse(glb_is_classification && glb_is_binomial, 
