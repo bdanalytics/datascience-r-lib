@@ -116,19 +116,21 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     mean_name <- grep(".mean", names(stats_df), fixed=TRUE, value=TRUE)
     stats_df[, paste0(median_name, ".offset.mult")] <-
         ifelse(stats_df[, median_name] >= stats_df[, mean_name], 1.05, 0.95)
-    sav_g <- g
+    #sav_g <- g
     if (length(ycol_names) == 1) {
         if (class(df[, ycol_names]) == "num")
             g <- g + scale_y_continuous(labels=myformat_number)
 
-        aes_str <- paste0("y=", ycol_names, ".median", " * ",
-                          ycol_names, ".median.offset.mult ",
-                            ", label=myformat_number(round(", ycol_names, ".median))")
-#                           ", label=", ycol_names, ".median")
-        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-        g <- g + geom_text(data=stats_df,
-                           mapping=aes_mapping
-                           , color="NavyBlue", size=3.5)
+        if (!inherits(df[, ycol_names], "logical")) { # logical crashes- why ???
+            aes_str <- paste0("y=", ycol_names, ".median", " * ",
+                              ycol_names, ".median.offset.mult ",
+                                ", label=myformat_number(round(", ycol_names, ".median))")
+    #                           ", label=", ycol_names, ".median")
+            aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+            g <- g + geom_text(data=stats_df,
+                               mapping=aes_mapping
+                               , color="NavyBlue", size=3.5)
+        }
     } else {
         g <- g + geom_text(data=stats_df,
                            mapping=aes_string(x="variable",

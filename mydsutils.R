@@ -1736,6 +1736,7 @@ require(caret)
 
 myget_feats_importance <- function(mdl, featsimp_df=NULL) {
     # For some models, if there is only one feature, varImp returns NaN due to bug in scaling
+    #   length(attr(mdl$terms, "variables")) == 2 ???
 
     if ((inherits(mdl$finalModel, "randomForest")) &&
             (mdl$modelType == "Regression")) {

@@ -184,7 +184,7 @@ glb_map_rsp_raw_to_var <- NULL # or function(raw) {
 #     #as.factor(paste0("B", raw))
 #     #as.factor(gsub(" ", "\\.", raw))    
 # }
-# glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0))
+# glb_map_rsp_raw_to_var(c(1, 1, 0, 0, NA))
 
 glb_map_rsp_var_to_raw <- NULL # or function(var) {
 #     return(exp(var))
@@ -194,7 +194,7 @@ glb_map_rsp_var_to_raw <- NULL # or function(var) {
 #     c("<=50K", " >50K")[as.numeric(var)]
 #     #c(FALSE, TRUE)[as.numeric(var)]
 # }
-# glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, 0)))
+# glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, NA)))
 
 if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
     stop("glb_map_rsp_raw_to_var function expected")
@@ -2514,10 +2514,10 @@ print(sprintf("Best model id: %s", dsp_models_df[1, "model_id"]))
     
 if (is.null(glb_sel_mdl_id)) { 
     glb_sel_mdl_id <- dsp_models_df[1, "model_id"]
-    if (glb_sel_mdl_id == "Interact.High.cor.Y.glm") {
-        warning("glb_sel_mdl_id: Interact.High.cor.Y.glm; myextract_mdl_feats does not currently support interaction terms")
-        glb_sel_mdl_id <- dsp_models_df[2, "model_id"]
-    }
+#     if (glb_sel_mdl_id == "Interact.High.cor.Y.glm") {
+#         warning("glb_sel_mdl_id: Interact.High.cor.Y.glm; myextract_mdl_feats does not currently support interaction terms")
+#         glb_sel_mdl_id <- dsp_models_df[2, "model_id"]
+#     }
 } else 
     print(sprintf("User specified selection: %s", glb_sel_mdl_id))   
     
