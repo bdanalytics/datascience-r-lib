@@ -1289,6 +1289,82 @@ mycreate_random_classfr <- function() {
 	return(algrthm)
 }
 
+# For debugging purposes
+myfit_baseln_classfr <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+    print("in Baseline.Classifier$fit")
+
+    print("class(x):"); print(class(x))
+    print("dimnames(x)[[2]]:"); print(dimnames(x)[[2]])
+    print("length(x):"); print(length(x))
+    print("head(x):"); print(head(x))
+
+    print("class(y):"); print(class(y))
+    #print("names(y):"); print(names(y))
+    print("length(y):"); print(length(y))
+    print("head(y):"); print(head(y))
+
+    x_names <- setdiff(dimnames(x)[[2]], ".rnorm")
+    # 		if (length(x_name) > 1)
+    # 			stop("Baseline.Classifier currently supports only var vs. ", paste(x_name, sep=" "))
+
+    if (inherits(y, "factor")) {
+        if (!identical(sort(unique(x) + 1), sort(as.numeric(unique(y))))) {
+            # x comes in as a dummy variable
+            #   + 1 will work for binomials only ???
+            #   For multinomials, x would be a matrix ???
+            print("Baseline.Classifier:fit: Unique x values: ");
+            print(sort(unique(x) + 1))
+            print("Baseline.Classifier:fit: Unique y values: ");
+            print(sort(unique(y)))
+            stop("Baseline.Classifier expects identical x & y unique vals.")
+        }
+    }
+
+    fit_df <- data.frame(x=x, y=y)
+    map_freq_df <- mycreate_sqlxtab_df(fit_df, names(fit_df))
+    print("    map_freq_df:"); print(map_freq_df)
+
+    # To extract y value with the highest frequency
+    #   map_freq_df[map_freq_df[, x_names] == 1, ][1, "y"]
+
+    map_df <- data.frame(x = sort(unique(x)))
+    map_df$y <- sapply(map_df$x,
+        function (val) map_freq_df[map_freq_df[, x_names] == val, ][1, "y"])
+
+    print("    map_df:"); print(map_df)
+
+    #return(list(x_names=x_names, x_vals=as.character(unique(y))))
+    return(list(x_names=x_names, map_df=map_df))
+}
+
+# predict fn needs to be called from prob fn where it's not accessible thru modelFit
+mypredict_baseln_classfr <- function(modelFit, newdata, preProc=NULL,
+                            submodels=NULL) {
+    print("in Baseline.Classifier$predict")
+    print("class(newdata):"); print(class(newdata))
+    print("head(newdata):"); print(head(newdata))
+
+    print("x_names: "); print(modelFit$x_names)
+    #print("x_vals: "); print(modelFit$x_vals)
+
+#     y <- factor(rep(modelFit$x_vals[1], nrow(newdata)), levels=modelFit$x_vals)
+#     for (row_ix in 1:nrow(newdata)) {
+#         if (sum(newdata[row_ix, modelFit$x_names]) > 0) {
+#             # not the default level in the factor
+#             y[row_ix] <- factor(modelFit$x_vals[which(newdata[row_ix, ] == 1) + 1],
+#                                 levels=modelFit$x_vals)
+#         }
+#     }
+
+    map_df <- modelFit$map_df
+    y <- sapply(newdata[, modelFit$x_names],
+                function(x_val) map_df[map_df$x == x_val, "y"])
+
+    print("length(y):"); print(length(y))
+    print("head(y):"); print(head(y))
+    return(y)
+}
+
 mycreate_baseln_classfr <- function() {
 	algrthm <- list(label="Baseline.Classifier", type="Classification",
 								library=NULL)
@@ -1296,60 +1372,31 @@ mycreate_baseln_classfr <- function() {
 												class=c("character"),
 												label=c("parameter"))
 	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
-	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
-		print("in Baseline.Classifier$fit")
-
-		print("class(x):"); print(class(x))
-		print("dimnames(x)[[2]]:"); print(dimnames(x)[[2]])
-		print("length(x):"); print(length(x))
-		print("head(x):"); print(head(x))
-
-		print("class(y):"); print(class(y))
-		#print("names(y):"); print(names(y))
-		print("length(y):"); print(length(y))
-		print("head(y):"); print(head(y))
-
-		x_names <- setdiff(dimnames(x)[[2]], ".rnorm")
-# 		if (length(x_name) > 1)
-# 			stop("Baseline.Classifier currently supports only var vs. ", paste(x_name, sep=" "))
-
-		return(list(x_names=x_names, x_vals=as.character(unique(y))))
-	}
+	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...)
+		myfit_baseln_classfr(x, y, wts, param, lev, last, weights, classProbs, ...)
 	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
 											submodels=NULL) {
-		print("in Baseline.Classifier$predict")
-		print("class(newdata):"); print(class(newdata))
-		print("head(newdata):"); print(head(newdata))
-
-		print("x_names: "); print(modelFit$x_names)
-		print("x_vals: "); print(modelFit$x_vals)
-
-		y <- factor(rep(modelFit$x_vals[1], nrow(newdata)), levels=modelFit$x_vals)
-		for (row_ix in 1:nrow(newdata)) {
-			if (sum(newdata[row_ix, modelFit$x_names]) > 0) {
-				# not the default level in the factor
-				y[row_ix] <- factor(modelFit$x_vals[which(newdata[row_ix, ] == 1) + 1],
-									levels=modelFit$x_vals)
-			}
-		}
-
-		print("length(y):"); print(length(y))
-		print("head(y):"); print(head(y))
-		return(y)
+	    return(mypredict_baseln_classfr(modelFit, newdata, preProc=NULL,
+	                                    submodels=NULL))
 	}
 	algrthm$prob <- function(modelFit, newdata, preProc=NULL, submodels=NULL) {
 		print("in Baseline.Classifier$prob")
 		# Bass-ackwards: b/c in this case, outcomes are easier to predict than probs
 
-		outcomes_vctr <- predict(modelFit, newdata)
-		prob_df <- as.data.frame(matrix(rep(0, length(unique(outcomes_vctr)) * nrow(newdata)),
+	    print("    class(modelFit):"); print(class(modelFit))
+	    print("    modelFit:"); print(modelFit)
+		outcomes_vctr <- mypredict_baseln_classfr(modelFit, newdata)
+		print("    outcomes_vctr:"); print(outcomes_vctr)
+		col_names <- as.character(sort(unique(outcomes_vctr)))
+		prob_df <- as.data.frame(matrix(rep(0, length(unique(outcomes_vctr)) *
+		                                        nrow(newdata)),
 										byrow=TRUE, nrow=nrow(newdata),
-								dimnames=list(NULL, as.character(unique(outcomes_vctr)))))
+						dimnames=list(NULL, col_names)))
 		for (row_ix in 1:nrow(newdata)) {
-			out_col_ix <- grep(as.character(outcomes_vctr[row_ix]),
-								as.character(unique(outcomes_vctr)))
+			out_col_ix <- grep(as.character(outcomes_vctr[row_ix]), col_names)
 			prob_df[row_ix, out_col_ix] <- 1
 		}
+		print("    head(prob_df): "); print(head(prob_df))
 		return(prob_df)
 	}
 	algrthm$sort <- function(x) x
