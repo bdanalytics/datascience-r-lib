@@ -2275,8 +2275,11 @@ for (method in glb_models_method_vctr) {
 # glb_models_lst <- sav_models_lst; glb_models_df <- sav_models_df; glm_featsimp_df <- sav_featsimp_df
 
     # easier to exclude features
-#model_id <- "";
-# indep_vars_vctr <- head(subset(glb_models_df, grepl("All\\.X\\.", model_id), select=feats), 1)
+# require(gdata) # needed for trim
+# model_id <- "";
+# indep_vars_vctr <- head(subset(glb_models_df, grepl("All\\.X\\.", model_id), select=feats)
+#                         , 1)[, "feats"]
+# indep_vars_vctr <- trim(unlist(strsplit(indep_vars_vctr, "[,]")))
 # indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
 
     # easier to include features
