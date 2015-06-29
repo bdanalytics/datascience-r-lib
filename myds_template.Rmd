@@ -226,6 +226,7 @@ glb_derive_lst <- NULL;
 # glb_derive_lst[["<feat.sfx>"]] <- list(
 #     mapfn=function(Rasmussen) { return(ifelse(sign(Rasmussen) >= 0, 1, 0)) }
 #     mapfn=function(PropR) { return(as.factor(ifelse(PropR >= 0.5, "Y", "N"))) }
+#     mapfn=function(purpose) { return(relevel(as.factor(purpose), ref="all_other")) }
 #     mapfn=function(Week) { return(substr(Week, 1, 10)) }
 #     mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
 #                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
