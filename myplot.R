@@ -35,6 +35,8 @@ myplot_bar <- function(df, xcol_name, ycol_names, colorcol_name=NULL, facet_spec
 #         df <- sqldf(sql)
 #     }
 
+    sum_df <- mycompute_stats_df(df=df, byvars_vctr=xcol_name)
+
     if (length(ycol_names) == 1) {
         df <- df[order(df[, ycol_names], decreasing=TRUE), ]
 #         df$xcol <- df[, xcol_name]
@@ -60,6 +62,12 @@ myplot_bar <- function(df, xcol_name, ycol_names, colorcol_name=NULL, facet_spec
     if (!(is.null(xlabel_formatter))) {
         g <- g + scale_x_discrete(labels=xlabel_formatter)
     }
+
+    aes_str <- paste0("x=", xcol_name,
+                    ", y=", ycol_names, ".sum * 1.05",
+                    ", label=myformat_number(round(", ycol_names, ".sum))")
+    aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
+    g <- g + geom_text(mapping=aes_mapping, data=sum_df, size=3.5)
 
     return(g)
 }
@@ -143,7 +151,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 }
 
 myplot_hbar <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL, facet_spec=NULL, ...)
-    return(myplot_bar(df, xcol_name, ycol_names, xlabel_formatter, facet_spec, ...) + coord_flip())
+    return(myplot_bar(df, xcol_name, ycol_names, xlabel_formatter, facet_spec, ...) +
+               coord_flip())
 
 myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
                              show_stats=TRUE, facet_frmla=NULL) {
@@ -192,18 +201,21 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
 
     if (show_stats) {
         if (is.numeric(df[, hst_col_name]))
-            p <- p + geom_vline(aes_string(xintercept=mean(df[, hst_col_name],
-                                                           na.rm=TRUE),
-                                linetype="\"dotted\""), show_guide=TRUE)
-        p <- p + geom_vline(aes_string(xintercept=mycompute_median(df[, hst_col_name]),
-                                       linetype="\"dashed\""), show_guide=TRUE)
+            p <- p + geom_vline(aes_string(
+                                xintercept = mean(df[, hst_col_name], na.rm = TRUE),
+                                            linetype = "\"dotted\""))
+        p <- p + geom_vline(aes_string(
+                                xintercept = mycompute_median(df[, hst_col_name]),
+                                        #linetype = "\"dashed\""), show_guide=TRUE)
+                                            linetype = "\"dashed\""))
     }
 
     # Add number of missing values as a horizontal line
     num_na <- sum(is.na(df[, hst_col_name]))
     if (num_na > 0)
-        p <- p + geom_hline(aes_string(yintercept=num_na,
-                                       linetype="\"dotdash\""), show_guide=TRUE)
+        p <- p + geom_hline(aes_string(yintercept = num_na,
+                                       #linetype="\"dotdash\""), show_guide=TRUE)
+                                        linetype = "\"dotdash\""))
 
     #if ((class(facet_frmla) == "formula") | (!is.na(facet_frmla)))
     if (mycheck_validarg(facet_frmla))
@@ -267,6 +279,97 @@ myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL,
 #            facet_spec="fStepGrp ~ .")
 #myplot_line(prdct_feats_df, "fStep", c("trainErrorRate", "testErrorRate"))
 #myplot_line(prdct_feats_df, "fStep", "trainErrorRate")
+
+myplot_parcoord <- function (obs_df, obs_ix=1:nrow(obs_df), id_var=".rownames",
+                             category_var=NULL) {
+    require(lazyeval)
+
+    # Setup id_df & remove id_var from range computation
+    if (id_var != ".rownames") {
+        id_df <- obs_df[obs_ix, id_var, FALSE]
+        obs_df <- obs_df[, setdiff(names(obs_df), id_var), FALSE]
+    } else id_df <- data.frame(.rownames=row.names(obs_df)[obs_ix])
+
+    # Setup category_var -> Create a facet ???
+    category_df <- id_df
+    if (is.null(category_var)) {
+        category_var <- ".category"; category_df[, category_var] <- as.factor(0)
+    } else {
+        category_df[, category_var] <- obs_df[obs_ix, category_var]
+        obs_df <- obs_df[, setdiff(names(obs_df), category_var), FALSE]
+    }
+
+
+    ranges_mtrx <- apply(obs_df, 2L, range, na.rm = TRUE)
+#     obs_scld_df <- as.data.frame(apply(obs_df, 2L, function(feat) {
+#                     feat <- as.numeric(feat);
+#                     feat_rng <- max(feat, na.rm = TRUE) - min(feat, na.rm = TRUE);
+#                     feat_rng <- ifelse(feat_rng == 0, 1, feat_rng);
+#                     return((feat - min(feat, na.rm = TRUE)) / feat_rng)
+#                 }))
+    # apply coerces data.frame to matrix; so factors are coerced into characters
+    obs_scld_df <- as.data.frame(sapply(names(obs_df), function(feat) {
+        feat <- as.numeric(obs_df[, feat]);
+        feat_rng <- max(feat, na.rm = TRUE) - min(feat, na.rm = TRUE);
+        feat_rng <- ifelse(feat_rng == 0, 1, feat_rng);
+        return((feat - min(feat, na.rm = TRUE)) / feat_rng)
+    }))
+
+    obsT_df <- as.data.frame(t(obs_df))
+    names(obsT_df) <- paste(".obs", names(obsT_df), sep=".");
+    obsT_df$.var.name <- row.names(obsT_df)
+    obsT_df$.var.pos <- 1:length(row.names(obsT_df))
+
+    obsST_df <- as.data.frame(t(obs_scld_df))
+    names(obsST_df) <- paste(".obs", names(obsST_df), sep=".");
+    obsST_df$.var.name <- row.names(obsST_df)
+    obsST_df$.var.pos <- 1:length(row.names(obsST_df))
+    plt_violin_df <- tidyr::gather(obsST_df, key=obs, value=value, -.var.name, -.var.pos)
+
+    obsHST_df <- as.data.frame(t(obs_scld_df[obs_ix, ]));
+    names(obsHST_df) <- as.character(id_df[, id_var])
+    obsHST_df$.var.name <- row.names(obsHST_df)
+    obsHST_df$.var.pos <- 1:length(row.names(obsHST_df))
+    plt_obsHST_df <- tidyr::gather_(obsHST_df, key_col = interp(id_var), value_col = "value",
+        gather_cols = names(obsHST_df)[!grepl("(\\.var\\.name|\\.var\\.pos)",
+                                             names(obsHST_df))])
+    #plt_obsHST_df <- tidyr::gather(obsHST_df, id, value, -.var.name, -.var.pos)
+
+    ranges_df <- cbind(as.data.frame(ranges_mtrx),
+                       data.frame(.type = c("min", "max")))
+    ranges_df <- tidyr::gather(ranges_df, key = .var, value = value, -.type)
+    ranges_df$.y <- ifelse(ranges_df$.type == "min", -0.05, 1.05)
+    ranges_df <- merge(ranges_df, obsT_df[, c(".var.name", ".var.pos")],
+                       by.x = ".var", by.y = ".var.name", all.x = TRUE)
+    ranges_df$.x <- ranges_df$.var.pos
+    ranges_df <- subset(ranges_df, select = -.var.pos)
+    ranges_df$label <- myformat_number(ranges_df$value)
+    if (length(ix <- which(ranges_df$label %in% "NA")) > 0)
+        ranges_df[ix, "label"] <- ranges_df[ix, "value"]
+
+    plt_obsHST_df <- merge(plt_obsHST_df, category_df, x.all = TRUE)
+    #     plt_obsHST_df[, category_var] <- NA
+    #     plt_obsHST_df[plt_obsHST_df[, id_var] == 11448, glb_category_var] <- "Unknown#0"
+    #     plt_obsHST_df[plt_obsHST_df[, id_var] == 11581, glb_category_var] <- "iPad4#1"
+    #     plt_obsHST_df[plt_obsHST_df[, id_var] == 11583, glb_category_var] <- "Unknown#0"
+    gp <- ggplot(plt_obsHST_df, aes(x=reorder(.var.name, .var.pos), y=value)) +
+        geom_violin(data=plt_violin_df, aes(x=reorder(.var.name, .var.pos), y=value),
+                    color="grey80", scale="width") +
+        geom_line(data=plt_obsHST_df,
+                  aes_string(group=id_var, color=id_var, linetype=category_var), size=1) +
+        geom_point(data=plt_obsHST_df, aes_string(shape=category_var), size=3) +
+        scale_color_brewer(type="qual", palette="Set1") +
+        geom_vline(xintercept=1:length(names(obs_df)), color="grey50") +
+        geom_text(data = ranges_df,
+                  aes_string(x = ".x", y = ".y", label = "label"),
+                  size = 3.5) +
+        theme(axis.text.x=element_text(hjust=1, angle=45),
+              axis.text.y=element_blank(), axis.ticks.y=element_blank()) +
+        xlab("") + ylab("")
+    # ggtitle("Dummy")
+
+    return(gp)
+}
 
 # plot.ly
 myplot_plotly <- function(ggplot_obj) {
@@ -362,7 +465,8 @@ myplot_prediction_regression <- function(df, feat_x, feat_y, rsp_var, rsp_var_ou
     print(head(df, 5))
 
     return(myplot_scatter(df, feat_x, feat_y) +
-            geom_point(aes_string(size=predct_err_name), alpha=0.4, show_guide = TRUE) +
+        #geom_point(aes_string(size=predct_err_name), alpha=0.4, show_guide = TRUE) +
+            geom_point(aes_string(size=predct_err_name), alpha=0.4) +
             geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5))
 }
 
@@ -563,10 +667,12 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
 
     if (!missing(stats_df)) {
         # Display stats of x-axis feature
-        aes_str <- paste0("linetype=\"dashed\", xintercept=as.numeric(", xcol_name, ")")
+        aes_str <- paste0("linetype=\"dashed\", xintercept=as.numeric(",
+                          xcol_name, ")")
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-        p <- p + geom_vline(mapping=aes_mapping,
-                            data=stats_df, show_guide=TRUE)
+#         p <- p + geom_vline(mapping = aes_mapping,
+#                             data = stats_df, show_guide=TRUE)
+        p <- p + geom_vline(, data = stats_df, mapping = aes_mapping)
         p <- p + scale_linetype_identity(guide="legend", name="Stats", labels=rownames(stats_df))
     }
 
@@ -617,7 +723,7 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 #         stop("Multiple feats not implemented with x variable.",
 #              "\n  Consider using facet parameter instead.")
 
-    if (!missing(xcol_name) & !is.factor(df[, xcol_name])) {
+    if (!is.null(xcol_name) & !is.factor(df[, xcol_name])) {
         xcol_name_par <- xcol_name
         xcol_name <- paste(xcol_name_par, "fctr", sep="_")
         warning("xcol_name:", xcol_name_par, " is not a factor; creating ", xcol_name)

@@ -2,7 +2,50 @@
 # Created 2014-08-12
 # Check if functions are assigned to proper data science process steps
 
+## 00. Base
 #suppressPackageStartupMessages(require(<<package name>>))
+
+# https://github.com/hadley/pryr/blob/master/R/assign-delayed.r
+#' Create an delayed binding.
+#'
+#' Infix form of \code{\link{delayedAssign}} which creates an \emph{delayed}
+#' or lazy binding, which only evaluates the expression the first time it is
+#' used.
+#'
+#' @usage x \%<d-\% value
+#' @param x unquoted expression naming variable to create
+#' @param value unquoted expression to evaluate the first time \code{name} is
+#'   accessed
+#' @export
+#' @rdname assign-delayed
+#' @examples
+#' x %<d-% (a + b)
+#' a <- 10
+#' b <- 100
+#' x
+"%<d-%" <- function(x, value) {
+    name <- substitute(x)
+    value <- substitute(value)
+
+    if (!is.name(name)) stop("Left-hand side must be a name")
+
+    env <- parent.frame()
+    call <- substitute(delayedAssign(deparse(name), value,
+                                     eval.env = env, assign.env = env), list(value = value))
+    eval(call)
+
+    invisible()
+}
+
+## A helper function that tests whether an object is either NULL _or_
+## a list of NULLs
+is.NullObj <- function(x) is.null(x) | all(sapply(x, is.null))
+
+## Recursively step down into list, removing all such objects
+myrmNullObj <- function(x) {
+    x <- Filter(Negate(is.NullObj), x)
+    lapply(x, function(x) if (is.list(x)) myrmNullObj(x) else x)
+}
 
 ## 01. 		import data
 
@@ -264,17 +307,44 @@ mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
 # mycheck_prime(7)
 # mycheck_prime(9)
 
-myfind_numerics_missing <- function(df) {
-    numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
-                              function(col) sum(is.na(df[, col])))
-    numeric_missing <- numeric_missing[numeric_missing > 0]
-    print(numeric_missing)
-    numeric_feats_missing <- setdiff(names(numeric_missing),
-                                     c(glb_exclude_vars_as_features, glb_rsp_var))
-    return(numeric_feats_missing)
-}
+sel_obs <- function(vars_lst, ignore.case=TRUE, perl=FALSE) {
+    tmp_df <- glb_allobs_df
 
-mycheck_problem_data <- function(df, terminate=FALSE) {
+    # Does not work for Popular == NAs ???
+    #     if (!is.null(Popular)) {
+    #         if (is.na(Popular))
+    #             tmp_df <- tmp_df[is.na(tmp_df$Popular), ] else
+    #             tmp_df <- tmp_df[tmp_df$Popular == Popular, ]
+    #     }
+    #     if (!is.null(NewsDesk))
+    #         tmp_df <- tmp_df[tmp_df$NewsDesk == NewsDesk, ]
+
+    for (var in names(vars_lst)) {
+        if (grepl(".contains", var))
+            tmp_df <- tmp_df[grep(vars_lst[var],
+                                  tmp_df[, unlist(strsplit(var, ".contains"))],
+                                  ignore.case=ignore.case, perl=perl), ]
+        else
+            tmp_df <- tmp_df[tmp_df[, var] == vars_lst[var], ]
+    }
+
+    return(glb_allobs_df[, glb_id_var] %in% tmp_df[, glb_id_var])
+}
+#print(glb_allobs_df[sel_obs(list(description.contains="mini(?!m)"), perl=TRUE), "description"])
+
+mydsp_obs <- function(..., cols=c(NULL), all=FALSE) {
+    feats <- c(glb_id_var, glb_rsp_var, glb_category_var, cols, glbFeatsText)
+    if (length(featsError <- setdiff(feats, names(glb_allobs_df))) > 0) {
+        warning("mydsp_obs: ignoring missing cols: ", paste0(featsError, collapse=", "))
+        feats <- setdiff(feats, featsError)
+    }
+    tmp_df <- glb_allobs_df[sel_obs(...), feats, FALSE]
+    if(all) { print(tmp_df) } else { myprint_df(tmp_df) }
+}
+#dsp_obs(list(description.contains="mini(?!m)"), perl=TRUE)
+# dsp_obs(Popular=NA, NewsDesk="", SectionName="")
+
+mycheck_problem_data <- function(df, featsExclude, fctrMaxUniqVals = 20, terminate=FALSE) {
     print(sprintf("numeric data missing in %s: ",
                   ifelse(!is.null(df_name <- comment(df)), df_name, "")))
     # refactor this code with myfind_numerics_missing
@@ -283,7 +353,7 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     numeric_missing <- numeric_missing[numeric_missing > 0]
     print(numeric_missing)
     numeric_feats_missing <- setdiff(names(numeric_missing),
-                                     c(glb_exclude_vars_as_features, glb_rsp_var))
+                                     c(featsExclude, glb_rsp_var))
     if ((length(numeric_feats_missing) > 0) && terminate)
         stop("terminating due to missing values in: ", paste(numeric_feats_missing, collapse=", "))
 
@@ -301,7 +371,7 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     numeric_Inf <- numeric_Inf[numeric_Inf > 0]
     print(numeric_Inf)
     numeric_feats_Inf <- setdiff(names(numeric_Inf),
-                                     c(glb_exclude_vars_as_features, glb_rsp_var))
+                                     c(featsExclude, glb_rsp_var))
     if ((length(numeric_feats_Inf) > 0) && terminate)
         stop("terminating due to Inf values in: ", paste(numeric_feats_Inf, collapse=", "))
 
@@ -312,7 +382,7 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
     numeric_NaN <- numeric_NaN[numeric_NaN > 0]
     print(numeric_NaN)
     numeric_feats_NaN <- setdiff(names(numeric_NaN),
-                                 c(glb_exclude_vars_as_features, glb_rsp_var))
+                                 c(featsExclude, glb_rsp_var))
     if ((length(numeric_feats_NaN) > 0) && terminate)
         stop("terminating due to NaN values in: ", paste(numeric_feats_NaN, collapse=", "))
 
@@ -322,9 +392,9 @@ mycheck_problem_data <- function(df, terminate=FALSE) {
                  function(col) sum(df[, col] == "")))
 
     length_fctrs <- sapply(setdiff(myfind_fctr_cols_df(df),
-                                   c(glb_rsp_var, glb_exclude_vars_as_features)),
+                                   c(glb_rsp_var, featsExclude)),
                            function(feat) length(unique(df[, feat])))
-    length_fctrs <- length_fctrs[length_fctrs > 20]
+    length_fctrs <- length_fctrs[length_fctrs > fctrMaxUniqVals]
     if (length(length_fctrs) > 0) {
         print("factors with high number of unique values: ")
         print(length_fctrs)
@@ -430,7 +500,7 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
         stop("df argument is not a data.frame: it is ", class(df))
 
     ret_df <- data.frame()
-    stats_fns <- c(median, mean); names(stats_fns) <- c(".median", ".mean")
+    stats_fns <- c(mean, median, sum); names(stats_fns) <- c(".mean", ".median", ".sum")
 
     # gather numeric vars
     num_lst <- sapply(names(df), function(col)
@@ -440,8 +510,10 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
         # Requires hard-coding of FUN ???
 #         ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
 #                             FUN=stats_fns)
-        ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
-                            FUN=c(median, mean), na.rm=TRUE)
+        ret_df <- summaryBy(as.formula(paste0(paste0(num_vctr, collapse="+"),
+                                              " ~ ", byvars_vctr)), data=df,
+                            #FUN=interp(~stats_fns), na.rm=TRUE)
+                            FUN=c(mean, median, sum), na.rm=TRUE)
 
         if (inherits(ret_df[, byvars_vctr], "factor") &&
             sum(is.na(ret_df[, byvars_vctr])) > 0) {
@@ -453,7 +525,10 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
 
     # summaryBy does not compute stats for factor / Date class variables
     non_num_lst <- sapply(names(df), function(col)
-        if (!is.numeric(df[, col]) && !is.factor(df[, col])) return(col))
+        if (!is.numeric(df[, col]) &&
+            !is.factor(df[, col]) &&
+            !is.character(df[, col]))
+            return(col))
     non_num_vctr <- unlist(non_num_lst[!sapply(non_num_lst, is.null)])
     non_num_vctr <- setdiff(non_num_vctr, byvars_vctr)
     for (var in non_num_vctr) {
@@ -572,13 +647,31 @@ myfind_fctr_cols_df <- function(df) {
 }
 #myfind_fctr_cols_df(glb_allobs_df)
 
+myfind_numerics_missing <- function(df, featsExclude) {
+    numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
+                              function(col) sum(is.na(df[, col])))
+    numeric_missing <- numeric_missing[numeric_missing > 0]
+    print(numeric_missing)
+    numeric_feats_missing <- setdiff(names(numeric_missing),
+                                     c(featsExclude, glb_rsp_var))
+    return(numeric_feats_missing)
+}
+
 myfind_dups_df <- function(df) { stop("use native duplicated R fn") }
 
 myformat_number <- function(x) {
     if (class(x) != "num") x <- as.numeric(x)
-    return(format(x, big.mark=',')) # 000's separator
+    return(sapply(x, function(elem)
+        if (is.na(elem)) format(elem) else
+        if (elem < 1)    format(elem, digits=4, nsmall=4, scientific=FALSE) else
+        if (elem < 10)   format(elem, digits=2, nsmall=2, scientific=FALSE) else
+        if (elem < 100)  format(elem, nsmall=1, scientific=FALSE) else
+                         format(elem, big.mark=',', digits=0, scientific=FALSE)))
+
+    return(format(x, big.mark=',', digits=4, scientific=FALSE)) # 000's separator
     #format(x, digits=4, scientific=FALSE)	# other format options
 }
+myformat_number(c(1000, 100, 10, 1, 0.1, 0.01, 0.001, 0.0001))
 
 myformat_time_MS <- function(x) {
     if (class(x) != "num") x <- as.numeric(x)
@@ -677,7 +770,8 @@ mycreate_date2daytype <- function (df, date_col_name) {
 #entity_agg_date_df <- mycreate_date2daytype(entity_agg_date_df, "date")
 
 mycount_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
-    sapply(str_vctr, function(str) sum(gregexpr(pattern, str, perl=perl)[[1]] > 0))
+    sapply(str_vctr,
+           function(str) sum(gregexpr(pattern, str, ignore.case=TRUE, perl=perl)[[1]] > 0))
 
 myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
     keep_feats <- c(NULL)
@@ -933,27 +1027,27 @@ myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
 #              var.equal=FALSE)$conf)
 
 ## 05.5	    id features / create feature combinations for highly correlated features
-myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
+myfind_cor_features <- function(feats_df, obs_df, rsp_var, nzv.freqCut=95/5, nzv.uniqueCut=10) {
 	require(reshape2)
     require(caret)
 
 	feats_df[, "cor.high.X"] <- NA
-    nzv_df <- nearZeroVar(obs_df[, setdiff(names(obs_df),
-                                              c(rsp_var, myfind_chr_cols_df(obs_df)))],
-                          saveMetrics=TRUE)
+    nzv_df <- nearZeroVar(obs_df[, setdiff(names(obs_df), c(rsp_var, myfind_chr_cols_df(obs_df)))],
+                          freqCut=nzv.freqCut, uniqueCut=nzv.uniqueCut, saveMetrics=TRUE)
     #nzv_df$id <- row.names(nzv_df)
 #     print(setdiff(union(row.names(feats_df), row.names(nzv_df)), intersect(row.names(feats_df), row.names(nzv_df))))
     #print(row.names(feats_df))
     feats_df <- merge(feats_df, nzv_df, by="row.names", all=TRUE)
     row.names(feats_df) <- feats_df$id
     feats_df <- subset(feats_df, select=-Row.names)
-    feats_df$myNearZV <- ifelse(feats_df$zeroVar |
-    	(feats_df$nzv & (feats_df$freqRatio > (nrow(subset(obs_df, .src == "Train")) / 4))),
-    							TRUE, FALSE)
+#     feats_df$myNearZV <- ifelse(feats_df$zeroVar |
+#     	(feats_df$nzv & (feats_df$freqRatio > (nrow(subset(obs_df, .src == "Train")) / 4))),
+#     							TRUE, FALSE)
 
     cor_threshold <- feats_df[feats_df$id == ".rnorm", "cor.y.abs"]
-	feats_df <- mutate(feats_df,
-                       is.cor.y.abs.low=ifelse(cor.y.abs >= cor_threshold, FALSE, TRUE))
+# 	feats_df <- mutate(feats_df,
+#                        is.cor.y.abs.low=ifelse(cor.y.abs >= cor_threshold, FALSE, TRUE))
+	feats_df$is.cor.y.abs.low <- (feats_df$cor.y.abs < cor_threshold)
 	if (nrow(feats_df) == 1)
 		return(feats_df)
 
@@ -1028,6 +1122,22 @@ myfind_cor_features <- function(feats_df, obs_df, rsp_var) {
     return(feats_df)
 }
 
+myget_vectorized_obs_df <- function(obs_df, rsp_var, indep_vars) {
+    # Convert all factors (incl. interactions) to dummy vectors
+    vctobs_df <- obs_df[, c(rsp_var, unique(unlist(strsplit(indep_vars, "[:|*]"))))]
+
+    # Need to modify for interaction vars that are features
+    fctr_vars <- grep(".fctr", indep_vars, fixed=TRUE, value=TRUE)
+    if (length(fctr_vars) > 0)
+        vctobs_df <- cbind(vctobs_df[, -grep(gsub(".", "\\.",
+                                paste0(unique(unlist(strsplit(fctr_vars, "[:]"))), collapse="|"),
+                                                    fixed=TRUE), names(vctobs_df))],
+                            model.matrix(reformulate(c(0, fctr_vars)), vctobs_df))
+    # Because predictors is a function for rfe
+    #predictors_vctr <- setdiff(names(vctobs_df), rsp_var)
+    return(vctobs_df)
+}
+
 ## 05.5.1	add back in key features even though they might have been eliminated
 ## 05.5.2   cv of significance
 ## 05.6     scale / normalize selected features for data distribution requirements in various models
@@ -1053,19 +1163,14 @@ myprint_mdl <- function(mdl) {
 
     lcl_mdl <- mdl$finalModel
 
-    if (inherits(lcl_mdl, "list")) {
-		# Custom model
-    	print(summary(lcl_mdl))
-    	return(TRUE)
-    }
+    if (inherits(lcl_mdl, "bagEarth")) {
+        # plot crashes in certain conditions
+        x <- lcl_mdl
+        if (is.list(x) && all(c("x", "y") %in% names(x)))
+            plot(lcl_mdl, ask=FALSE)
 
-    if (inherits(lcl_mdl, "rpart")) {
-    	require(rpart.plot)
-    	prp(lcl_mdl)
-
-    	lcl_mdl$call <- lcl_mdl$call[-3]	# Hide "data" printing
-    	print(summary(lcl_mdl))
-    	return(TRUE)
+        print(summary(lcl_mdl))
+        return(TRUE)
     }
 
     if (inherits(lcl_mdl, "bayesglm")) {
@@ -1077,6 +1182,119 @@ myprint_mdl <- function(mdl) {
 
         print(summary(lcl_mdl))
         return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "glmnet")) {
+        plot(lcl_mdl, ask=FALSE)
+        print(summary(lcl_mdl))
+        # Need to find array offset of best-tuned lambda
+        if (length(exact <- which(lcl_mdl$lambda == lcl_mdl$lambdaOpt)) != 0)
+            stop("not implemented yet")
+        else {
+            print("min lambda > lambdaOpt:")
+            if (length(positions <- which(lcl_mdl$lambda > lcl_mdl$lambdaOpt)) > 0) {
+                pos_left <- max(positions)
+                coefs_left <- coef(lcl_mdl)[, pos_left]
+                print(coefs_left[coefs_left != 0])
+            } else coefs_left <- NULL
+
+            print("max lambda < lambdaOpt:")
+            if (length(positions <- which(lcl_mdl$lambda < lcl_mdl$lambdaOpt)) > 0) {
+                pos_rght <- min(positions)
+                coefs_rght <- coef(lcl_mdl)[, pos_rght]
+                print(coefs_rght[coefs_rght != 0])
+            } else coefs_rght <- NULL
+
+            if (length(feats <- setdiff(names(coefs_left), names(coefs_rght))) > 0) {
+                print("Feats mismatch between coefs_left & rght:")
+                print(feats)
+            }
+            if (length(feats <- setdiff(names(coefs_rght), names(coefs_left))) > 0) {
+                print("Feats mismatch between coefs_rght & left:")
+                print(feats)
+            }
+        }
+        return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "ksvm")) {
+        if (type(lcl_mdl) == "C-svc" || type(lcl_mdl) == "nu-svc")
+            # plots of regression (eps-svr) not supported
+            plot(lcl_mdl, ask=FALSE)
+
+        print(summary(lcl_mdl))
+        return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "lda")) {
+        # plot.lda fails due to lcl_mdl$call not being setup properly via caret
+        #lcl_mdl$terms <- mdl$terms
+        if (all(!grepl(":", dimnames(lcl_mdl$means)[[2]]))) {
+            # Kludge doesn't work with interaction vars
+            lclTrainingData <-
+                myget_vectorized_obs_df(mdl$trainingData,
+                                        rsp_var = names(mdl$trainingData)[1],
+                                    indep_vars = tail(names(mdl$trainingData), -1))
+            lcl_mdl$call$x <-
+                expression(lclTrainingData[, dimnames(lcl_mdl$means)[[2]]])
+            lcl_mdl$call$grouping <- expression(lclTrainingData[, 1])
+            plot(lcl_mdl, ask = FALSE)
+        }
+
+        print(summary(lcl_mdl))
+        return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "list")) {
+		# Custom model
+    	print(summary(lcl_mdl))
+    	return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, c("nnet", "avNNet"))) {
+        # native plot crashes in certain conditions
+        #plot(lcl_mdl, ask=FALSE)
+        #         require(devtools)
+        #         source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+        # plot.nnet(lcl_mdl)
+
+        if (inherits(lcl_mdl, c("nnet"))) {
+            require(NeuralNetTools)
+            par(mar = numeric(4), family = 'serif')
+            plotnet(mdl, alpha = 0.6)
+            # plotnet(lcl_mdl, alpha = 0.6)
+        } else if (inherits(lcl_mdl, c("avNNet"))) {
+#             The problem is that the ‘avNNet’ method of train creates a final model that averages multiple nnet models to create the final output. As far as I can tell, the output doesn’t include enough information to use the plotting function. My suggestion is to recreate the individual models that were used to make the averaged models, then look at each model separately. Try this code, it isolates individual models from the output, recreates them, then uses the NeuralNetTools functions.
+
+#             mod <- train(Y1 ~ X1 + X2 + X3, method = 'avNNet', data = neuraldat,
+#                          linout = TRUE)
+#
+#             allmods <- mod$finalModel$model
+#
+#             mod <- allmods[[1]] # first model, change this number to look at the other models
+#             wts <- mod$wts
+#             decay <- mod$decay
+#             struct <- mod$n
+#
+#             # recreate
+#             recmod <- nnet(Y1 ~ X1 + X2 + X3, data = neuraldat, Wts = wts, decay = decay,
+#                            size = struct[2], maxit = 0)
+#
+#             # use the functions to look at the individual model
+#             plotnet(recmod)
+        }
+
+        print(summary(lcl_mdl))
+        return(TRUE)
+    }
+
+    if (inherits(lcl_mdl, "rpart")) {
+    	require(rpart.plot)
+    	prp(lcl_mdl)
+
+    	lcl_mdl$call <- lcl_mdl$call[-3]	# Hide "data" printing
+    	print(summary(lcl_mdl))
+    	return(TRUE)
     }
 
         plot(lcl_mdl, ask=FALSE)
@@ -1203,7 +1421,8 @@ mycreate_MFO_classfr <- function() {
 	algrthm$parameters <- data.frame(parameter=c("parameter"),
 												class=c("character"),
 												label=c("parameter"))
-	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$grid <- function (x, y, len = NULL, search = "grid")
+	    data.frame(parameter = "none")
 	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
 		print("in MFO.Classifier$fit")
 		unique.vals <- sort(unique(y))
@@ -1252,7 +1471,8 @@ mycreate_random_classfr <- function() {
 	algrthm$parameters <- data.frame(parameter=c("parameter"),
 												class=c("character"),
 												label=c("parameter"))
-	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$grid <- function (x, y, len = NULL, search = "grid")
+	    data.frame(parameter = "none")
 	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
 		return(list(unique.vals=sort(unique(y)), unique.prob=table(y) / length(y)))
 	}
@@ -1371,7 +1591,8 @@ mycreate_baseln_classfr <- function() {
 	algrthm$parameters <- data.frame(parameter=c("parameter"),
 												class=c("character"),
 												label=c("parameter"))
-	algrthm$grid <- function (x, y, len = NULL) data.frame(parameter = "none")
+	algrthm$grid <- function (x, y, len = NULL, search = "grid")
+	    data.frame(parameter = "none")
 	algrthm$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...)
 		myfit_baseln_classfr(x, y, wts, param, lev, last, weights, classProbs, ...)
 	algrthm$predict <- function(modelFit, newdata, preProc=NULL,
@@ -1405,7 +1626,24 @@ mycreate_baseln_classfr <- function() {
 	return(algrthm)
 }
 
-mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
+myextract_actual_feats <- function(vars) {
+#     return(unique(unlist(lapply(strsplit(vars, ".fctr|:"), function(var_components_lst)
+#     { if (length(var_components_lst) == 1) return(var_components_lst) else
+#         return(paste0(var_components_lst[seq(1, length(var_components_lst), 2)], ".fctr")) }))))
+
+    # Remove `` wrapper, if any
+    ret_vars <- gsub("^`(.*)`$", "\\1", vars)
+
+    # Split interactions, if any
+    ret_vars <- unique(unlist(strsplit(ret_vars, "[:|\\*]")))
+
+    # Remove values of factors, if any
+    ret_vars <- unique(gsub("\\.fctr(.*)", "\\.fctr", ret_vars))
+
+    return(ret_vars)
+}
+
+mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, mdl_id, label,
 							model_summaryFunction=NULL, model_metric=NULL,
 							model_metric_maximize=NULL,
 							ret_type="stats") {
@@ -1418,40 +1656,48 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 	if (mdl$modelType == "Classification") {
 		is.binomial <- (length(unique(df[, rsp_var])) == 2)
 	}
-	stats_df <- data.frame(model_id=model_id_method)
+	stats_df <- data.frame(id = mdl_id)
 
 	if ((mdl$modelType == "Classification") && is.binomial) {
-		require(ROCR)
+	    requireNamespace("pROC")
+	    df[, rsp_var_out] <- predict(mdl, newdata = df, type = "raw")
+	    if (!is.ordered(df[, rsp_var_out]))
+	        df[, rsp_var_out] <- ordered(df[, rsp_var_out], levels = levels(df[, rsp_var]))
+	    rocObject <- try(pROC::roc(df[, rsp_var], df[, rsp_var_out]))
+	    stats_df[, paste0("max.AUCpROC.", label)] <-
+	        if (class(rocObject)[1] == "try-error") NA else rocObject$auc
+	    stats_df[, paste0("max.Sens.", label)] <-
+	        sensitivity(df[, rsp_var_out], df[, rsp_var], levels(df[, rsp_var])[1])
+	    stats_df[, paste0("max.Spec.", label)] <-
+	        specificity(df[, rsp_var_out], df[, rsp_var], levels(df[, rsp_var])[2])
 
-		df[, paste0(rsp_var_out, ".prob")] <-
-			predict(mdl, newdata=df, type="prob")[, 2]
-		ROCRpred <- prediction(df[, paste0(rsp_var_out, ".prob")],
-							   df[, rsp_var])
-		stats_df[, paste0("max.auc.", label)] <-
-			as.numeric(performance(ROCRpred, "auc")@y.values)
+		require(ROCR)
+		df[, paste0(rsp_var_out, ".prob")] <- predict(mdl, newdata = df, type = "prob")[, 2]
+		ROCRpred <- prediction(df[, paste0(rsp_var_out, ".prob")], df[, rsp_var])
+		stats_df[, paste0("max.AUCROCR.", label)] <-
+		    as.numeric(performance(ROCRpred, "auc")@y.values)
 
 		ROCRperf <- performance(ROCRpred, "tpr", "fpr")
 		if (length(ROCRperf@y.values[[1]]) > 2) {
-			plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0, 1, 0.1), text.adj=c(-0.2,1.7))
+			plot(ROCRperf, colorize = TRUE, print.cutoffs.at = seq(0, 1, 0.1),
+			     text.adj = c(-0.2,1.7))
+		}
 
-			thresholds_df <- data.frame(threshold=seq(0.0, 1.0, 0.1))
-			thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix)
-				mycompute_classifier_f.score(mdl, obs_df=df,
-									proba_threshold=thresholds_df[row_ix, "threshold"],
-											  rsp_var,
-											  rsp_var_out))
-			print(thresholds_df)
-			print(myplot_line(thresholds_df, "threshold", "f.score"))
-
-# 			prob_threshold <- thresholds_df[which.max(thresholds_df$f.score),
-# 													 "threshold"]
-            # Avoid picking 0.0 as threshold
-			prob_threshold <- orderBy(~ -f.score -threshold, thresholds_df)[1, "threshold"]
-		} else # the plot crashes
-			prob_threshold <- 0.5
-
-		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
-					  prob_threshold, label))
+		thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.1))
+		thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix)
+		    mycompute_classifier_f.score(mdl, obs_df = df,
+		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
+		                                 rsp_var, rsp_var_out))
+		#print(thresholds_df)
+		# Avoid picking 0.0 as threshold
+		prob_threshold <- orderBy(~ -f.score -threshold, thresholds_df)[1, "threshold"]
+# 		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
+# 					  prob_threshold, label))
+		# print(myplot_line(thresholds_df, "threshold", "f.score"))
+		print(myplot_line(thresholds_df, "threshold", "f.score") +
+		          geom_point(data = subset(thresholds_df, threshold == prob_threshold),
+		                     mapping = aes(x = threshold, y = f.score),
+		                     shape = 5, color = "red", size = 4))
 		stats_df[, paste0("opt.prob.threshold.", label)] <- prob_threshold
 
 		df[, rsp_var_out] <-
@@ -1464,13 +1710,10 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 			mycompute_classifier_f.score(mdl, df,
 										 prob_threshold,
 										 rsp_var, rsp_var_out)
-	} else df[, rsp_var_out] <- predict(mdl, newdata=df, type="raw")
+	} else df[, rsp_var_out] <- predict(mdl, newdata = df, type = "raw")
 
 
     if (mdl$modelType == "Classification") {
-#         print("in mypredict_mdl: calling confusionMatrix...")
-#         print("    unique(df[, rsp_var_out]: "); print(unique(df[, rsp_var_out]))
-#         print("    unique(df[, rsp_var    ]: "); print(unique(df[, rsp_var    ]))
     	conf_lst <- confusionMatrix(df[, rsp_var_out], df[, rsp_var])
     	print(t(conf_lst$table))
     	print(conf_lst$overall)
@@ -1481,14 +1724,10 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
 
     	if (!is.null(model_summaryFunction)) {
     		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
-            result <- model_summaryFunction(df)
-            if (length(result) > 1) {
-                warning("Expecting 1 metric: ", model_metric, "; recd: ", paste0(names(result), collapse=", "),
-                        "; retaining ", names(result)[1], " only")
-                result <- result[1]
-            }
-    		stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
-    							model_metric, ".", label)] <- result
+            results <- model_summaryFunction(df, lev = levels(df$obs))
+            # Add unk.* for metrics that are returned from summaryFunction but not specified as key metric ?
+        	stats_df[, paste0(ifelse(model_metric_maximize, "max.", "min."),
+        							model_metric, ".", label)] <- results[model_metric]
     	}
     } else
     if (mdl$modelType == "Regression") {
@@ -1496,175 +1735,364 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, model_id_method, label,
         #stats_df[, paste0("max.R.sq.", label)] <- 1 - (SSE / sum((df[, rsp_var] - mean(mdl$finalModel$fitted.values)) ^ 2))
         stats_df[, paste0("max.R.sq.", label)] <- 1 -
             (SSE / sum((df[, rsp_var] - mean(predict(mdl, mdl$trainingData, "raw"))) ^ 2))
-        stats_df[, paste0("min.RMSE.", label)] <- (sum((df[, rsp_var_out] - df[, rsp_var]) ^ 2) / (nrow(df) - 0)) ^ 0.5
+        stats_df[, paste0("min.RMSE.", label)] <-
+            (sum((df[, rsp_var_out] - df[, rsp_var]) ^ 2) / (nrow(df) - 0)) ^ 0.5
+
+        if (label == "fit") {
+            if (inherits(mdl$finalModel, c("glmnet", "ksvm", "list",
+                                           "nnet", "avNNet",
+                                           "rpart", "randomForest"))) {
+                # list implies custom model
+                # summary(glmnet)$adj.r.squared causes an error
+                # summary(randomForest)$r.squared causes an error
+                # summary(rpart) always spits out stuff
+            } else {
+                #models_df$max.R.sq.fit <- summary(mdl$finalModel)$r.squared
+                stats_df$max.Adj.R.sq.fit <- summary(mdl$finalModel)$adj.r.squared
+                #models_df$min.SSE.fit <- sum(mdl$finalModel$residuals ^ 2)
+                stats_df$min.aic.fit <- mdl$finalModel$aic
+            }
+        }
+
+        if (!is.null(stats_df[, paste0("max.R.sq.", label)]) &&
+            (!grepl(paste0("max.Adj.R.sq.", label), names(stats_df), fixed=TRUE) ||
+             is.null(stats_df[, paste0("max.Adj.R.sq.", label)])))
+            stats_df[, paste0("max.Adj.R.sq.", label)] <- 1.0 -
+               ((1.0 - stats_df[, paste0("max.R.sq.", label)]) *
+                (nrow(df) - 1) /
+                (nrow(df) - nrow(myget_feats_importance(mdl)) - 1))
     }
 
 	if (ret_type == "stats") return(stats_df) else
 	if (ret_type == "raw") return(df[, rsp_var_out])
 }
 
-myfit_mdl <- function(model_id, model_method, model_type="classification",
-						  indep_vars_vctr, rsp_var, rsp_var_out,
-						  fit_df, OOB_df=NULL,
-						  n_cv_folds=0, tune_models_df=NULL,
-						  model_loss_mtrx=NULL, model_summaryFunction=NULL,
-						  model_metric=NULL, model_metric_maximize=NULL) {
-	require(caret)
+myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
+    require(caret)
+    if (packageVersion("caret") != "6.0.57")
+        stop("unexpected caret version: ", packageVersion("caret"), "\n check defaults in caret package")
+    # check oob method in trainControl for different algorithms in myfit_mdl
 
-	model_id_method <- paste0(model_id, ".", model_method)
-    print(sprintf("fitting model: %s", model_id_method))
+    for (spec in c("id.prefix", "type", "tune.df",
+                   # train params that feed defaults for trainControl params
+                   "train.preProcess",
+                   # trainControl params
+        "trainControl.method", "trainControl.number", "trainControl.repeats",
+        "trainControl.classProbs", "trainControl.summaryFunction",
+        "trainControl.allowParallel",
+                   # train params
+                   "train.method", "train.metric", "train.maximize")) {
+    #     function specs ()
 
-    if (!(model_type %in% c("regression", "classification")))
-        stop("unsupported model_type: ", model_type)
-    if (model_type == "classification")
-	    if (is.binomial <- (length(unique(fit_df[, rsp_var])) == 2)) {
-	        #require(ROCR)
-	    }
+        if (!any(grepl(spec, names(mdl_specs_lst), fixed = TRUE))) {
+            # mdl_specs_lst[[spec]] <- NULL # this does not work for preProc.method
+            mdl_specs_lst <- append(mdl_specs_lst, list(last.item = NULL))
+            names(mdl_specs_lst) <-
+                gsub("last.item", spec, names(mdl_specs_lst), fixed = TRUE)
+        }
 
-	models_df <- data.frame(model_id=model_id_method,
-							model_method=model_method)
+        if ((spec == "trainControl.number") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <-
+                ifelse(!is.null(mdl_specs_lst[["train.preProcess"]]) &&
+                           grepl("cv", mdl_specs_lst[["train.preProcess"]]), 10, 25)
+        if ((spec == "trainControl.repeats") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <-
+                ifelse(!is.null(mdl_specs_lst[["train.preProcess"]]) &&
+                           grepl("cv", mdl_specs_lst[["train.preProcess"]]),
+                                            1, mdl_specs_lst[["trainControl.number"]])
+        if ((spec == "trainControl.classProbs") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <- FALSE
+        if ((spec == "trainControl.summaryFunction") &&
+            is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <- defaultSummary
+        if ((spec == "trainControl.allowParallel") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <- TRUE
 
-	if ((length(indep_vars_vctr) == 1) & any(indep_vars_vctr %in% "."))
-    	indep_vars_vctr <- setdiff(names(fit_df), rsp_var)
-
-#     if (!(".rnorm" %in% indep_vars_vctr))
-#     	indep_vars_vctr <- union(indep_vars_vctr, ".rnorm")
-
-#     # rpart does not like .rnorm
-#     if ((model_method == "rpart") & (".rnorm" %in% indep_vars_vctr))
-#     	indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
-
-	print(sprintf("    indep_vars: %s", paste(indep_vars_vctr, collapse=", ")))
-    models_df$feats	<- paste(indep_vars_vctr, collapse=", ")
-
-    rsp_var_out <- paste0(rsp_var_out, model_id, ".", model_method)
-
-    mytuneGrid <- NULL
-#     if (!is.null(tune_models_df) &
-#     	(nrow(subset(modelLookup(), model == model_method)) > 0)) {
-# 		tune_params_df <- getModelInfo(model_method)[[model_method]]$parameters
-
-    # tune_params_df is needed later irrespective of mytuneGrid
-    if (nrow(subset(modelLookup(), model == model_method)) > 0)
-        tune_params_df <- getModelInfo(model_method)[[model_method]]$parameters
-
-    if (!is.null(tune_models_df) &
-        (nrow(subset(modelLookup(), model == model_method)) > 0)) {
-        if (length((tune_params_vctr <- intersect( tune_models_df$parameter,
-											tune_params_df$parameter))) > 0) {
-			args_lst <- NULL
-			for (param_ix in 1:length(tune_params_vctr))
-				args_lst[[param_ix]] <- seq(
-	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "min"],
-	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "max"],
-	 tune_models_df[ tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
-
-			# For single values, convert to list
-            if (length(args_lst[[1]]) == 1) args_lst <- list(args_lst)
-            names(args_lst) <- tune_params_vctr
-			mytuneGrid <- do.call("expand.grid", args_lst)
-		}
+        if ((spec == "train.metric") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <- ifelse(mdl_specs_lst[["type"]] == "classification",
+                                            "Accuracy", "RMSE")
+        if ((spec == "train.maximize") && is.null(mdl_specs_lst[[spec]]))
+            mdl_specs_lst[[spec]] <-
+                ifelse(mdl_specs_lst[["train.metric"]]  %in% c("RMSE", "logLoss"),
+                       FALSE, TRUE)
     }
-#     print(mytuneGrid)
 
-	if (model_method == "myrandom_classfr") model_method <- mycreate_random_classfr() else
-	if (model_method == "mybaseln_classfr") model_method <- mycreate_baseln_classfr() else
-	if (model_method == "myMFO_classfr") 	model_method <- mycreate_MFO_classfr()
+    return(mdl_specs_lst)
+}
+
+mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
+    seeds <- vector(mode = "list", length = seeds_lst_len)
+    start_multiplier <- tail(myget_primes(seeds_lst_len + 2), 1)
+    for (i in 1:(seeds_lst_len - 1)) {
+        #print(sprintf("setting seeds for i: %d", i))
+        seeds[[i]] <- tail(seq( 1001 + start_multiplier * ((i + 1) ^ 3),
+                                1001 + start_multiplier * ((i + 1) ^ 4),
+                                by = start_multiplier), seeds_elmnt_lst_len)
+    }
+    ## For the last element:
+    seeds[[length(seeds)]] <- 997
+    return(seeds)
+}
+#mygen_seeds(seeds_lst_len=(glb_rcv_n_folds * glb_rcv_n_repeats) + 1, seeds_elmnt_lst_len=9)
+
+myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
+    #spec_indep_vars <- indep_vars
+
+    mdl_specs_lst[["id"]] <- gsub("..", ".",
+        paste(mdl_specs_lst[["id.prefix"]], mdl_specs_lst[["train.preProcess"]],
+                mdl_specs_lst[["train.method"]], sep="."),
+                                fixed=TRUE)
+    print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
+
+    if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
+        stop("unsupported model type: ", mdl_specs_lst[["type"]])
+    if (mdl_specs_lst[["type"]] == "classification")
+	    mdl_specs_lst[["is.binomial"]] <- (length(unique(fit_df[, rsp_var])) == 2)
+
+	models_df <- data.frame(id=mdl_specs_lst[["id"]])
+
+	if ((length(indep_vars) == 1) && any(indep_vars %in% "."))
+    	indep_vars <- setdiff(names(fit_df), rsp_var)
+
+	print(sprintf("    indep_vars: %s", paste(indep_vars, collapse=",")))
+    models_df$feats	<- paste(indep_vars, collapse=",")
+
+    rsp_var_out <- paste0(rsp_var, ".predict.", mdl_specs_lst[["id"]])
+
+    mdl_specs_lst <- append(mdl_specs_lst, list(train.tuneGrid=NULL))
+    # tune_params_df is needed later irrespective of mdl_specs_lst[["train.tuneGrid"]]
+    if (nrow(subset(modelLookup(), model == mdl_specs_lst[["train.method"]])) > 0)
+        mdl_specs_lst[["tune.params.df"]] <-
+            getModelInfo(mdl_specs_lst[["train.method"]])[[mdl_specs_lst[["train.method"]]]]$parameters
+    if (!is.null(lcl_tune_models_df <- mdl_specs_lst[["tune.df"]]) &&
+        (nrow(lcl_tune_models_df) > 0) &&
+        (nrow(subset(modelLookup(), model == mdl_specs_lst[["train.method"]])) > 0)) {
+        if (length((tune_params_vctr <- intersect(
+                subset(lcl_tune_models_df,
+                       method %in% mdl_specs_lst[["train.method"]])$parameter,
+				mdl_specs_lst[["tune.params.df"]]$parameter))) > 0) {
+			args_lst <- list()
+			for (param_ix in 1:length(tune_params_vctr)) {
+			    vals <- subset(lcl_tune_models_df,
+			                    (method == mdl_specs_lst[["train.method"]]) &
+			                    (parameter == tune_params_vctr[param_ix]))$vals
+			    if (!is.null(vals) && !is.na(vals))
+			        args_lst[[tune_params_vctr[param_ix]]] <-
+			            # strsplit does not work when there are multiple blanks
+			            #   consider using stringr::str_split
+			            as.numeric(unlist(strsplit(vals, "[ ,]"))) else
+				    args_lst[[tune_params_vctr[param_ix]]] <- seq(
+#   lcl_tune_models_df[ lcl_tune_models_df$parameter==tune_params_vctr[param_ix], "min"],
+# 	lcl_tune_models_df[ lcl_tune_models_df$parameter==tune_params_vctr[param_ix], "max"],
+# 	lcl_tune_models_df[ lcl_tune_models_df$parameter==tune_params_vctr[param_ix], "by"])
+	               subset(lcl_tune_models_df, parameter == tune_params_vctr[param_ix])$min,
+	               subset(lcl_tune_models_df, parameter == tune_params_vctr[param_ix])$max,
+	               subset(lcl_tune_models_df, parameter == tune_params_vctr[param_ix])$by)
+			}
+
+			mdl_specs_lst[["train.tuneGrid"]] <- do.call("expand.grid", args_lst)
+		}
+    } else         # For some odd reason caret does not set this up
+
+        # bagEarth should use OOB, repeatedcv mdl$results contains only one row
+            if (mdl_specs_lst[["train.method"]] == "bagEarth") {
+        mdl_specs_lst[["train.tuneGrid"]] <- expand.grid(
+            nprune=tail(2^(1:as.integer(log2(length(setdiff(names(
+                myget_vectorized_obs_df(fit_df, rsp_var, indep_vars)), rsp_var))))), 5), # same as RFE
+            # degree == Maximum degree of interaction (Friedman’s mi). Default is 1, meaning build an additive model (i.e., no interaction terms).
+            degree=1)
+#     } else  if (mdl_specs_lst[["train.method"]] == "svmLinear") {
+#         mdl_specs_lst[["train.tuneGrid"]] <- expand.grid(C=10^(-2:2))
+    }
+#     print(mdl_specs_lst[["train.tuneGrid"]])
+
+	if (mdl_specs_lst[["train.method"]] == "myrandom_classfr") mdl_specs_lst[["train.method"]] <-
+        mycreate_random_classfr() else
+	if (mdl_specs_lst[["train.method"]] == "mybaseln_classfr") mdl_specs_lst[["train.method"]] <-
+        mycreate_baseln_classfr() else
+	if (mdl_specs_lst[["train.method"]] == "myMFO_classfr") 	mdl_specs_lst[["train.method"]] <-
+        mycreate_MFO_classfr()
+
+    if (is.null(mdl_specs_lst[["trainControl.method"]]))
+        mdl_specs_lst[["trainControl.method"]] <-
+            ifelse(!is.null(mdl_specs_lst[["trainControl.number"]]) &&
+                       (mdl_specs_lst[["trainControl.number"]] > 0), "repeatedcv", "none")
+
+    if (!inherits(mdl_specs_lst[["train.method"]], "list") &&
+        (mdl_specs_lst[["trainControl.method"]] %in% c("cv", "repeatedcv"))) {
+        # cv is not useful for these algorithms
+        for (alg in c("bag", "bagEarth", "rf")) {
+            #grep(alg, names(getModelInfo()), ignore.case=TRUE, value=TRUE)
+            if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE))
+                mdl_specs_lst[["trainControl.method"]] <- "oob"
+        }
+    }
+
+    mdl_specs_lst[["train.tuneLength"]] <-
+        ifelse(mdl_specs_lst[["trainControl.method"]] == "none", 1,
+                        ifelse(!is.null(mdl_specs_lst[["train.tuneGrid"]]),
+                               nrow(mdl_specs_lst[["train.tuneGrid"]]), 5))
+
+    if (mdl_specs_lst[["trainControl.method"]] != "none") {
+        seeds_lst_len <- mdl_specs_lst[["trainControl.number"]] *
+                         mdl_specs_lst[["trainControl.repeats"]] + 1
+        seeds <- vector(mode = "list", length = seeds_lst_len)
+        start_multiplier <- tail(myget_primes(seeds_lst_len + 2), 1)
+        nMdlsPerCvSample <- switch(mdl_specs_lst[["train.method"]],
+
+                                   nnet    = mdl_specs_lst[["train.tuneLength"]] ^ 2,
+                                   avNNet  = mdl_specs_lst[["train.tuneLength"]] ^ 2,
+
+                                   svmPoly = mdl_specs_lst[["train.tuneLength"]] ^ 2 * 3,
+
+                                   dummy   = mdl_specs_lst[["train.tuneLength"]])
+        if (is.null(nMdlsPerCvSample))
+            nMdlsPerCvSample <- mdl_specs_lst[["train.tuneLength"]]
+
+        for (i in 1:(seeds_lst_len - 1)) {
+            #print(sprintf("setting seeds for i: %d", i))
+            endExp <- 3;
+            while (is.null(seeds[[i]]) || (length(seeds[[i]]) < nMdlsPerCvSample)) {
+                seeds[[i]] <- tail(seq( 1001 + start_multiplier * ((i + 1) ^ 2),
+                                        1001 + start_multiplier * ((i + 1) ^ endExp),
+                                        by = start_multiplier), nMdlsPerCvSample)
+                endExp <- endExp + 1;
+            }
+        }
+        ## For the last model:
+        seeds[[length(seeds)]] <- 997
+    } else seeds <- NA
+    #seeds <- NA
+
+    #grep("trainControl", names(mdl_specs_lst), value=TRUE)
+
+    if (packageVersion("caret") != "6.0.57")
+        stop("Review caret kludges")
+
+    # caret kludge
+    allowPar <- mdl_specs_lst[["trainControl.allowParallel"]]
+    if (mdl_specs_lst[["train.method"]] %in%
+        c("bayesglm", "glm", "lda", "lda2", "rpart", "svmLinear", "svmPoly"))
+        allowPar <- FALSE
+
+	mdl_specs_lst[["trainControl"]] <-
+	    trainControl(method = mdl_specs_lst[["trainControl.method"]],
+	                 number = mdl_specs_lst[["trainControl.number"]],
+	                 repeats = mdl_specs_lst[["trainControl.repeats"]],
+	                verboseIter = TRUE, returnResamp = "all", savePredictions = TRUE,
+                summaryFunction = mdl_specs_lst[["trainControl.summaryFunction"]],
+	                 seeds = seeds,
+	                 allowParallel = allowPar)
+
+    # Need to figure out how to handle glb_featsimp_df; has PC1:PCn as feature names
+    #     if (!inherits(mdl_specs_lst[["train.method"]], "list") && (mdl_specs_lst[["train.method"]] == "rf")) {
+    #     	 print("performing pca pre-processing for rf")
+    #     	 preProc_mthd <- c("pca")
+    #     }
+    if (!is.null(mdl_specs_lst[["train.preProcess"]])) {
+        if (mdl_specs_lst[["train.preProcess"]] == "NULL")
+            mdl_specs_lst[["train.preProcess"]] <- NULL else
+        if (grepl(".", mdl_specs_lst[["train.preProcess"]], fixed=TRUE))
+            mdl_specs_lst[["train.preProcess"]] <-
+                unlist(strsplit(mdl_specs_lst[["train.preProcess"]], "[.]"))
+    }
+
+	# varImp crashes for bayesglm if char/string features are present in fit_df
+	fit_df <- fit_df[, c(rsp_var, sort(unique(unlist(strsplit(indep_vars, "[:\\*]")))))]
+
+	# preProcess method %in% c("pca", "range") train crashes if a column has no variance (might result from a dummy var)
+	if (!is.null(mdl_specs_lst[["train.preProcess"]]) &&
+	    grepl("(ica|pca|range)", mdl_specs_lst[["train.preProcess"]])) {
+    	vctr_fit_df <- myget_vectorized_obs_df(fit_df, rsp_var = rsp_var, indep_vars = indep_vars)
+    	unqlen_cols <- sapply(names(vctr_fit_df), function(col)
+    	                                            length(unique(vctr_fit_df[, col])))
+    	if (length(problem_cols <- unqlen_cols[unqlen_cols <= 1]) > 0) {
+    	    warning(paste0("myfit_mdl: preProcess method: range currently does not work for columns with no variance: ", paste0(names(problem_cols), collapse=", ")), immediate.=TRUE)
+    	    return(NULL)
+#     	    indep_vars <- setdiff(names(vctr_fit_df), c(rsp_var, names(problem_cols)))
+#     	    fit_df <- vctr_fit_df[, c(rsp_var, indep_vars)]
+    	}
+	}
+
+	# Check if mdl_specs_lst[["train.method"]] is not a list (non-custom models only)
+	#   else it is a string
+# 	if (mdl_specs_lst[["train.method"]] %in% c("bagEarth", "svmLinear")) {
+# 	    print(sprintf("User-specified Tuning Grid Length: %d",
+# 	                  mdl_specs_lst[["train.tuneLength"]]))
+# 	    print(mdl_specs_lst[["train.tuneGrid"]])
+# 	}
 
 	set.seed(111)
-    methodControl <- ifelse(n_cv_folds > 0, "cv", "none")
-    preProcess <- NULL
-    # Need to figure out how to handle glb_featsimp_df; has PC1:PCn as feature names
-#     if (!inherits(model_method, "list") && (model_method == "rf")) {
-#     	 methodControl <- "oob"    # cv is not useful for rf
-#     	 print("performing pca pre-processing for rf")
-#     	 preProcess <- c("pca")
-#     }
+	mdl <- train(reformulate(sort(indep_vars), response=rsp_var), data=fit_df
+	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df
+				 , method=mdl_specs_lst[["train.method"]]
+				 , preProcess=mdl_specs_lst[["train.preProcess"]]
+				 , metric=mdl_specs_lst[["train.metric"]]
+				 , maximize=mdl_specs_lst[["train.maximize"]]
+				 , trControl=mdl_specs_lst[["trainControl"]]
+				 , tuneGrid=mdl_specs_lst[["train.tuneGrid"]]
+				 , tuneLength=mdl_specs_lst[["train.tuneLength"]])
 
-	if (is.null(model_summaryFunction))
-		myControl <- trainControl(method=methodControl, number=n_cv_folds,
-									verboseIter=TRUE) else
-		myControl <- trainControl(method=methodControl, number=n_cv_folds,
-                                  summaryFunction=model_summaryFunction, verboseIter=TRUE)
-
-	model_metric <- ifelse(!is.null(model_metric), model_metric,
-					 			ifelse(is.factor(fit_df[, rsp_var]), "Accuracy", "RMSE"))
-	model_metric_maximize <- ifelse(!is.null(model_metric_maximize), model_metric_maximize,
-				 					ifelse(model_metric == "RMSE", FALSE, TRUE))
-
-	mdl <- train(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-				 method=model_method, trControl=myControl,
-				 preProcess=preProcess,
-				 metric=model_metric,
-				 maximize=model_metric_maximize,
-				 tuneGrid=mytuneGrid,
-				 tuneLength=ifelse(n_cv_folds == 0, 1,
-				 					ifelse(!is.null(mytuneGrid), nrow(mytuneGrid), 3)))
+	# Make this assignment earlier than at the end, to facilitate debugging of the model
+	mdl$.myId <- mdl_specs_lst[["id"]]
+	models_lst <- glb_models_lst; models_lst[[mdl_specs_lst[["id"]]]] <- mdl;
+	glb_models_lst <<- models_lst
 
 	#print(mdl$bestTune)
 	if ((nrow(mdl$results) > 1) & (mdl$bestTune[1, 1] != "none")) {
-		print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted"))
-		for (param in (params_vctr <- as.character(tune_params_df[, "parameter"]))) {
+		# print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted"))
+	    print(ggplot(mdl, highBestTune = TRUE))
+		for (param in (params_vctr <- as.character(mdl_specs_lst[["tune.params.df"]][, "parameter"]))) {
 			if ((mdl$bestTune[1, param] == min(mdl$results[, param])) |
 				(mdl$bestTune[1, param] == max(mdl$results[, param])))
 				warning("model's bestTune found at an extreme of tuneGrid for parameter: ", param)
 		}
 	}
-
 	myprint_mdl(mdl)
 
-    models_lst <- glb_models_lst; models_lst[[model_id_method]] <- mdl; glb_models_lst <<- models_lst
-
-	#models_df$n.fit <- nrow(fit_df)
+    #models_df$n.fit <- nrow(fit_df)
 	models_df$max.nTuningRuns <- nrow(mdl$results)
     models_df$min.elapsedtime.everything <- mdl$times$everything["elapsed"]
     models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
 
 	# compute/gather fit & OOB prediction stats
-        print("    calling mypredict_mdl for fit:")
-		models_df <- merge(models_df, mypredict_mdl(mdl, df=fit_df,
-						rsp_var, rsp_var_out, model_id_method, label="fit",
-						model_summaryFunction, model_metric,
-						model_metric_maximize,ret_type="stats"), all.x=TRUE)
-	if (!is.null(OOB_df)) {
-	    print("    calling mypredict_mdl for OOB:")
-		models_df <- merge(models_df, mypredict_mdl(mdl, df=OOB_df,
-						rsp_var, rsp_var_out, model_id_method, label="OOB",
-						model_summaryFunction, model_metric,
-						model_metric_maximize,ret_type="stats"), all.x=TRUE)
-	}
-
-    if (inherits(mdl$finalModel, c("list", "randomForest", "rpart"))) {
-    	# list implies custom model
-    	# summary(randomForest)$r.squared causes an error
-    	# summary(rpart) always spits out stuff
-    } else {
-		#models_df$max.R.sq.fit <- summary(mdl$finalModel)$r.squared
-		models_df$max.Adj.R.sq.fit <- summary(mdl$finalModel)$adj.r.squared
-		#models_df$min.SSE.fit <- sum(mdl$finalModel$residuals ^ 2)
-		models_df$min.aic.fit <- mdl$finalModel$aic
+    for (obs in c("fit", "OOB")) {
+        # print(sprintf("    calling mypredict_mdl for %s:", obs))
+        if (obs == "fit") obs_df <- fit_df else obs_df <- OOB_df
+        if (!is.null(obs_df))
+    		models_df <- merge(models_df,
+    		    mypredict_mdl(mdl, df = obs_df, rsp_var, rsp_var_out, mdl_specs_lst[["id"]],
+    		                  label = obs,
+                            mdl_specs_lst[["trainControl.summaryFunction"]],
+                            mdl_specs_lst[["train.metric"]],
+                            mdl_specs_lst[["train.maximize"]],
+                            ret_type = "stats"),
+    		                   all.x = TRUE)
     }
 
 	if (nrow(mdl$results) > 0) {
 		myresults_df <- mdl$results
 		for (param in names(mdl$bestTune)) {
 			myresults_df <- myresults_df[myresults_df[, param] == mdl$bestTune[1, param], ]
-    		if (nrow(myresults_df) != 1)
-    			stop ("this should not happen")
-    		for (result in setdiff(names(myresults_df), names(mdl$bestTune))) {
-    		    metric_pfx <- ifelse(length(grep("Rsquared", result) > 0), "max.",
-                                     ifelse(model_metric_maximize, "max.", "min."))
-    			models_df[1, paste0(metric_pfx, result, ".fit")] <- myresults_df[1, result]
-    		}
+		}
+		if (nrow(myresults_df) != 1)
+		    stop ("this should not happen")
+		for (result in setdiff(names(myresults_df), names(mdl$bestTune))) {
+		    metric_pfx <- ifelse(length(grep("Rsquared", result) > 0), "max.",
+		                         ifelse(mdl_specs_lst[["train.maximize"]], "max.", "min."))
+		    models_df[1, paste0(metric_pfx, result, ".fit")] <- myresults_df[1, result]
 		}
 	}
 
 	print(models_df)
-    all_models_df <- myrbind_df(glb_models_df, models_df)
-    row.names(all_models_df) <- all_models_df$model_id
+	if (nrow(glb_models_df) > 0)
+        all_models_df <- myrbind_df(subset(glb_models_df, id != models_df$id),
+                                    models_df) else
+        all_models_df <- models_df
+    row.names(all_models_df) <- all_models_df$id
 	glb_models_df <<- all_models_df
 
-    return(list("model"=mdl, "models_df"= models_df))
+    return(list("model" = mdl, "models_df" = models_df))
 }
 
 ## 08.1	    fit on simple shuffled sample
@@ -1781,6 +2209,17 @@ mymerge_feats_importance <- function(feats_df, sel_mdl, entity_df) {
 
 require(caret)
 
+myget_primes <- function(n) {
+    p <- 2:n
+    i <- 1
+    while (p[i] <= sqrt(n)) {
+        p <-  p[p %% p[i] != 0 | p==p[i]]
+        i <- i+1
+    }
+    return(p)
+}
+#myget_primes(11)
+
 myget_feats_importance <- function(mdl, featsimp_df=NULL) {
     # For some models, if there is only one feature, varImp returns NaN due to bug in scaling
     #   length(attr(mdl$terms, "variables")) == 2 ???
@@ -1791,10 +2230,17 @@ myget_feats_importance <- function(mdl, featsimp_df=NULL) {
         #   randomForest::importance provided IncNodePurity but
         #       caret is looking for %IncMSE
         thisimp_df <- as.data.frame(importance(mdl$finalModel))
-        thisimp_df[, paste0(".scld.", names(thisimp_df)[1])] <- thisimp_df[, 1] * 100.0 / max(thisimp_df[, 1])
+        thisimp_df[, paste0(".scld.", names(thisimp_df)[1])] <-
+            thisimp_df[, 1] * 100.0 / max(thisimp_df[, 1])
         thisimp_df <- thisimp_df[, paste0(".scld.", names(thisimp_df)[1]), FALSE]
         names(thisimp_df) <- "Overall"
+    } else
+    if ((inherits(mdl$finalModel, "rpart")) &&
+            is.null(mdl$splits)) {
+        # varImp crashes for an empty tree
+        return(NULL)
     } else thisimp_df <- varImp(mdl)$importance
+
     names(thisimp_df)[length(names(thisimp_df))] <- "importance"
     if (is.null(featsimp_df)) featsimp_df <- thisimp_df else {
         featsimp_df <- merge(subset(featsimp_df, select=-importance), thisimp_df,
@@ -1802,6 +2248,9 @@ myget_feats_importance <- function(mdl, featsimp_df=NULL) {
         row.names(featsimp_df) <- featsimp_df$Row.names
         featsimp_df <- subset(featsimp_df, select=-Row.names)
     }
+
+    if (!is.null(mdl$.myId))
+        featsimp_df[, paste0(mdl$.myId, ".importance")] <- featsimp_df$importance
     return(orderBy(~ -importance, featsimp_df))
 }
 

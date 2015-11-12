@@ -1,12 +1,15 @@
 #suppressPackageStartupMessages(require())
 
-myadd_chunk <- function(chnk_df, label, major.inc=FALSE) {
+myadd_chunk <- function(chnk_df, label, major.inc=FALSE, label.minor=NULL) {
     # Can df elements be used in Rmd chunk specs ?
     #if (is.null(label)) stop("label parameter not specified")
     if (is.null(chnk_df)) {    # First chunk
+        step.minor <- 0
         upd_chnk_df <- data.frame(label=label,
                                 step_major=1,
-                                step_minor=0,
+                                step_minor=step.minor,
+            label_minor=ifelse(is.null(label.minor), as.character(step.minor),
+                               as.character(label.minor)),
                                 bgn=proc.time()["elapsed"],
                                 end=NA,
                                 elapsed=NA)
@@ -14,13 +17,15 @@ myadd_chunk <- function(chnk_df, label, major.inc=FALSE) {
         chnk_df[nrow(chnk_df), "end"] <- proc.time()["elapsed"]
         chnk_df[nrow(chnk_df), "elapsed"] <- proc.time()["elapsed"] -
                                             chnk_df[nrow(chnk_df), "bgn"]
+        step.minor <- ifelse(major.inc, 0, tail(chnk_df$step_minor, 1)+1)
         upd_chnk_df <- rbind(chnk_df,
             data.frame(label=label,
                 step_major=ifelse(major.inc,
                                         tail(chnk_df$step_major, 1)+1,
                                         tail(chnk_df$step_major, 1)),
-                step_minor=ifelse(major.inc, 0,
-                                        tail(chnk_df$step_minor, 1)+1),
+                step_minor=step.minor,
+                label_minor=ifelse(is.null(label.minor), as.character(step.minor),
+                                   as.character(label.minor)),
                 bgn=proc.time()["elapsed"],
                 end=NA,
                 elapsed=NA))
@@ -43,19 +48,20 @@ mydsp_chunk <- function(chunks_df) {
 #mydsp_chunk(glb_chunks_df)
 
 myplt_chunk <- function(chunks_df) {
-    print(orderBy(~ -duration, 
+    print(orderBy(~ -duration,
                   (chunks_df <- head(mutate(chunks_df, duration=end-bgn), -1))))
-    print(sprintf("Total Elapsed Time: %s secs", 
+    print(sprintf("Total Elapsed Time: %s secs",
                   format(max(chunks_df$end), big.mark=',')))
-    tmp_chunks_df <- subset(chunks_df, (step_minor == 0) & 
-                                            (label != "display.session.info"), 
+    tmp_chunks_df <- subset(chunks_df, (step_minor == 0) &
+                                            (label != "display.session.info"),
                             select=c(label, step_major))
     names(tmp_chunks_df)[1] <- "label_major"
     plt_chunks_df <- merge(chunks_df, tmp_chunks_df, all.x=TRUE)
-    plt_chunks_df$step_major_desc <- max(plt_chunks_df$step_major) - 
+    plt_chunks_df$step_major_desc <- max(plt_chunks_df$step_major) -
                                                 plt_chunks_df$step_major
-    print(ggplot(plt_chunks_df, aes(x=reorder(label_major, step_major_desc), 
-                                     y=duration, fill=factor(step_minor))) + 
+    print(ggplot(plt_chunks_df, aes(x=reorder(label_major, step_major_desc),
+                                     y=duration, fill=factor(label_minor))) +
+              scale_color_brewer(type="qual", palette="Set1") +
                      geom_bar(stat="identity") + coord_flip())
-}                 
+}
 

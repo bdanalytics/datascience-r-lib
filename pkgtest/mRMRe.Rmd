@@ -1,0 +1,456 @@
+---
+# Get YAML keywords from myYAML_ref.Rmd
+title: "<Project name>: cgps.ic50 regression:: mRMRe"
+author: "bdanalytics"
+
+# Choose one:
+output:
+    html_document:
+        keep_md: yes
+        pandoc_args: ["+RTS", "-K64M", "-RTS"]
+
+# output:
+#   pdf_document:
+#     fig_width: 8
+#     highlight: zenburn
+#     #keep_md: yes
+#     keep_tex: yes
+#     number_sections: yes
+#     toc: yes
+---
+
+**  **    
+**Date: `r format(Sys.time(), "(%a) %b %d, %Y")`**    
+
+# Introduction:  
+
+Data: 
+Source: 
+    Training:   <trnng_url>  
+    New:        <newdt_url>  
+Time period: 
+
+```{r set_global_options_wd, echo=FALSE}
+setwd("~/Dropbox/datascience/R/pkgtest")
+```
+
+# Synopsis:
+
+Based on analysis utilizing <> techniques, <conclusion heading>:  
+
+Regression results:
+First run:
+    <glb_sel_mdl_id>: 
+        OOB_RMSE=<0.4f>; new_RMSE=<0.4f>; <feat1>=<imp>; <feat2>=<imp>
+
+Classification results:
+First run:
+    <glb_sel_mdl_id>: Leaderboard: <accuracy>
+        newobs_tbl=[0=, 1=]; submit_filename=
+        OOB_conf_mtrx=[YN=, NY=]=; max.Accuracy.OOB=; opt.prob.threshold.OOB=
+            <feat1>=<imp>; <feat1>=<imp>; <feat1>=<imp>; 
+            <txt.feat1>=<imp>; <txt.feat1>=<imp>; <txt.feat1>=<imp>; 
+
+### Prediction Accuracy Enhancement Options:
+- import.data chunk:
+    - which obs should be in fit vs. OOB (currently dirty.0 vs .1 is split 50%)
+    
+- inspect.data chunk:
+    - For date variables
+        - Appropriate factors ?
+        - Different / More last* features ?
+        
+- scrub.data chunk:        
+- transform.data chunk:
+    - derive features from multiple features
+    
+- manage.missing.data chunk:
+    - Not fill missing vars
+    - Fill missing numerics with a different algorithm
+    - Fill missing chars with data based on clusters 
+    
+- extract.features chunk:
+    - Text variables: move to date extraction chunk ???
+        - Mine acronyms
+        - Mine places
+
+- Review set_global_options chunk after features are finalized
+
+### ![](<filename>.png)
+
+## Potential next steps include:
+- Organization:
+    - Categorize by chunk
+    - Priority criteria:
+        0. Ease of change
+        1. Impacts report
+        2. Cleans innards
+        3. Bug report
+        
+- all chunks:
+    - at chunk-end rm(!glb_<var>)
+    
+- manage.missing.data chunk:
+    - cleaner way to manage re-splitting of training vs. new entity
+
+- extract.features chunk:
+    - Add n-grams for glb_txt_vars
+        - "RTextTools", "tau", "RWeka", and "textcat" packages
+    - Convert user-specified mutate code to config specs
+    
+- fit.models chunk:
+    - Prediction accuracy scatter graph:
+    -   Add tiles (raw vs. PCA)
+    -   Use shiny for drop-down of "important" features
+    -   Use plot.ly for interactive plots ?
+    
+    - Change .fit suffix of model metrics to .mdl if it's data independent (e.g. AIC, Adj.R.Squared - is it truly data independent ?, etc.)
+    - move model_type parameter to myfit_mdl before indep_vars_vctr (keep all model_* together)
+    - create a custom model for rpart that has minbucket as a tuning parameter
+    - varImp for randomForest crashes in caret version:6.0.41 -> submit bug report
+
+- Probability handling for multinomials vs. desired binomial outcome
+-   ROCR currently supports only evaluation of binary classification tasks (version 1.0.7)
+-   extensions toward multiclass classification are scheduled for the next release
+
+- Skip trControl.method="cv" for dummy classifier ?
+- Add custom model to caret for a dummy (baseline) classifier (binomial & multinomial) that generates proba/outcomes which mimics the freq distribution of glb_rsp_var values; Right now glb_dmy_glm_mdl always generates most frequent outcome in training data
+- glm_dmy_mdl should use the same method as glm_sel_mdl until custom dummy classifer is implemented
+
+- fit.all.training chunk:
+    - myplot_prediction_classification: displays 'x' instead of '+' when there are no prediction errors 
+- Compare glb_sel_mdl vs. glb_fin_mdl:
+    - varImp
+    - Prediction differences (shd be minimal ?)
+
+- Move glb_analytics_diag_plots to mydsutils.R: (+) Easier to debug (-) Too many glb vars used
+- Add print(ggplot.petrinet(glb_analytics_pn) + coord_flip()) at the end of every major chunk
+- Parameterize glb_analytics_pn
+- Move glb_impute_missing_data to mydsutils.R: (-) Too many glb vars used; glb_<>_df reassigned
+- Replicate myfit_mdl_classification features in myfit_mdl_regression
+- Do non-glm methods handle interaction terms ?
+- f-score computation for classifiers should be summation across outcomes (not just the desired one ?)
+- Add accuracy computation to glb_dmy_mdl in predict.data.new chunk
+- Why does splitting fit.data.training.all chunk into separate chunks add an overhead of ~30 secs ? It's not rbind b/c other chunks have lower elapsed time. Is it the number of plots ?
+- Incorporate code chunks in print_sessionInfo
+- Test against 
+    - projects in github.com/bdanalytics
+    - lectures in jhu-datascience track
+
+# Analysis: 
+```{r set_global_options}
+rm(list=ls())
+set.seed(12345)
+options(stringsAsFactors=FALSE)
+source("~/Dropbox/datascience/R/myscript.R")
+source("~/Dropbox/datascience/R/mydsutils.R")
+source("~/Dropbox/datascience/R/myplot.R")
+source("~/Dropbox/datascience/R/mypetrinet.R")
+source("~/Dropbox/datascience/R/myplclust.R")
+# Gather all package requirements here
+suppressPackageStartupMessages(require(doMC))
+registerDoMC(4) # max(length(glb_txt_vars), glb_n_cv_folds) + 1
+#packageVersion("snow")
+#require(sos); findFn("cosine", maxPages=2, sortby="MaxScore")
+require(mRMRe)
+
+# Analysis control global variables
+glb_trnng_url <- "<trnng_url>"
+glb_newdt_url <- "<newdt_url>"
+glb_out_pfx <- "mRMRe_"
+glb_save_envir <- FALSE # or TRUE
+
+glb_is_separate_newobs_dataset <- FALSE    # or TRUE
+    glb_split_entity_newobs_datasets <- TRUE   # or FALSE
+    glb_split_newdata_method <- "sample"          # "condition" or "sample" or "copy"
+    glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
+    glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
+    glb_split_sample.seed <- 123               # or any integer
+
+glb_max_fitobs <- NULL # or any integer                         
+glb_is_regression <- TRUE; glb_is_classification <- !glb_is_regression; 
+    glb_is_binomial <- NULL # or TRUE or FALSE
+
+glb_rsp_var_raw <- "cgps.ic50"
+
+# for classification, the response variable has to be a factor
+glb_rsp_var <- glb_rsp_var_raw # or "cgps.ic50.fctr"
+
+# if the response factor is based on numbers/logicals e.g (0/1 OR TRUE/FALSE vs. "A"/"B"), 
+#   or contains spaces (e.g. "Not in Labor Force")
+#   caret predict(..., type="prob") crashes
+glb_map_rsp_raw_to_var <- NULL # or function(raw) {
+#     return(log(raw))
+#     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
+#     #as.factor(paste0("B", raw))
+#     #as.factor(gsub(" ", "\\.", raw))    
+# }
+# glb_map_rsp_raw_to_var(c(1, 1, 0, 0, NA))
+
+glb_map_rsp_var_to_raw <- NULL # or function(var) {
+#     return(exp(var))
+#     as.numeric(var) - 1
+#     #as.numeric(var)
+#     #gsub("\\.", " ", levels(var)[as.numeric(var)])
+#     c("<=50K", " >50K")[as.numeric(var)]
+#     #c(FALSE, TRUE)[as.numeric(var)]
+# }
+# glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(c(1, 1, 0, 0, NA)))
+
+if ((glb_rsp_var != glb_rsp_var_raw) & is.null(glb_map_rsp_raw_to_var))
+    stop("glb_map_rsp_raw_to_var function expected")
+glb_rsp_var_out <- paste0(glb_rsp_var, ".predict.") # model_id is appended later
+
+# List info gathered for various columns
+# <col_name>:   <description>; <notes>
+
+# If multiple vars are parts of id, consider concatenating them to create one id var
+# If glb_id_var == NULL, ".rownames <- row.names()" is the default
+glb_id_var <- NULL # or c("<var1>")
+glb_category_vars <- NULL # or c("<var1>", "<var2>")
+glb_drop_vars <- c(NULL) # or c("<col_name>")
+
+glb_map_vars <- NULL # or c("<var1>", "<var2>")
+glb_map_urls <- list();
+# glb_map_urls[["<var1>"]] <- "<var1.url>"
+
+glb_assign_pairs_lst <- NULL; 
+# glb_assign_pairs_lst[["<var1>"]] <- list(from=c(NA),
+#                                            to=c("NA.my"))
+glb_assign_vars <- names(glb_assign_pairs_lst)
+
+# Derived features
+glb_derive_lst <- NULL;
+
+# Add logs of numerics that are not distributed normally ->  do automatically ???
+
+# glb_derive_lst[["<feat.sfx>"]] <- list(
+#     mapfn=function(Rasmussen) { return(ifelse(sign(Rasmussen) >= 0, 1, 0)) }
+#     mapfn=function(PropR) { return(as.factor(ifelse(PropR >= 0.5, "Y", "N"))) }
+#     mapfn=function(purpose) { return(relevel(as.factor(purpose), ref="all_other")) }
+#     mapfn=function(Week) { return(substr(Week, 1, 10)) }
+#     mapfn=function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
+#                           tfr_raw[is.na(tfr_raw)] <- "NA.my";
+#                           return(as.factor(tfr_raw)) }
+#     , args=c("raw"))
+#     mapfn=function(PTS, oppPTS) { return(PTS - oppPTS) }
+#     , args=c("PTS", "oppPTS"))
+
+# # If glb_allobs_df is not sorted in the desired manner
+#     mapfn=function(Week) { return(coredata(lag(zoo(orderBy(~Week, glb_allobs_df)$ILI), -2, na.pad=TRUE))) }
+#     mapfn=function(ILI) { return(coredata(lag(zoo(ILI), -2, na.pad=TRUE))) }
+#     mapfn=function(ILI.2.lag) { return(log(ILI.2.lag)) }
+
+# glb_derive_lst[["<txt_var>.niso8859.log"]] <- list(
+#     mapfn=function(<txt_var>) { match_lst <- gregexpr("&#[[:digit:]]{3};", <txt_var>)
+#                         match_num_vctr <- unlist(lapply(match_lst, 
+#                                                         function(elem) length(elem)))
+#                         return(log(1 + match_num_vctr)) }
+#     , args=c("<txt_var>"))
+
+#     mapfn=function(raw) { mod_raw <- raw;
+#         mod_raw <- gsub("&#[[:digit:]]{3};", " ", mod_raw);
+#         # Modifications for this exercise only
+#         mod_raw <- gsub("\\bgoodIn ", "good In", mod_raw);
+#                           return(mod_raw)
+
+#         # Create user-specified pattern vectors 
+# #sum(mycount_pattern_occ("Metropolitan Diary:", glb_allobs_df$Abstract) > 0)
+#         if (txt_var %in% c("Snippet", "Abstract")) {
+#             txt_X_df[, paste0(txt_var_pfx, ".P.metropolitan.diary.colon")] <-
+#                 as.integer(0 + mycount_pattern_occ("Metropolitan Diary:", 
+#                                                    glb_allobs_df[, txt_var]))
+#summary(glb_allobs_df[ ,grep("P.on.this.day", names(glb_allobs_df), value=TRUE)])
+
+# glb_derive_lst[["<var1>"]] <- glb_derive_lst[["<var2>"]]
+
+glb_derive_vars <- names(glb_derive_lst)
+# tst <- "PropR.fctr"; args_lst <- NULL; for (arg in glb_derive_lst[[tst]]$args) args_lst[[arg]] <- glb_allobs_df[, arg]; print(head(args_lst[[arg]])); print(head(drv_vals <- do.call(glb_derive_lst[[tst]]$mapfn, args_lst))); 
+# print(which_ix <- which(args_lst[[arg]] == 0.75)); print(drv_vals[which_ix]); 
+
+glb_date_vars <- NULL # or c("<date_var>")
+glb_date_fmts <- list(); #glb_date_fmts[["<date_var>"]] <- "%m/%e/%y"
+glb_date_tzs <- list();  #glb_date_tzs[["<date_var>"]] <- "America/New_York"
+#grep("America/New", OlsonNames(), value=TRUE)
+
+glb_txt_vars <- NULL # or c("<txt_var1>", "<txt_var2>")   
+#Sys.setlocale("LC_ALL", "C") # For english
+
+glb_append_stop_words <- list()
+# Remember to use unstemmed words
+#orderBy(~ -cor.y.abs, subset(glb_feats_df, grepl("[HSA]\\.T\\.", id) & !is.na(cor.high.X)))
+#dsp_obs(Headline.contains="polit")
+#subset(glb_allobs_df, H.T.compani > 0)[, c("UniqueID", "Headline", "H.T.compani")]
+# glb_append_stop_words[["<txt_var1>"]] <- c(NULL
+# #                             ,"<word1>" # <reason1>
+#                             )
+#subset(glb_allobs_df, S.T.newyorktim > 0)[, c("UniqueID", "Snippet", "S.T.newyorktim")]
+#glb_txt_lst[["Snippet"]][which(glb_allobs_df$UniqueID %in% c(8394, 8317, 8339, 8350, 8307))]
+
+glb_important_terms <- list()
+# Remember to use stemmed terms 
+
+glb_sprs_thresholds <- NULL # or c(0.988, 0.970, 0.970) # Generates 29, 22, 22 terms
+# Properties:
+#   numrows(glb_feats_df) << numrows(glb_fitobs_df)
+#   Select terms that appear in at least 0.2 * O(FP/FN(glb_OOBobs_df))
+#       numrows(glb_OOBobs_df) = 1.1 * numrows(glb_newobs_df)
+names(glb_sprs_thresholds) <- glb_txt_vars
+
+# User-specified exclusions  
+glb_exclude_vars_as_features <- NULL # or c("<var_name>") 
+if (glb_rsp_var_raw != glb_rsp_var)
+    glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                            glb_rsp_var_raw)
+
+# List feats that shd be excluded due to known causation by prediction variable
+glb_exclude_vars_as_features <- union(glb_exclude_vars_as_features, 
+                                      c(NULL)) # or c("<col_name>")
+
+glb_impute_na_data <- FALSE # or TRUE
+glb_mice_complete.seed <- 144 # or any integer
+
+glb_cluster <- FALSE # or TRUE
+
+glb_interaction_only_features <- NULL # or ???
+
+glb_models_lst <- list(); glb_models_df <- data.frame()
+# Regression
+if (glb_is_regression)
+    glb_models_method_vctr <- c("lm", "glm", "bayesglm", "rpart", "rf") else
+# Classification
+    if (glb_is_binomial)
+        glb_models_method_vctr <- c("glm", "bayesglm", "rpart", "rf") else  
+        glb_models_method_vctr <- c("rpart", "rf")
+
+# Baseline prediction model feature(s)
+glb_Baseline_mdl_var <- NULL # or c("<col_name>")
+
+glb_model_metric_terms <- NULL # or matrix(c(
+#                               0,1,2,3,4,
+#                               2,0,1,2,3,
+#                               4,2,0,1,2,
+#                               6,4,2,0,1,
+#                               8,6,4,2,0
+#                           ), byrow=TRUE, nrow=5)
+glb_model_metric <- NULL # or "<metric_name>"
+glb_model_metric_maximize <- NULL # or FALSE (TRUE is not the default for both classification & regression) 
+glb_model_metric_smmry <- NULL # or function(data, lev=NULL, model=NULL) {
+#     confusion_mtrx <- t(as.matrix(confusionMatrix(data$pred, data$obs)))
+#     #print(confusion_mtrx)
+#     #print(confusion_mtrx * glb_model_metric_terms)
+#     metric <- sum(confusion_mtrx * glb_model_metric_terms) / nrow(data)
+#     names(metric) <- glb_model_metric
+#     return(metric)
+# }
+
+glb_tune_models_df <- 
+   rbind(
+    #data.frame(parameter="cp", min=0.00005, max=0.00005, by=0.000005),
+                            #seq(from=0.01,  to=0.01, by=0.01)
+    #data.frame(parameter="mtry",  min=080, max=100, by=10),
+    #data.frame(parameter="mtry",  min=08, max=10, by=1),    
+    data.frame(parameter="dummy", min=2, max=4, by=1)
+        ) 
+# or NULL
+glb_n_cv_folds <- 3 # or NULL
+
+glb_clf_proba_threshold <- NULL # 0.5
+
+# Model selection criteria
+if (glb_is_regression)
+    glb_model_evl_criteria <- c("min.RMSE.OOB", "max.R.sq.OOB", "max.Adj.R.sq.fit")
+if (glb_is_classification) {
+    if (glb_is_binomial)
+        glb_model_evl_criteria <- 
+            c("max.Accuracy.OOB", "max.auc.OOB", "max.Kappa.OOB", "min.aic.fit") else
+        glb_model_evl_criteria <- c("max.Accuracy.OOB", "max.Kappa.OOB")
+}
+
+glb_sel_mdl_id <- NULL # or "<model_id_prefix>.<model_method>"
+glb_fin_mdl_id <- glb_sel_mdl_id # or "Final"
+
+# Depict process
+glb_analytics_pn <- petrinet(name="glb_analytics_pn",
+                        trans_df=data.frame(id=1:6,
+    name=c("data.training.all","data.new",
+           "model.selected","model.final",
+           "data.training.all.prediction","data.new.prediction"),
+    x=c(   -5,-5,-15,-25,-25,-35),
+    y=c(   -5, 5,  0,  0, -5,  5)
+                        ),
+                        places_df=data.frame(id=1:4,
+    name=c("bgn","fit.data.training.all","predict.data.new","end"),
+    x=c(   -0,   -20,                    -30,               -40),
+    y=c(    0,     0,                      0,                 0),
+    M0=c(   3,     0,                      0,                 0)
+                        ),
+                        arcs_df=data.frame(
+    begin=c("bgn","bgn","bgn",        
+            "data.training.all","model.selected","fit.data.training.all",
+            "fit.data.training.all","model.final",    
+            "data.new","predict.data.new",
+            "data.training.all.prediction","data.new.prediction"),
+    end  =c("data.training.all","data.new","model.selected",
+            "fit.data.training.all","fit.data.training.all","model.final",
+            "data.training.all.prediction","predict.data.new",
+            "predict.data.new","data.new.prediction",
+            "end","end")
+                        ))
+#print(ggplot.petrinet(glb_analytics_pn))
+print(ggplot.petrinet(glb_analytics_pn) + coord_flip())
+glb_analytics_avl_objs <- NULL
+
+glb_chunks_df <- myadd_chunk(NULL, "import.data")
+```
+
+## Step ``r mydsp_chunk(glb_chunks_df)``
+#### chunk option: eval=<r condition>
+```{r sample.data, cache=FALSE} 
+require(mRMRe)
+suppressPackageStartupMessages(require(doMC))
+registerDoMC(4) # max(length(glb_txt_vars), glb_n_cv_folds) + 1
+
+data(cgps)
+data.annot <- data.frame(cgps.annot)
+data.cgps <- data.frame(cgps.ic50, cgps.ge)
+
+## Test on the 'cgps' dataset, where the
+## variables are all of continuous type.
+
+dd <- mRMR.data(data = data.cgps)
+dd <- subsetData(dd, 1:10, 1:10)
+# Uses Spearman as correlation estimator
+spearman_mim <- mim(dd, continuous_estimator = "spearman")
+print(spearman_mim[1:4, 1:4])
+
+dd <- mRMR.data(data = data.cgps)
+mRMRe.fltr <- mRMR.classic(data = dd, target_indices = c(1), feature_count = 30)
+print(solutions(mRMRe.fltr)[[1]])
+print(apply(solutions(mRMRe.fltr)[[1]], 2, function(x, y) { return(y[x]) },
+            y=featureNames(dd)))
+print(featureNames(dd)[solutions(mRMRe.fltr)[[1]]])
+
+ensemble.fltr <- mRMR.ensemble(data = dd, target_indices = c(1), 
+                               solution_count=5, feature_count = 10)
+print(solutions(ensemble.fltr)[[1]])
+print(featureNames(dd)[solutions(ensemble.fltr)[[1]][, 5]])
+```
+
+```{r dummy.data, cache=FALSE} 
+## Test on a dummy dataset.
+# Create a dummy data set
+require(survival)
+df <- data.frame(
+        "surv1" = Surv(runif(100),sample(0:1, 100, replace = TRUE)),
+        "cont1" = runif(100),
+        "disc1" = factor(sample(1:5, 100, replace = TRUE),ordered = TRUE),
+        "surv2" = Surv(runif(100),sample(0:1, 100, replace = TRUE)),
+        "cont2" = runif(100),
+        "cont3" = runif(100),
+        "surv3" = Surv(runif(100),sample(0:1, 100, replace = TRUE)),
+        "disc2" = factor(sample(1:5, 100, replace = TRUE),ordered = TRUE))
+dd <- mRMR.data(data = df)
+# Show a partial mutual information matrix.
+print(mim(subsetData(dd, 1:4, 1:4)))
+```
