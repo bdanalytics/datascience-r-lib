@@ -1,9 +1,41 @@
 "rex_str", "rpl_str"
 #
-#--- Misc. Outliers ---
+#   "\\b" in R shd appear as "\b" here
+#
+#--- Synced Applications---
+# MIT/Analytics_Edge_15_071x/Assignments/Kaggle_eBay_iPads2
+#   Need to clean NYTimesBlogs local stuff from here to .Rmd
+#
+#--- Misc. Outliers ---> shd be in .Rmd
 #
 "\bHong Hong\b",            "HongKong"
 "\b(Angeles|York)based\b",  "\1 based"
+#
+#--- ISO-8859-* Dictionary --- http://www.htmlhelp.com/reference/charset/iso032-063.html
+#   "&#[[:digit:]]{3};" should be handled in config section
+#
+"\&#034;",  """"
+"&#(0*)37;", "%"
+"\&#039;",  "'"
+"\&#8230;",  " ellps " # my shorthand for ellipse
+"\&amp;",   "&"
+"&amp;",   "&"
+"&lt;",   "<"
+"&gt;",   ">"
+"<br>", " " # line break - add a count for it ??? 
+#
+#
+#--- Latin-1 Supplement --- http://www.charbase.com/block/latin-supplement
+#
+"\x89",   " " # CHARACTER TABULATION WITH JUSTIFICATION -> \x89 does not work; Use Sys.setlocale() instead
+#
+#--- Category ??? ---
+#"\n|\211|\235|\317|\333", " " # This does not work; \2 is considered to a back reference
+#
+#
+#--- removePunctuation --- tm does not substitute whitespace -> condition(8.25/10) becomes condition82510
+#
+"(\w)\(",   "\1 \("
 #
 #---Combine some words (names of places/organizations/concepts) that have .n > 1
 #
@@ -16,6 +48,8 @@
 #
 #---Acronyms
 #
+"\.\.", "\. "
+"\.(com|COM)\b", "dot\1"
 "\bA\.C\.A\.", "ACA"
 "\bA\.D\.P\.", "ADP"
 "\bA\.G\.", "AG"
@@ -29,6 +63,7 @@
 "\bA\. O\. Scott", "AOScott"
 "\bA\.P\.", "AP"
 "\bA\.T\.M\.", "ATM"
+"\bAT&T\b", "ATT"
 "\bB\.B\. King", "BBKing"
 "\bC\.A\.A\.", "CAA"
 "\bC\.D\.C\.", "CDC"
@@ -142,6 +177,8 @@
 #
 #---Places / Names cleansing---
 #
+"\b(B|b)(EST|est) (B|b)(UY|uy)\b", "\1\2\3\4"
+"\b(G|g)(EEK|eek) (S|s)(QUAD|quad)\b", "\1\2\3\4"
 "\bUnited States",  "USA"
 "\bWall Street",    "WallStreet"
 "\bWall St\.",      "WallStreet"
@@ -173,9 +210,18 @@
 #
 #---numbers---
 #
-"([[:digit:]]+)-by-([[:digit:]]+)", "\1 by \2"
-"([[:digit:]]+)-([[:digit:]]+)", "\1 to \2"
+"([[:digit:]])\\.([[:digit:]])\\.([[:digit:]])", "\\1point\\2\\point\\3"
+"([[:digit:]])\\.([[:digit:]])", "\\1point\\2"
+"([[:digit:]]),([[:digit:]])", "\\1\\2"             # thousands separator
+"([[:digit:]]+)-by-([[:digit:]]+)", "\1by\2"
+"([[:digit:]]+)-([[:digit:]]+)", "\1to\2"
 "([[:digit:]]+)-", "\1 "
+"\b([[:digit:]]+) (GB|gb)\b", "\1\2"
+"\b([[:digit:]]+) gig\b", "\1gb"
+"\b1st\b", "first"
+"\b2nd\b", "second"
+"\b3rd\b", "third"
+"\b4th\b", "fourth"
 "(.+)-(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)", "\1 \2"
 "(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)-(.+)", "\1 \2"
 "(one|two|three|four|five|six|seven|eight|nine)-", "\1 "
@@ -184,6 +230,7 @@
 "(\w)-a-year", "\1-per-year" # billion-a-year gets transformed into billion-ayear after removePunctuation w/ OR w/o preserve_intra...
 "(\w)-birthday", "\1 birthday"
 "\bto-([[:digit:]]+)", "to \1"
+"\bthree\b", "3"
 "\bhalf-dozen\b", "6"
 "\bdozen\b", "12"
 "\b[Tt]hirty-[Ff]ive\b", "35"
@@ -192,4 +239,13 @@
 #
 #---misc consolidations---
 #
+"\bEUC\b", "excellent used condition"
+"\bI (CLOUD|cloud)\\b", "I\1"
+"\bI pad\\b", "Ipad"
+"\b(I|i)(P|p)(A|a)(D|d) (A|a)(I|i)(R|r)\b", "\1\2\3\4\5\6\7"
+"\b(I|i)(P|p)(A|a)(D|d) (M|m)ini\b", "\1\2\3\4\5ini"
+"\b(IPAD|Ipad|iPad|ipad) ([[:digit:]])\b", "\1\2"
+"\b(Ipadair|iPadAir|ipadair) ([[:digit:]])\b", "\1\2"
+"\b(iPadMini|iPadmini) ([[:digit:]])\b", "\1\2"
+"\bI Phone\b", "IPhone"
 "\btelevision\b", "tv" # Consolidate with "tv" in raw data

@@ -1924,7 +1924,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
         for (alg in c("bag", "bagEarth", "rf")) {
             #grep(alg, names(getModelInfo()), ignore.case=TRUE, value=TRUE)
             if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE))
-                mdl_specs_lst[["trainControl.method"]] <- "oob"
+                mdl_specs_lst[["trainControl.method"]] <- 
+                	if is.null(OOB_df) "none" else "oob"
         }
     }
 
