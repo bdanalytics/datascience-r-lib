@@ -58,7 +58,10 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL,
     download_filepath <- paste("./data", download_filename, sep="/")
     if (!file.exists(download_filepath)) {
     	print(sprintf("Downloading file %s from %s...", download_filepath, url))
-        download.file(url, destfile=download_filepath, method="curl")
+
+        # Issue with downloading from https:// ??? currently downloads html doc even though url points to csv file
+        # download.file(url, destfile=download_filepath, method="curl")
+        download.file(url, destfile = download_filepath, method = "auto")
     }
 
     url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
@@ -308,7 +311,7 @@ mycheck_prime <- function(n) n == 2L || all(n %% 2L:ceiling(sqrt(n)) != 0)
 # mycheck_prime(9)
 
 sel_obs <- function(vars_lst, ignore.case=TRUE, perl=FALSE) {
-    tmp_df <- glb_allobs_df
+    tmp_df <- glbObsAll
 
     # Does not work for Popular == NAs ???
     #     if (!is.null(Popular)) {
@@ -328,17 +331,20 @@ sel_obs <- function(vars_lst, ignore.case=TRUE, perl=FALSE) {
             tmp_df <- tmp_df[tmp_df[, var] == vars_lst[var], ]
     }
 
-    return(glb_allobs_df[, glb_id_var] %in% tmp_df[, glb_id_var])
+    return(glbObsAll[, glb_id_var] %in% tmp_df[, glb_id_var])
 }
-#print(glb_allobs_df[sel_obs(list(description.contains="mini(?!m)"), perl=TRUE), "description"])
+#print(glbObsAll[sel_obs(list(description.contains="mini(?!m)"), perl=TRUE), "description"])
 
-mydsp_obs <- function(..., cols=c(NULL), all=FALSE) {
-    feats <- c(glb_id_var, glb_rsp_var, glb_category_var, cols, glbFeatsText)
-    if (length(featsError <- setdiff(feats, names(glb_allobs_df))) > 0) {
-        warning("mydsp_obs: ignoring missing cols: ", paste0(featsError, collapse=", "))
+mydspObs <- function(.dot = ..., cols = c(NULL), all = FALSE) {
+    feats <-
+        union(c(glb_id_var, glb_rsp_var, glb_category_var, cols, glbFeatsText),
+              gsub("\\.contains$", "", names(.dot)))
+    if (length(featsError <- setdiff(feats, names(glbObsAll))) > 0) {
+        warning("mydsp_obs: ignoring missing cols: ",
+                paste0(featsError, collapse = ", "))
         feats <- setdiff(feats, featsError)
     }
-    tmp_df <- glb_allobs_df[sel_obs(...), feats, FALSE]
+    tmp_df <- glbObsAll[sel_obs(.dot), feats, FALSE]
     if(all) { print(tmp_df) } else { myprint_df(tmp_df) }
 }
 #dsp_obs(list(description.contains="mini(?!m)"), perl=TRUE)
@@ -645,7 +651,7 @@ myfind_fctr_cols_df <- function(df) {
                    function(col) ifelse(inherits(df[, col], "factor"), col, ""))
     return(cols[cols != ""])
 }
-#myfind_fctr_cols_df(glb_allobs_df)
+#myfind_fctr_cols_df(glbObsAll)
 
 myfind_numerics_missing <- function(df, featsExclude) {
     numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
@@ -785,16 +791,16 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
                                                     glb_date_fmts[[var]],
                                                     tz=glb_date_tzs[[var]])))
         #         print(dates_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", ".date")])
-        #         print(glb_allobs_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])
-        #         print(head(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), c("ID", "Arrest.fctr", "Date")]))
-        #         print(head(strptime(glb_allobs_df[grepl("4/7/02 .:..", glb_allobs_df$Date), "Date"], "%m/%e/%y %H:%M"))
+        #         print(glbObsAll[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])
+        #         print(head(glbObsAll[grepl("4/7/02 .:..", glbObsAll$Date), c("ID", "Arrest.fctr", "Date")]))
+        #         print(head(strptime(glbObsAll[grepl("4/7/02 .:..", glbObsAll$Date), "Date"], "%m/%e/%y %H:%M"))
         # Wrong data during EST->EDT transition
         #         tmp <- strptime("4/7/02 2:00","%m/%e/%y %H:%M:%S"); print(tmp); print(is.na(tmp))
         #         dates_df[dates_df$ID == 2068197, .date] <- tmp
-        #         grep("(.*?) 2:(.*)", glb_allobs_df[is.na(dates_df$.date), "Date"], value=TRUE)
+        #         grep("(.*?) 2:(.*)", glbObsAll[is.na(dates_df$.date), "Date"], value=TRUE)
         #         dates_df[is.na(dates_df$.date), ".date"] <-
         #             data.frame(.date=strptime(gsub("(.*?) 2:(.*)", "\\1 3:\\2",
-        #                 glb_allobs_df[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
+        #                 glbObsAll[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
         if (sum(is.na(dates_df$.date)) > 0) {
             stop("NA POSIX dates for ", var)
             print(df[is.na(dates_df$.date), c(id_vars, rsp_var, var)])
@@ -1769,8 +1775,8 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, mdl_id, label,
 
 myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
     require(caret)
-    if (packageVersion("caret") != "6.0.57")
-        stop("unexpected caret version: ", packageVersion("caret"), "\n check defaults in caret package")
+#     if (packageVersion("caret") != "6.0.57")
+#         stop("unexpected caret version: ", packageVersion("caret"), "\n check defaults in caret package")
     # check oob method in trainControl for different algorithms in myfit_mdl
 
     for (spec in c("id.prefix", "type", "tune.df",
@@ -1924,8 +1930,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
         for (alg in c("bag", "bagEarth", "rf")) {
             #grep(alg, names(getModelInfo()), ignore.case=TRUE, value=TRUE)
             if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE))
-                mdl_specs_lst[["trainControl.method"]] <- 
-                	if is.null(OOB_df) "none" else "oob"
+                mdl_specs_lst[["trainControl.method"]] <-
+                	if (is.null(OOB_df)) "none" else "oob"
         }
     }
 
@@ -1967,14 +1973,18 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 
     #grep("trainControl", names(mdl_specs_lst), value=TRUE)
 
-    if (packageVersion("caret") != "6.0.57")
+    if (packageVersion("caret") != "6.0.58")
         stop("Review caret kludges")
 
     # caret kludge
     allowPar <- mdl_specs_lst[["trainControl.allowParallel"]]
-    if (mdl_specs_lst[["train.method"]] %in%
-        c("bayesglm", "glm", "lda", "lda2", "rpart", "svmLinear", "svmPoly"))
-        allowPar <- FALSE
+#     if (mdl_specs_lst[["train.method"]] %in%
+#         c(NULL
+#           # , "bayesglm"
+#           , "glm"
+#           # , "lda", "lda2", "rpart", "svmLinear", "svmPoly"
+#           ))
+#         allowPar <- FALSE
 
 	mdl_specs_lst[["trainControl"]] <-
 	    trainControl(method = mdl_specs_lst[["trainControl.method"]],

@@ -382,7 +382,7 @@ myplot_plotly <- function(ggplot_obj) {
 }
 
 myplot_prediction_classification <- function(df, feat_x, feat_y,
-                                    rsp_var, rsp_var_out, id_vars, prob_threshold=NULL) {
+                            rsp_var, rsp_var_out, id_vars, prob_threshold=NULL) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
@@ -399,7 +399,7 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     df[, predct_error_var_name] <- 0
     predct_prob_var_name <- paste0(rsp_var_out, ".prob")
     tmp_vars <- grep("All\\.X", names(df), value=TRUE)
-    head(df[, c(glb_id_var, tmp_vars)])
+    #head(df[, c(glb_id_var, tmp_vars)])
     if (!all(is.na(df[, predct_accurate_var_name]))) {
         if (glb_is_binomial) {
             df[!df[, predct_accurate_var_name],  predct_error_var_name] <-
@@ -430,25 +430,23 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
                                 paste0(".", rownames(df)[row_ix]))
     }
 
-    dsp_vars <- c(id_vars, grep(rsp_var, names(df), value=TRUE))
-    print("Min/Max Boundaries: ")
-    myprint_df(orderBy(reformulate(predct_error_var_name),
-                       subset(df[, c(dsp_vars, ".label")], .label != "")))
-    print("Inaccurate: ")
-    myprint_df(orderBy(reformulate(predct_error_var_name),
-                       df[!df[, predct_accurate_var_name], c(dsp_vars)]))
+    dsp_vars <- c(id_vars, grep(rsp_var, names(df), value = TRUE))
+    if (any(!is.na(df[, predct_accurate_var_name]))) {
+        print("Min/Max Boundaries: ")
+        myprint_df(orderBy(reformulate(predct_error_var_name),
+                           subset(df[, c(dsp_vars, ".label")], .label != "")))
+        print("Inaccurate: ")
+        myprint_df(orderBy(reformulate(predct_error_var_name),
+                           df[!df[, predct_accurate_var_name], c(dsp_vars)]))
 
-    return(ggplot(df, aes_string(x=feat_x, y=feat_y)) +
-            geom_point(aes_string(color=color_var,
-#    shape=paste0("factor(as.numeric(", predct_accurate_var_name, ") + 3)")),
-#    shape=paste0("relevel(factor(as.numeric(", predct_accurate_var_name, ") + 3), ref=1)")),
-                                    shape=predct_accurate_var_name),
-                           position="jitter") +
-            scale_shape_manual(values=c(4,3)) + guides(shape=FALSE) +
-            geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5) +
-            facet_wrap(reformulate( predct_accurate_var_name)) +
-            scale_color_brewer(type="qual", palette="Set1")
-          )
+        return(ggplot(df, aes_string(x = feat_x, y = feat_y)) +
+        geom_point(aes_string(color = color_var, shape = predct_accurate_var_name),
+                    position = "jitter") +
+                scale_shape_manual(values = c(4,3)) + guides(shape = FALSE) +
+        geom_text(aes_string(label = ".label"), color = "NavyBlue", size = 3.5) +
+                facet_wrap(reformulate(predct_accurate_var_name)) +
+                scale_color_brewer(type = "qual", palette = "Set1"))
+    } else return(NULL)
 }
 
 myplot_prediction_regression <- function(df, feat_x, feat_y, rsp_var, rsp_var_out, id_vars) {
