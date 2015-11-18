@@ -580,6 +580,7 @@ mycreate_xtab_df <- function(df, xtab_col_names) {
     require(reshape2)
 
     df[, "_n"] <- 1
+    #xtab_col_names <- paste("`", xtab_col_names, "`", sep = "")
     count_df <- summaryBy(reformulate(xtab_col_names, "`_n`"), df, FUN=c(length))
     #count_df <- summaryBy(reformulate(xtab_col_names, "_n"), df, FUN=c(length))
     names(count_df) <- gsub("`", "", names(count_df))
@@ -596,23 +597,6 @@ mycreate_xtab_df <- function(df, xtab_col_names) {
     	paste(tail(xtab_col_names, 1), names(cast_df)[col_ix], sep=".")
 
     return(cast_df)
-
-#     print(xtabs(~ Month_fctr + Arrest, obs_df))
-#
-# 	print(prblm_3_2_xtb <- xtabs(~ Month + Arrest, obs_df))
-# 	print(prblm_3_2_df <- data.frame(dimnames(prblm_3_2_xtb)[[1]],
-#                                  prblm_3_2_xtb[, 1],
-#                                  prblm_3_2_xtb[, 2]))
-# 	names(prblm_3_2_df) <- c(names(dimnames(prblm_3_3_xtb))[1],
-#     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][1], sep="."),
-#     paste(names(dimnames(prblm_3_3_xtb))[2], dimnames(prblm_3_2_xtb)[[2]][2], sep="."))
-# 	print(prblm_3_2_df)
-#
-# 	print(prblm_3_3_tbl <- table(obs_df$Year, obs_df$Arrest))
-# 	print(prblm_3_3_df <- data.frame(Year=dimnames(prblm_3_3_tbl)[[1]],
-#                                  Arrest_FALSE=prblm_3_3_tbl[, 1],
-#                                  Arrest_TRUE =prblm_3_3_tbl[, 2]))
-
 }
 
 mycreate_sqlxtab_df <- function(obs_df, xtab_col_names) {
@@ -1343,14 +1327,19 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 		mrg_obs_xtab_df[, paste(predct_var, val, sep=".")] <- 0
 	#print(mrg_obs_xtab_df)
 
-	obs_xtab_df <- mycreate_xtab_df(obs_df, c(actual_var, predct_var))
+	#obs_xtab_df <- mycreate_xtab_df(obs_df, c(actual_var, predct_var))
+	obs_xtab_df <- mycreate_sqlxtab_df(obs_df, c(actual_var, predct_var))
+# 	obs_xtab_df <- tidyr::spread_(obs_xtab_df, "Popular.fctr.predict.MFO###myMFO_classfr", ".n")
+	obs_xtab_df <- tidyr::spread_(obs_xtab_df, predct_var, ".n")
+	names(obs_xtab_df)[2:ncol(obs_xtab_df)] <-
+	    paste(predct_var, names(obs_xtab_df)[2:ncol(obs_xtab_df)], sep = ".")
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 	#print(obs_xtab_df)
 
 	for (col_ix in 2:ncol(obs_xtab_df))
 		mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[,
 			-which(names(mrg_obs_xtab_df) == names(obs_xtab_df)[col_ix])],
-								 obs_xtab_df[, c(1, col_ix)], all.x=TRUE)
+								 obs_xtab_df[, c(1, col_ix)], all.x = TRUE)
 
 	mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
 	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0
@@ -1649,7 +1638,28 @@ myextract_actual_feats <- function(vars) {
     return(ret_vars)
 }
 
-mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, mdl_id, label,
+mygetPredictIds <- function(rsp_var, mdlId = NULL) {
+    rsp_var_out <- paste0(rsp_var, ".", gsub("#", ".", mdlId))
+    return(list(value   = rsp_var_out,
+                prob    = paste0(rsp_var_out, ".prob"),
+                is.acc  = paste0(rsp_var_out, ".is.acc"), # accurate
+                err     = paste0(rsp_var_out, ".err"),
+                err.abs = paste0(rsp_var_out, ".err.abs")))
+}
+
+myparseMdlId <- function(mdlId) {
+    mdlComps <- unlist(strsplit(mdlId, "[#]"))
+    return(list(family     = mdlComps[1],
+                preProcess = mdlComps[2],
+                resample   = plyr::revalue(mdlComps[3],c(NULL
+                                    , " " = "none" # shd be "" but R treats it as an error
+                                                        , "rcv" = "repeatedcv"
+                                                        ),
+                                           warn_missing = FALSE),
+                alg        = mdlComps[4]))
+}
+
+mypredict_mdl <- function(mdl, df, rsp_var, label,
 							model_summaryFunction=NULL, model_metric=NULL,
 							model_metric_maximize=NULL,
 							ret_type="stats") {
@@ -1662,7 +1672,8 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, mdl_id, label,
 	if (mdl$modelType == "Classification") {
 		is.binomial <- (length(unique(df[, rsp_var])) == 2)
 	}
-	stats_df <- data.frame(id = mdl_id)
+	stats_df <- data.frame(id = mdl$.myId)
+	rsp_var_out <- mygetPredictIds(rsp_var)$value
 
 	if ((mdl$modelType == "Classification") && is.binomial) {
 	    requireNamespace("pROC")
@@ -1711,7 +1722,10 @@ mypredict_mdl <- function(mdl, df, rsp_var, rsp_var_out, mdl_id, label,
 				(df[, paste0(rsp_var_out, ".prob")] >=
 					prob_threshold) * 1 + 1], levels(df[, rsp_var]))
 
-		print(mycreate_xtab_df(df, c(rsp_var, rsp_var_out)))
+		#print(mycreate_xtab_df(df, c(rsp_var, rsp_var_out)))
+# 		print(df %>%
+# 		      mycreate_sqlxtab_df(c(rsp_var, rsp_var_out)) %>%
+# 		      tidyr::spread_(rsp_var_out, ".n"))
 		stats_df[ , paste0("max.f.score.", label)] <-
 			mycompute_classifier_f.score(mdl, df,
 										 prob_threshold,
@@ -1844,10 +1858,15 @@ mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
 myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indep_vars <- indep_vars
 
-    mdl_specs_lst[["id"]] <- gsub("..", ".",
-        paste(mdl_specs_lst[["id.prefix"]], mdl_specs_lst[["train.preProcess"]],
-                mdl_specs_lst[["train.method"]], sep="."),
-                                fixed=TRUE)
+    # change id.prefix to mdlFamily
+    mdl_specs_lst[["id"]] <- paste(mdl_specs_lst[["id.prefix"]],
+                                   mdl_specs_lst[["train.preProcess"]],
+                        plyr::revalue(mdl_specs_lst[["trainControl.method"]], c(
+                                       "none" = "",
+                                       "repeatedcv" = "rcv"),
+                                      warn_missing = FALSE),
+                                   mdl_specs_lst[["train.method"]],
+                                    sep = "#")
     print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
 
     if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
@@ -2072,8 +2091,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
         if (obs == "fit") obs_df <- fit_df else obs_df <- OOB_df
         if (!is.null(obs_df))
     		models_df <- merge(models_df,
-    		    mypredict_mdl(mdl, df = obs_df, rsp_var, rsp_var_out, mdl_specs_lst[["id"]],
-    		                  label = obs,
+    		    mypredict_mdl(mdl, df = obs_df, rsp_var, label = obs,
                             mdl_specs_lst[["trainControl.summaryFunction"]],
                             mdl_specs_lst[["train.metric"]],
                             mdl_specs_lst[["train.maximize"]],

@@ -433,19 +433,30 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     dsp_vars <- c(id_vars, grep(rsp_var, names(df), value = TRUE))
     if (any(!is.na(df[, predct_accurate_var_name]))) {
         print("Min/Max Boundaries: ")
-        myprint_df(orderBy(reformulate(predct_error_var_name),
-                           subset(df[, c(dsp_vars, ".label")], .label != "")))
+        myprint_df(df[, c(dsp_vars, ".label")] %>%
+            subset(.label != "") %>%
+            arrange_(interp(~var, var = as.name(predct_error_var_name))))
+#         myprint_df(orderBy(reformulate(predct_error_var_name),
+#                            subset(df[, c(dsp_vars, ".label")], .label != "")))
         print("Inaccurate: ")
-        myprint_df(orderBy(reformulate(predct_error_var_name),
-                           df[!df[, predct_accurate_var_name], c(dsp_vars)]))
+        myprint_df(df[!df[, predct_accurate_var_name], c(dsp_vars)] %>%
+            arrange_(interp(~var, var = as.name(predct_error_var_name))))
+#         myprint_df(orderBy(reformulate(predct_error_var_name),
+#                            df[!df[, predct_accurate_var_name], c(dsp_vars)]))
 
-        return(ggplot(df, aes_string(x = feat_x, y = feat_y)) +
-        geom_point(aes_string(color = color_var, shape = predct_accurate_var_name),
-                    position = "jitter") +
-                scale_shape_manual(values = c(4,3)) + guides(shape = FALSE) +
-        geom_text(aes_string(label = ".label"), color = "NavyBlue", size = 3.5) +
-                facet_wrap(reformulate(predct_accurate_var_name)) +
-                scale_color_brewer(type = "qual", palette = "Set1"))
+        plt_df <- df
+        tmpName <- gsub("\\*", "_", predct_accurate_var_name)
+        plt_df[, tmpName] <- plt_df[, predct_accurate_var_name]
+        gp <- ggplot(plt_df, aes_string(x = feat_x, y = feat_y)) +
+            geom_point(aes_string(color = color_var,
+                                  shape = tmpName),
+                       position = "jitter") +
+            scale_shape_manual(values = c(4,3)) + guides(shape = FALSE) +
+            geom_text(aes_string(label = ".label"), color = "NavyBlue",
+                      size = 3.5) +
+            facet_wrap(reformulate(tmpName)) +
+            scale_color_brewer(type = "qual", palette = "Set1")
+        return(gp)
     } else return(NULL)
 }
 
