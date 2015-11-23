@@ -52,16 +52,26 @@ myplt_chunk <- function(chunks_df) {
                   (chunks_df <- head(mutate(chunks_df, duration=end-bgn), -1))))
     print(sprintf("Total Elapsed Time: %s secs",
                   format(max(chunks_df$end), big.mark=',')))
-    tmp_chunks_df <- subset(chunks_df, (step_minor == 0) &
-                                            (label != "display.session.info"),
-                            select=c(label, step_major))
-    names(tmp_chunks_df)[1] <- "label_major"
-    plt_chunks_df <- merge(chunks_df, tmp_chunks_df, all.x=TRUE)
-    plt_chunks_df$step_major_desc <- max(plt_chunks_df$step_major) -
-                                                plt_chunks_df$step_major
-    print(ggplot(plt_chunks_df, aes(x=reorder(label_major, step_major_desc),
-                                     y=duration, fill=factor(label_minor))) +
-              scale_color_brewer(type="qual", palette="Set1") +
-                     geom_bar(stat="identity") + coord_flip())
+    if (length(unique(chunks_df$step_major)) > 1) {
+        # glb_chunks_df
+        tmp_chunks_df <- subset(chunks_df, (step_minor == 0) &
+                                                (label != "display.session.info"),
+                                select = c(label, step_major))
+        names(tmp_chunks_df)[1] <- "label_major"
+        plt_chunks_df <- merge(chunks_df, tmp_chunks_df, all.x=TRUE)
+        plt_chunks_df$step_major_desc <- max(plt_chunks_df$step_major) -
+                                                    plt_chunks_df$step_major
+        print(ggplot(plt_chunks_df, aes(x=reorder(label_major, step_major_desc),
+                                         y=duration, fill=factor(label_minor))) +
+                  scale_color_brewer(type="qual", palette="Set1") +
+                         geom_bar(stat="identity") + coord_flip())
+    } else {
+        # <chunkId>_chunk_df
+        plt_chunks_df <- subset(chunks_df, !grepl("_end$", label))
+        print(ggplot(plt_chunks_df, aes(x = label,
+                                        y = elapsed, fill = factor(label_minor))) +
+                  scale_color_brewer(type = "qual", palette = "Set1") +
+                  geom_bar(stat = "identity") + coord_flip())
+    }
 }
 

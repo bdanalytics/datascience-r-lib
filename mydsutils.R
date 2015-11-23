@@ -134,8 +134,10 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL,
 myprint_df <- function(df, dims=FALSE) {
     if (dims)
         print(sprintf("Rows: %s; Cols: %s",
-                      format(dim(df)[1], big.mark=","),
-                      format(dim(df)[2], big.mark=",")))
+                      format(dim(df)[1], big.mark = ","),
+                      format(dim(df)[2], big.mark = ",")))
+
+    if (nrow(df) == 0) return()
 
     if (dim(df)[1] <= 20) print(df) else {
     	print(head(df))
@@ -637,13 +639,17 @@ myfind_fctr_cols_df <- function(df) {
 }
 #myfind_fctr_cols_df(glbObsAll)
 
-myfind_numerics_missing <- function(df, featsExclude) {
+myfind_numerics_missing <- function(df, featsExclude = NULL) {
     numeric_missing <- sapply(setdiff(names(df), myfind_chr_cols_df(df)),
                               function(col) sum(is.na(df[, col])))
     numeric_missing <- numeric_missing[numeric_missing > 0]
-    print(numeric_missing)
+    #print(numeric_missing)
     numeric_feats_missing <- setdiff(names(numeric_missing),
                                      c(featsExclude, glb_rsp_var))
+    if (length(numeric_feats_missing) > 0) {
+        print("Missing data for numerics:")
+        print(numeric_missing)
+    }
     return(numeric_feats_missing)
 }
 
@@ -771,9 +777,9 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
     for (var in vars) {
         #dates_df <- data.frame(.date=strptime(df[, var], "%Y-%m-%d %H:%M:%S"))
         dates_df <- cbind(dates_df,
-                          data.frame(.date=strptime(df[, var],
-                                                    glb_date_fmts[[var]],
-                                                    tz=glb_date_tzs[[var]])))
+                          data.frame(.date = strptime(df[, var],
+                                                      glbFeatsDateTime[[var]]["format"],
+                                                     tz = glbFeatsDateTime[[var]]["timezone"])))
         #         print(dates_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", ".date")])
         #         print(glbObsAll[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])
         #         print(head(glbObsAll[grepl("4/7/02 .:..", glbObsAll$Date), c("ID", "Arrest.fctr", "Date")]))
@@ -800,44 +806,66 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         dates_df[, paste0(var, ".date.fctr")] <-
             cut(as.numeric(format(.date, "%d")), 5) # by month week
         dates_df[, paste0(var, ".juliandate")] <- as.numeric(format(.date, "%j"))
+        print(myplot_histogram(dates_df, paste0(var, ".juliandate")) +
+                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
 
         # wkday Sun=0; Mon=1; ...; Sat=6
         dates_df[, paste0(var, ".wkday")] <- as.numeric(format(.date, "%w"))
+        print(myplot_histogram(dates_df, paste0(var, ".wkday")) +
+                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
         dates_df[, paste0(var, ".wkday.fctr")] <- as.factor(format(.date, "%w"))
+        dates_df[, paste0(var, ".wkend")] <-
+            as.numeric(dates_df[, paste0(var, ".wkday")] %in% c(0, 6))
 
         # Get US Federal Holidays for relevant years
         require(XML)
-        doc.html = htmlTreeParse('http://about.usps.com/news/events-calendar/2012-federal-holidays.htm', useInternal = TRUE)
+        hldays <- c(NULL)
+        for (year in sort(unique(format(.date, "%Y")))) {
+            doc.html = htmlTreeParse(paste0('http://about.usps.com/news/events-calendar/',
+                                            year, '-federal-holidays.htm'),
+                                     useInternalNodes = TRUE)
 
-        #         # Extract all the paragraphs (HTML tag is p, starting at
-        #         # the root of the document). Unlist flattens the list to
-        #         # create a character vector.
-        #         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
-        #         # Replace all \n by spaces
-        #         doc.text = gsub('\\n', ' ', doc.text)
-        #         # Join all the elements of the character vector into a single
-        #         # character string, separated by spaces
-        #         doc.text = paste(doc.text, collapse = ' ')
+            #         # Extract all the paragraphs (HTML tag is p, starting at
+            #         # the root of the document). Unlist flattens the list to
+            #         # create a character vector.
+            #         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
+            #         # Replace all \n by spaces
+            #         doc.text = gsub('\\n', ' ', doc.text)
+            #         # Join all the elements of the character vector into a single
+            #         # character string, separated by spaces
+            #         doc.text = paste(doc.text, collapse = ' ')
 
-        # parse the tree by tables
-        txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
-        # do some clean up with regular expressions
-        txt <- grep("day, ", txt, value=TRUE)
-        txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
-        #         txt <- gsub("\t","",txt)
-        #         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
-        #         txt <- txt[!(txt %in% c("", "|"))]
-        hldays <- strptime(paste(txt, ", 2012", sep=""), "%B %e, %Y")
+            # parse the tree by tables
+            # txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
+            # parse the tree by span & ul
+            txt <- unlist(strsplit(xpathSApply(doc.html, "//span/ul", xmlValue), "\n"))
+
+            # do some clean up with regular expressions
+            txt <- grep("day, ", txt, value = TRUE)
+            txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
+            txt <- gsub("(.+) ([[:digit:]]+) (.*)", "\\1 \\2", txt)
+            #         txt <- gsub("\t","",txt)
+            #         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
+            #         txt <- txt[!(txt %in% c("", "|"))]
+            hldays <- union(hldays,
+                    format(strptime(paste(txt, " ", year, sep = ""), "%B %e %Y"), "%Y-%m-%d"))
+            if (any(is.na(hldays)))
+                stop("US Federal Holidays not found for year: ", year)
+        }
         dates_df[, paste0(var, ".hlday")] <-
             ifelse(format(.date, "%Y-%m-%d") %in% hldays, 1, 0)
+        #print(table(format(dates_df[dates_df[, paste0(var, ".hlday")] == 1, ".date"], "%Y-%m-%d")))
 
-        # NYState holidays 1.9., 13.10., 11.11., 27.11., 25.12.
-
-        dates_df[, paste0(var, ".wkend")] <- as.numeric(
-            (dates_df[, paste0(var, ".wkday")] %in% c(0, 6)) |
-                dates_df[, paste0(var, ".hlday")] )
+        # NYState holidays 1.9., 13.10., 11.11., 27.11., 25.12. for 2014
+        print("**********")
+        print(sprintf("Consider adding state & city holidays for glbFeatsDateTime: %s", var))
+        print("**********")
+        print(myplot_histogram(dates_df, paste0(var, ".hlday")) +
+                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
 
         dates_df[, paste0(var, ".hour")] <- as.numeric(format(.date, "%H"))
+        print(myplot_histogram(dates_df, paste0(var, ".hour")) +
+                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
         dates_df[, paste0(var, ".hour.fctr")] <-
             if (length(unique(vals <- as.numeric(format(.date, "%H")))) <= 1)
                 vals else cut(vals, 3) # by work-shift
@@ -851,14 +879,7 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
                 vals else cut(vals, 4) # by quarter-minutes
 
         dates_df[, paste0(var, ".day.minutes")] <-
-            60 * dates_df[, paste0(var, ".hour")] +
-            dates_df[, paste0(var, ".minute")]
-        if ((unq_vals_n <- length(unique(dates_df[, paste0(var, ".day.minutes")]))) > 1) {
-            max_degree <- min(unq_vals_n, 5)
-            dates_df[, paste0(var, ".day.minutes.poly.", 1:max_degree)] <-
-                as.matrix(poly(dates_df[, paste0(var, ".day.minutes")], max_degree))
-        } else max_degree <- 0
-
+            60 * dates_df[, paste0(var, ".hour")] + dates_df[, paste0(var, ".minute")]
         #         print(gp <- myplot_box(df=dates_df, ycol_names="PubDate.day.minutes",
         #                                xcol_name=rsp_var))
         #         print(gp <- myplot_scatter(df=dates_df, xcol_name=".rownames",
@@ -885,16 +906,96 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         #                                xcol_name=rsp_var,
         #                                colorcol_name=paste0(var, ".hour.fctr")))
         keep_feats <- union(keep_feats, paste(var,
-            c(".POSIX", ".year.fctr", ".month.fctr", ".date.fctr", ".wkday.fctr", ".wkend",
-              ".hour.fctr", ".minute.fctr", ".second.fctr"),
-                                                sep=""))
-        if (max_degree > 0)
-            keep_feats <- union(keep_feats, paste(var,
-                                    paste0(".day.minutes.poly.", 1:max_degree), sep=""))
+            c(".POSIX", ".year.fctr", ".month.fctr", ".date.fctr", ".juliandate",
+              ".wkday.fctr", ".wkend", ".hlday",
+              ".hour.fctr", ".minute.fctr", ".second.fctr",
+              ".day.minutes"),
+                                                sep = ""))
+        if (length(missFeats <- setdiff(keep_feats, names(dates_df))) > 0)
+            warning("Missing features for glbFeatsDateTime: ", var, " :", missFeats)
         keep_feats <- intersect(keep_feats, names(dates_df))
     }
     #myprint_df(dates_df)
     return(dates_df[, keep_feats])
+}
+
+myextractTimePoly <- function(obs, feat) {
+    retObs <- data.frame()
+
+    if ((unq_vals_n <- length(unique(obs[, paste0(feat, ".day.minutes")]))) > 1) {
+        max_degree <- min(unq_vals_n, 5)
+
+        # setup appropriate row.names
+        retObs <- obs[, paste0(feat, ".day.minutes"), FALSE]
+        retObs[, paste0(feat, ".day.minutes.poly.", 1:max_degree)] <-
+            as.matrix(poly(obs[, paste0(feat, ".day.minutes")], max_degree))
+        return(retObs[, -1, FALSE])
+    } else return(retObs)
+}
+
+
+myextractTimeLags <- function(Obs, FeatTime, rsp_var, rsp_var_raw, impute.na = "TRUE") {
+    # Create features that measure the gap between previous timestamp in the data
+
+    addedFeats <- c()
+    require(zoo)
+
+    # Find provided order of observations
+    Obs$.order <- seq(1:nrow(Obs))
+    Obs <- orderBy(reformulate(paste0(FeatTime, ".POSIX")), Obs)
+    z <- zoo(as.numeric(as.POSIXlt(Obs[, paste0(FeatTime, ".POSIX")])))
+    Obs[, paste0(FeatTime, ".zoo")] <- z; addedFeats <- union(addedFeats, paste0(FeatTime, ".zoo"))
+    #print(head(Obs[, c(glb_id_var, FeatTime, paste0(FeatTime, ".zoo"))]))
+    b <- zoo(, seq(nrow(Obs)))
+
+    # last<k> computes the time difference between an obs & its kth obs
+    for (k in head((2 ^ (1:floor(log(length(z), 2)))), 5)) {
+        if (is.na(k)) break
+        last <- as.numeric(merge(z - lag(z, k), b, all = TRUE))
+        if (!as.logical(impute.na))
+            last[is.na(last)] <- 0
+        Obs[, paste0(FeatTime, ".last", as.character(k), ".log1p")] <- log1p(last)
+        addedFeats <- union(addedFeats, paste0(FeatTime, ".last", as.character(k), ".log1p"))
+#         print(gp <- myplot_violin(df = Obs,
+#                                  ycol_names = paste0(FeatTime, ".last", as.character(k), ".log1p"),
+#                                   xcol_name = rsp_var))
+    }
+
+    if (length(myfind_numerics_missing(Obs[,
+                                          grepl(FeatTime, names(Obs), fixed = TRUE)], NULL)) > 0) {
+        impObs <- myimputeMissingData(Obs[, setdiff(names(Obs),
+                c(rsp_var, rsp_var_raw, paste0(FeatTime, ".POSIX"), paste0(FeatTime, ".zoo")))])
+        Obs <- cbind(Obs[, setdiff(names(Obs), names(impObs))], impObs)
+    }
+    retObs <- orderBy(~.order, Obs[, c(".order", addedFeats), FALSE])
+
+    return(retObs[, -1, FALSE])
+}
+
+myimputeMissingData <- function(inpObs, miceSeed = 144) {
+    require(mice)
+
+    set.seed(miceSeed)
+    print("Summary before imputation: ")
+    print(summary(inpObs))
+    retObs <- complete(mice(inpObs[, setdiff(names(inpObs), myfind_chr_cols_df(inpObs))]))
+    print(summary(retObs))
+
+    ret_vars <- sapply(names(retObs),
+                       function(col) ifelse(!identical(retObs[, col],
+                                                       inpObs[, col]),
+                                            col, ""))
+    ret_vars <- ret_vars[ret_vars != ""]
+
+    # complete(mice()) changes attributes of factors even though values don't change
+    for (col in ret_vars) {
+        if (inherits(retObs[, col], "factor")) {
+            if (identical(as.numeric(retObs[, col]),
+                          as.numeric(inpObs[, col])))
+                ret_vars <- setdiff(ret_vars, col)
+        }
+    }
+    return(retObs[, ret_vars, FALSE])
 }
 
 ## 03.2		filter features
@@ -1793,13 +1894,15 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
 #         stop("unexpected caret version: ", packageVersion("caret"), "\n check defaults in caret package")
     # check oob method in trainControl for different algorithms in myfit_mdl
 
+    # Refactor to separate mdl_specs_lst into inpSpecs vs. retSpecs
+    inpSpecs <- mdl_specs_lst
     for (spec in c("id.prefix", "type", "tune.df",
                    # train params that feed defaults for trainControl params
                    "train.preProcess",
                    # trainControl params
         "trainControl.method", "trainControl.number", "trainControl.repeats",
         "trainControl.classProbs", "trainControl.summaryFunction",
-        "trainControl.allowParallel",
+        #"trainControl.allowParallel",
                    # train params
                    "train.method", "train.metric", "train.maximize")) {
     #     function specs ()
@@ -1825,8 +1928,8 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
         if ((spec == "trainControl.summaryFunction") &&
             is.null(mdl_specs_lst[[spec]]))
             mdl_specs_lst[[spec]] <- defaultSummary
-        if ((spec == "trainControl.allowParallel") && is.null(mdl_specs_lst[[spec]]))
-            mdl_specs_lst[[spec]] <- TRUE
+#         if ((spec == "trainControl.allowParallel") && is.null(mdl_specs_lst[[spec]]))
+#             mdl_specs_lst[[spec]] <- TRUE
 
         if ((spec == "train.metric") && is.null(mdl_specs_lst[[spec]]))
             mdl_specs_lst[[spec]] <- ifelse(mdl_specs_lst[["type"]] == "classification",
@@ -1837,7 +1940,25 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
                        FALSE, TRUE)
     }
 
-    return(mdl_specs_lst)
+    retSpecs <- mdl_specs_lst
+
+    # change id.prefix to mdlFamily
+    # Build id to access specs by id
+    retSpecs[["id"]] <- paste(retSpecs[["id.prefix"]],
+                                   retSpecs[["train.preProcess"]],
+                                   plyr::revalue(retSpecs[["trainControl.method"]], c(
+                                       "none" = "",
+                                       "repeatedcv" = "rcv"),
+                                       warn_missing = FALSE),
+                                   retSpecs[["train.method"]],
+                                   sep = "#")
+
+    if ((!is.null(allowParallelSpecs <- inpSpecs[["trainControl.allowParallel"]])) &&
+        (!is.null(spec <- allowParallelSpecs[[unlist(retSpecs["id"])]])))
+        retSpecs[["trainControl.allowParallel"]] <- as.logical(spec) else
+        retSpecs[["trainControl.allowParallel"]] <- TRUE
+
+    return(retSpecs)
 }
 
 mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
@@ -1858,15 +1979,6 @@ mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
 myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indep_vars <- indep_vars
 
-    # change id.prefix to mdlFamily
-    mdl_specs_lst[["id"]] <- paste(mdl_specs_lst[["id.prefix"]],
-                                   mdl_specs_lst[["train.preProcess"]],
-                        plyr::revalue(mdl_specs_lst[["trainControl.method"]], c(
-                                       "none" = "",
-                                       "repeatedcv" = "rcv"),
-                                      warn_missing = FALSE),
-                                   mdl_specs_lst[["train.method"]],
-                                    sep = "#")
     print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
 
     if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
@@ -1890,16 +2002,12 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
         mdl_specs_lst[["tune.params.df"]] <-
             getModelInfo(mdl_specs_lst[["train.method"]])[[mdl_specs_lst[["train.method"]]]]$parameters
     if (!is.null(lcl_tune_models_df <- mdl_specs_lst[["tune.df"]]) &&
-        (nrow(lcl_tune_models_df) > 0) &&
-        (nrow(subset(modelLookup(), model == mdl_specs_lst[["train.method"]])) > 0)) {
-        if (length((tune_params_vctr <- intersect(
-                subset(lcl_tune_models_df,
-                       method %in% mdl_specs_lst[["train.method"]])$parameter,
-				mdl_specs_lst[["tune.params.df"]]$parameter))) > 0) {
+        (nrow(lcl_tune_models_df <-
+              subset(lcl_tune_models_df, mdlId == mdl_specs_lst[["id"]])) > 0)) {
+        if (length(tune_params_vctr <- lcl_tune_models_df$parameter) > 0) {
 			args_lst <- list()
 			for (param_ix in 1:length(tune_params_vctr)) {
 			    vals <- subset(lcl_tune_models_df,
-			                    (method == mdl_specs_lst[["train.method"]]) &
 			                    (parameter == tune_params_vctr[param_ix]))$vals
 			    if (!is.null(vals) && !is.na(vals))
 			        args_lst[[tune_params_vctr[param_ix]]] <-
@@ -1995,24 +2103,14 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     if (packageVersion("caret") != "6.0.58")
         stop("Review caret kludges")
 
-    # caret kludge
-    allowPar <- mdl_specs_lst[["trainControl.allowParallel"]]
-#     if (mdl_specs_lst[["train.method"]] %in%
-#         c(NULL
-#           # , "bayesglm"
-#           , "glm"
-#           # , "lda", "lda2", "rpart", "svmLinear", "svmPoly"
-#           ))
-#         allowPar <- FALSE
-
-	mdl_specs_lst[["trainControl"]] <-
-	    trainControl(method = mdl_specs_lst[["trainControl.method"]],
-	                 number = mdl_specs_lst[["trainControl.number"]],
-	                 repeats = mdl_specs_lst[["trainControl.repeats"]],
-	                verboseIter = TRUE, returnResamp = "all", savePredictions = TRUE,
-                summaryFunction = mdl_specs_lst[["trainControl.summaryFunction"]],
-	                 seeds = seeds,
-	                 allowParallel = allowPar)
+	mdl_specs_lst[["trainControl"]] <- trainControl(
+	    method = mdl_specs_lst[["trainControl.method"]],
+	    number = mdl_specs_lst[["trainControl.number"]],
+	    repeats = mdl_specs_lst[["trainControl.repeats"]],
+	    verboseIter = TRUE, returnResamp = "all", savePredictions = TRUE,
+        summaryFunction = mdl_specs_lst[["trainControl.summaryFunction"]],
+	    seeds = seeds,
+	    allowParallel = mdl_specs_lst[["trainControl.allowParallel"]])
 
     # Need to figure out how to handle glb_featsimp_df; has PC1:PCn as feature names
     #     if (!inherits(mdl_specs_lst[["train.method"]], "list") && (mdl_specs_lst[["train.method"]] == "rf")) {
@@ -2270,17 +2368,17 @@ myget_feats_importance <- function(mdl, featsimp_df=NULL) {
         return(NULL)
     } else thisimp_df <- varImp(mdl)$importance
 
-    names(thisimp_df)[length(names(thisimp_df))] <- "importance"
+    names(thisimp_df)[length(names(thisimp_df))] <- "imp"
     if (is.null(featsimp_df)) featsimp_df <- thisimp_df else {
-        featsimp_df <- merge(subset(featsimp_df, select=-importance), thisimp_df,
+        featsimp_df <- merge(subset(featsimp_df, select=-imp), thisimp_df,
                              by="row.names", all=TRUE)
         row.names(featsimp_df) <- featsimp_df$Row.names
         featsimp_df <- subset(featsimp_df, select=-Row.names)
     }
 
     if (!is.null(mdl$.myId))
-        featsimp_df[, paste0(mdl$.myId, ".importance")] <- featsimp_df$importance
-    return(orderBy(~ -importance, featsimp_df))
+        featsimp_df[, paste0(mdl$.myId, ".imp")] <- featsimp_df$imp
+    return(orderBy(~ -imp, featsimp_df))
 }
 
 ## 11.	    predict results for new data
