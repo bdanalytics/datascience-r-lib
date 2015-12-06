@@ -49,36 +49,39 @@ myrmNullObj <- function(x) {
 
 ## 01. 		import data
 
-myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL,
+myimport_data <- function(specs, nrows=-1, comment=NULL,
 							force_header=FALSE, print_diagn=TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
-    url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
-    download_filename <- gsub("%2F", "-", url_split[length(url_split)], fixed=TRUE)
-    download_filepath <- paste("./data", download_filename, sep="/")
-    if (!file.exists(download_filepath)) {
-    	print(sprintf("Downloading file %s from %s...", download_filepath, url))
+    url <- specs$url; filename <- specs$name
+    if (!is.null(url)) {
+        url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
+        download_filename <- gsub("%2F", "-", url_split[length(url_split)], fixed=TRUE)
+        download_filepath <- paste("./data", download_filename, sep="/")
+        if (!file.exists(download_filepath)) {
+        	print(sprintf("Downloading file %s from %s...", download_filepath, url))
 
-        # Issue with downloading from https:// ??? currently downloads html doc even though url points to csv file
-        # download.file(url, destfile=download_filepath, method="curl")
-        download.file(url, destfile = download_filepath, method = "auto")
-    }
-
-    url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
-    download_filename_ext <- url_split[length(url_split)]
-    if (download_filename_ext == "zip") {
-        if (is.null(filename)) {
-#           stop("Please specify which file(filename=) should be imported from ",
-#                  download_filepath)
-			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
+            # Issue with downloading from https:// ??? currently downloads html doc even though url points to csv file
+            # download.file(url, destfile=download_filepath, method="curl")
+            download.file(url, destfile = download_filepath, method = "auto")
         }
 
-        file_path <- paste("./data", filename, sep="/")
-        if (!file.exists(file_path)) {
-    		print(sprintf("Unzipping file %s...", file_path))
-            unzip(download_filepath, filename)
-        }
-    } else file_path <- download_filepath
+        url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
+        download_filename_ext <- url_split[length(url_split)]
+        if (download_filename_ext == "zip") {
+            if (is.null(filename)) {
+    #           stop("Please specify which file(filename=) should be imported from ",
+    #                  download_filepath)
+    			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
+            }
+
+            file_path <- paste("./data", filename, sep="/")
+            if (!file.exists(file_path)) {
+        		print(sprintf("Unzipping file %s...", file_path))
+                unzip(download_filepath, filename)
+            }
+        } else file_path <- download_filepath
+    } else file_path <- paste("./data", filename, sep="/")
 
     # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
     #	check if file contains header
@@ -109,7 +112,12 @@ myimport_data <- function(url, filename=NULL, nrows=-1, comment=NULL,
 	} else header <- TRUE
 
     print(sprintf("Reading file %s...", file_path))
-    df <- read.csv(file_path, header=header, nrows=nrows, ...)
+    if (is.null(specs$sep))
+        specs$sep = ","
+
+    if (specs$sep == "\t")
+        df <- read.delim(file_path, header = header, nrows = nrows, ...) else
+        df <- read.csv(file_path, header = header, nrows = nrows, ...)
 
     if (nrows > 0)
     	warning("first ", nrows, " records read")
@@ -339,7 +347,7 @@ sel_obs <- function(vars_lst, ignore.case=TRUE, perl=FALSE) {
 
 mydspObs <- function(.dot = ..., cols = c(NULL), all = FALSE) {
     feats <-
-        union(c(glb_id_var, glb_rsp_var, glb_category_var, cols, glbFeatsText),
+        union(c(glb_id_var, glb_rsp_var, glbFeatsCategory, cols, glbFeatsText),
               gsub("\\.contains$", "", names(.dot)))
     if (length(featsError <- setdiff(feats, names(glbObsAll))) > 0) {
         warning("mydsp_obs: ignoring missing cols: ",
@@ -683,7 +691,6 @@ mysort_df <- function(df, col_name, desc=FALSE) {
 }
 
 ## 02.2	    manage (impute/delete) missing data
-#require(plyr)
 #intersect(names(obs_df), names(entity_agg_intrvl_df))
 #entimptd_df <- join(obs_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
@@ -768,6 +775,11 @@ mycreate_date2daytype <- function (df, date_col_name) {
 mycount_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
     sapply(str_vctr,
            function(str) sum(gregexpr(pattern, str, ignore.case=TRUE, perl=perl)[[1]] > 0))
+
+mykntpar_pattern_occ <- function(pattern, str_vctr, perl=FALSE)
+    unlist(plyr::llply(str_vctr,
+            function(str) sum(gregexpr(pattern, str, ignore.case = TRUE, perl = perl)[[1]] > 0),
+                       .parallel = TRUE))
 
 myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
     keep_feats <- c(NULL)
@@ -1072,7 +1084,6 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 04.3	    cross-validation sample
 
 ## 05.      select features
-#require(plyr)
 #intersect(names(obs_df), names(entity_agg_intrvl_df))
 #entimptd_df <- join(obs_df, entity_agg_intrvl_df, by="interval")
 #entimptd_df <- mutate(entimptd_df, steps_imputed=ifelse(is.na(steps), steps_mean,
@@ -1082,8 +1093,8 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 ## 05.2	    remove row keys & prediction variable
 ## 05.3	    remove features that should not be part of estimation
 ## 05.4	    select significant features
-myselect_features <- function( entity_df,  exclude_vars_as_features, rsp_var) {
-	require(plyr)
+myselect_features <- function(entity_df,  exclude_vars_as_features, rsp_var) {
+	require(dplyr)
 
 	# Collect numeric vars
     vars_tbl <- summary( entity_df)
@@ -2100,8 +2111,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 
     #grep("trainControl", names(mdl_specs_lst), value=TRUE)
 
-    if (packageVersion("caret") != "6.0.58")
-        stop("Review caret kludges")
+#     if (packageVersion("caret") != "6.0.58")
+#         stop("Review caret kludges")
 
 	mdl_specs_lst[["trainControl"]] <- trainControl(
 	    method = mdl_specs_lst[["trainControl.method"]],
@@ -2152,7 +2163,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 
 	set.seed(111)
 	mdl <- train(reformulate(sort(indep_vars), response=rsp_var), data=fit_df
-	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df
+	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df # does not handle interaction var specs
 				 , method=mdl_specs_lst[["train.method"]]
 				 , preProcess=mdl_specs_lst[["train.preProcess"]]
 				 , metric=mdl_specs_lst[["train.metric"]]
@@ -2295,7 +2306,6 @@ myextract_mdl_feats <- function(sel_mdl, entity_df) {
             ifelse((chrs <- unlist(strsplit(dummy_vars_df[row_ix, "root1.feat"], "")))[1] == "`",
                    paste0(tail(chrs, -1), collapse=""), dummy_vars_df[row_ix, "root1.feat"]))
 		#print(dummy_vars_df)
-        require(plyr)
 		dummy_vars_df <- mutate(dummy_vars_df,
 								vld.fit.feat=(root.feat %in% names( entity_df))
 								)

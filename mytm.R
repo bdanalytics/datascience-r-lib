@@ -1,3 +1,7 @@
+myreplacePunctuation <- function(x) {
+    return(gsub("[[:punct:]]+", " ", gsub("('|-)", "", x)))
+}
+
 # myweightTfIdf <- function (m, normalize = TRUE) {
 #     isDTM <- inherits(m, "DocumentTermMatrix")
 #     if (isDTM)

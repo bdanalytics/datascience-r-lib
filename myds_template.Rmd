@@ -1,6 +1,6 @@
 ---
 # Get YAML keywords from myYAML_ref.Rmd
-title: "<Project name>: <rsp_var_raw> <regression/classification>:: <script_name>"
+title: "<ProjectName>: <rsp_var_raw> <regression/classification>:: <scriptName>"
 author: "bdanalytics"
 
 # Choose one:
@@ -26,15 +26,15 @@ output:
 
 Data: 
 Source: 
-    Training:   <trnng_url>  
-    New:        <newdt_url>  
+    Training:   <obsTrnFileName>  
+    New:        <obsNewFileName>  
 Time period: 
 
 ```{r set_global_options_wd, echo=FALSE}
 # Rename 
 #   glb_*obs_df to glb_obs*_df to keep it adjacent in the Environment panel
 #   indep_vars_vctr -> indep_vars ; create a function ?
-setwd("~/Documents/Work/<path>")
+setwd("~/Documents/Work/<scriptPath>")
 ```
 
 # Synopsis:
@@ -133,20 +133,23 @@ source("~/Dropbox/datascience/R/mytm.R")
 suppressPackageStartupMessages(require(doMC))
 registerDoMC(6) # # of cores on machine - 2
 suppressPackageStartupMessages(require(caret))
+require(plyr)
+require(dplyr)
 #source("dbgcaret.R")
 #packageVersion("snow")
 #require(sos); findFn("cosine", maxPages=2, sortby="MaxScore")
 
 # Analysis control global variables
 # Inputs
-glb_trnng_url <- "<trnng_url>"
-glb_newdt_url <- "<newdt_url>"
+#   url/name = "<obsTrnFileName>"; sep = choose from c(NULL, "\t")
+glbObsTrnFileName <- list(url = "<obsTrnFileName>") 
+glbObsNewFileName <- list(url = "<obsNewFileName>")
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
-    glb_split_entity_newobs_datasets <- FALSE   # select from c(FALSE, TRUE)
-    glb_split_newdata_method <- NULL # select from c(NULL, "condition", "sample", "copy")
+    glb_split_entity_newobs_datasets <- TRUE   # FALSE not supported - use "copy" for glb_split_newdata_method # select from c(FALSE, TRUE)
+    glb_split_newdata_method <- "copy" # select from c(NULL, "condition", "sample", "copy")
     glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
     glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
     glb_split_sample.seed <- 123               # or any integer
@@ -488,7 +491,7 @@ glb_mice_complete.seed <- 144 # or any integer
 
 glb_cluster <- FALSE # : default or TRUE
 glb_cluster.seed <- 189 # or any integer
-glb_cluster_entropy_var <- glb_rsp_var # c(glb_rsp_var, as.factor(cut(glb_rsp_var, 3)), default: NULL)
+glb_cluster_entropy_var <- NULL # c(glb_rsp_var, as.factor(cut(glb_rsp_var, 3)), default: NULL)
 glbFeatsTextClusterVarsExclude <- FALSE # default FALSE
 
 glb_interaction_only_feats <- NULL # : default or c(<parent_feat> = "<child_feat>")
@@ -771,7 +774,7 @@ glb_out_vars_lst[["Probability1"]] <-
 glbOutStackFnames <- NULL #: default
     # c("ebayipads_txt_assoc1_out_bid1_stack.csv") # manual stack
     # c("ebayipads_finmdl_bid1_out_nnet_1.csv") # universal stack
-glb_out_pfx <- "<script_name>_"
+glb_out_pfx <- "<scriptName>_"
 glb_save_envir <- FALSE # or TRUE
 
 # Depict process
@@ -838,7 +841,7 @@ glb2Sav <- function() {
         !is.null(glb_featsimp_df)) sav_featsimp_df <<- glb_featsimp_df    
 }
 
-glbObsTrn <- myimport_data(url=glb_trnng_url, comment="glbObsTrn", 
+glbObsTrn <- myimport_data(url=glbObsTrnFileName, comment="glbObsTrn", 
                                 force_header=TRUE)
 # glbObsTrn <- read.delim("data/hygiene.txt", header=TRUE, fill=TRUE, sep="\t",
 #                             fileEncoding='iso-8859-1')
@@ -850,7 +853,7 @@ glbObsTrn <- myimport_data(url=glb_trnng_url, comment="glbObsTrn",
 # glbObsTrn <- data.frame()
 # for (symbol in c("Boeing", "CocaCola", "GE", "IBM", "ProcterGamble")) {
 #     sym_trnobs_df <- 
-#         myimport_data(url=gsub("IBM", symbol, glb_trnng_url), comment="glbObsTrn", 
+#         myimport_data(url=gsub("IBM", symbol, glbObsTrnFileName), comment="glbObsTrn", 
 #                                     force_header=TRUE)
 #     sym_trnobs_df$Symbol <- symbol
 #     glbObsTrn <- myrbind_df(glbObsTrn, sym_trnobs_df)
@@ -860,7 +863,7 @@ glbObsTrn <- myimport_data(url=glb_trnng_url, comment="glbObsTrn",
 #     glbObsTrn %>% dplyr::filter(Year >= 1999)
                                 
 if (glb_is_separate_newobs_dataset) {
-    glbObsNew <- myimport_data(url=glb_newdt_url, comment="glbObsNew", 
+    glbObsNew <- myimport_data(url=glbObsNewFileName, comment="glbObsNew", 
                                    force_header=TRUE)
     
     # To make plots / stats / checks easier in chunk:inspectORexplore.data
