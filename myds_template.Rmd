@@ -96,8 +96,6 @@ Summary of key steps & error improvement stats:
 -   extensions toward multiclass classification are scheduled for the next release
 
 - Skip trControl.method="cv" for dummy classifier ?
-- Add custom model to caret for a dummy (baseline) classifier (binomial & multinomial) that generates proba/outcomes which mimics the freq distribution of glb_rsp_var values; Right now glb_dmy_glm_mdl always generates most frequent outcome in training data
-- glm_dmy_mdl should use the same method as glm_sel_mdl until custom dummy classifer is implemented
 
 - fit.all.training chunk:
     - myplot_prediction_classification: displays 'x' instead of '+' when there are no prediction errors 
@@ -178,6 +176,7 @@ glb_rsp_var <- glb_rsp_var_raw # or "<rsp_var_raw>.fctr"
 glb_map_rsp_raw_to_var <- NULL 
 # function(raw) {
 #     return(raw ^ 0.5)
+#     return(log(raw))
 #     return(log(1 + raw))
 #     return(log10(raw)) 
 #     return(exp(-raw / 2))
@@ -185,8 +184,9 @@ glb_map_rsp_raw_to_var <- NULL
 #     #as.factor(paste0("B", raw))
 #     #as.factor(gsub(" ", "\\.", raw))    
 #     }
-# glb_map_rsp_raw_to_var(tst <- c(NA, 0, 1)) 
-# glb_map_rsp_raw_to_var(tst <- c(NA, 0, 2.99, 280.50, 1000.00)) 
+#print(summary(glbObsAll[, glb_rsp_var_raw]))
+#glb_map_rsp_raw_to_var(tst <- c(NA, as.numeric(summary(glbObsAll[, glb_rsp_var_raw])))) 
+
 
 glb_map_rsp_var_to_raw <- NULL 
 # function(var) {
@@ -596,7 +596,7 @@ glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
 # family: Choose from c("RFE.X", "CSM.X", "All.X", "Best.Interact")
 #   methods: Choose from c(NULL, <method>, glbMdlMethods) 
 #glbMdlFamilies[["RFE.X"]] <- c("glmnet", "glm") # non-NULL vector is mandatory
-glbMdlFamilies[["All.X"]] <- "glmnet" # non-NULL vector is mandatory
+glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")  # non-NULL vector is mandatory
 #glbMdlFamilies[["Best.Interact"]] <- "glmnet" # non-NULL vector is mandatory
 
 # Check if interaction features make RFE better
