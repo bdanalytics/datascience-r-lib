@@ -1293,18 +1293,32 @@ myprint_mdl <- function(mdl) {
         if (length(exact <- which(lcl_mdl$lambda == lcl_mdl$lambdaOpt)) != 0)
             stop("not implemented yet")
         else {
+
+            lclGetCoefs <- function(pos) {
+                coefs <- coef(lcl_mdl)
+                if (class(coefs) != "list") {
+                    coefs_pos <- coefs[, pos]
+                    print(coefs_pos[coefs_pos != 0])
+                } else { # Multinomial model has coefs for each class
+                    for (cls in names(coefs)) {
+                        print(sprintf("class: %s:", cls))
+                        coefs_pos <- coefs[[cls]][, pos]
+                        print(coefs_pos[coefs_pos != 0])
+                    }
+                    # For multinomials only the last class coefs are returned
+                    coefs_pos <- coefs[[tail(names(coefs), 1)]][, pos]
+                }
+                return(coefs_pos)
+            }
+
             print("min lambda > lambdaOpt:")
             if (length(positions <- which(lcl_mdl$lambda > lcl_mdl$lambdaOpt)) > 0) {
-                pos_left <- max(positions)
-                coefs_left <- coef(lcl_mdl)[, pos_left]
-                print(coefs_left[coefs_left != 0])
+                coefs_left <- lclGetCoefs(max(positions))
             } else coefs_left <- NULL
 
             print("max lambda < lambdaOpt:")
             if (length(positions <- which(lcl_mdl$lambda < lcl_mdl$lambdaOpt)) > 0) {
-                pos_rght <- min(positions)
-                coefs_rght <- coef(lcl_mdl)[, pos_rght]
-                print(coefs_rght[coefs_rght != 0])
+                coefs_rght <- lclGetCoefs(min(positions))
             } else coefs_rght <- NULL
 
             if (length(feats <- setdiff(names(coefs_left), names(coefs_rght))) > 0) {
@@ -2357,10 +2371,14 @@ myget_primes <- function(n) {
 }
 #myget_primes(11)
 
-myget_feats_importance <- function(mdl, featsimp_df=NULL) {
+myget_feats_importance <- function(mdl, featsimp_df = NULL) {
     # For some models, if there is only one feature, varImp returns NaN due to bug in scaling
     #   length(attr(mdl$terms, "variables")) == 2 ???
 
+    if (length(names(varImp(mdl))) > 1) {
+        # multinomial classification model
+        thisimp_df <- varImp(mdl)$importance
+    } else # Regression or Binomial Classification
     if ((inherits(mdl$finalModel, "randomForest")) &&
             (mdl$modelType == "Regression")) {
         # varImp for randomForest regression crashes in caret version:6.0.41
@@ -2378,12 +2396,23 @@ myget_feats_importance <- function(mdl, featsimp_df=NULL) {
         return(NULL)
     } else thisimp_df <- varImp(mdl)$importance
 
-    names(thisimp_df)[length(names(thisimp_df))] <- "imp"
+    if (length(names(thisimp_df)) > 1) {
+        # Multinomial
+        names(thisimp_df) <-
+            paste0(gsub("#",".",mdl$.myId, fixed = TRUE), ".imp.", names(thisimp_df))
+
+        # Used for sorting; already sorted in descending order by importance across classes
+        thisimp_df$imp <- 0 - (1:nrow(thisimp_df))
+    } else {
+        thisimp_df$imp <- thisimp_df[, 1] # Used for sorting
+        names(thisimp_df)[1] <- paste0(gsub("#",".",mdl$.myId, fixed = TRUE), ".imp")
+    }
+
     if (is.null(featsimp_df)) featsimp_df <- thisimp_df else {
-        featsimp_df <- merge(subset(featsimp_df, select=-imp), thisimp_df,
-                             by="row.names", all=TRUE)
+        featsimp_df <- merge(subset(featsimp_df, select = -imp), thisimp_df,
+                             by = "row.names", all = TRUE)
         row.names(featsimp_df) <- featsimp_df$Row.names
-        featsimp_df <- subset(featsimp_df, select=-Row.names)
+        featsimp_df <- subset(featsimp_df, select = -Row.names)
     }
 
     if (!is.null(mdl$.myId))

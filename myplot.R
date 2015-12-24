@@ -165,9 +165,9 @@ myplot_histogram <- function(df, hst_col_name, fill_col_name=NULL,
 
     if (is.null(fill_col_name)) {
         # Fill with raw counts
-        p <- ggplot(df, aes_string(x=hst_col_name))
-        p <- p + geom_histogram(aes(fill=..count..)) +
-                 scale_fill_gradient("Count", low="red", high="blue")
+        p <- ggplot(df, aes_string(x = hst_col_name))
+        p <- p + geom_histogram(aes(fill = ..count..))
+        p <- p + scale_fill_gradient("Count", low = "red", high = "blue")
     }
     else {
         # If fill variable has 7 or less unique values use raw data

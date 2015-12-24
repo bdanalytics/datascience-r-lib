@@ -32,7 +32,6 @@ Time period:
 
 ```{r set_global_options_wd, echo=FALSE}
 # Rename 
-#   glb_*obs_df to glb_obs*_df to keep it adjacent in the Environment panel
 #   indep_vars_vctr -> indep_vars ; create a function ?
 setwd("~/Documents/Work/<scriptPath>")
 ```
@@ -140,8 +139,8 @@ require(dplyr)
 # Analysis control global variables
 # Inputs
 #   url/name = "<obsTrnFileName>"; sep = choose from c(NULL, "\t")
-glbObsTrnFileName <- list(url = "<obsTrnFileName>") 
-glbObsNewFileName <- list(url = "<obsNewFileName>")
+glbObsTrnFile <- list(url = "<obsTrnFileName>") 
+glbObsNewFile <- list(url = "<obsNewFileName>")
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
@@ -154,8 +153,7 @@ glb_is_separate_newobs_dataset <- TRUE    # or TRUE
 
 glbObsDropCondition <- NULL # : default
 #            "<condition>" # use | & ; NOT || &&
-#parse(text=glbObsDropCondition)
-#subset(glbObsAll, .grpid %in% c(31))
+#nrow(do.call("subset",list(glbObsAll, parse(text=paste0("!(", glbObsDropCondition, ")")))))
     
 glb_obs_repartition_train_condition <- NULL # : default
 #    "<condition>" 
@@ -181,11 +179,17 @@ glb_map_rsp_raw_to_var <- NULL
 #     return(log10(raw)) 
 #     return(exp(-raw / 2))
 #     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
-#     #as.factor(paste0("B", raw))
-#     #as.factor(gsub(" ", "\\.", raw))    
+#     as.factor(paste0("B", raw))
+#     as.factor(gsub(" ", "\\.", raw))    
 #     }
+
+#if glb_rsp_var_raw is numeric:
 #print(summary(glbObsAll[, glb_rsp_var_raw]))
 #glb_map_rsp_raw_to_var(tst <- c(NA, as.numeric(summary(glbObsAll[, glb_rsp_var_raw])))) 
+
+#if glb_rsp_var_raw is character:
+#print(table(glbObsAll[, glb_rsp_var_raw]))
+#glb_map_rsp_raw_to_var(tst <- c(NA, names(table(glbObsAll[, glb_rsp_var_raw])))) 
 
 
 glb_map_rsp_var_to_raw <- NULL 
@@ -368,7 +372,7 @@ if (!is.null(glbFeatsText)) {
         # chisq.pval high (e.g. == 1); keep c("<comma-separated-terms-to-keep>")
             # ,<comma-separated-terms>
 
-        # nzv.freqRatio high (e.g. >= glb_nzv_freqCut); keep c("<comma-separated-terms-to-keep>")
+        # nzv.freqRatio high (e.g. >= glbFeatsNzvFreqMax); keep c("<comma-separated-terms-to-keep>")
             # ,<comma-separated-terms>        
                                             ))
 }
@@ -404,7 +408,7 @@ if (!is.null(glbFeatsText)) {
 
 # To identify terms with high nzv.freqRatio
 #summary(glb_post_stem_words_terms_df_lst[[txt_var]]$nzv.freqRatio)
-#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (nzv.freqRatio >= glb_nzv_freqCut) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
+#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (nzv.freqRatio >= glbFeatsNzvFreqMax) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
 
 # To identify obs with a txt term
 #tail(orderBy(~-freq+term, glb_post_stop_words_terms_df_lst[[txt_var]]), 20)
@@ -497,8 +501,8 @@ glbFeatsTextClusterVarsExclude <- FALSE # default FALSE
 
 glb_interaction_only_feats <- NULL # : default or c(<parent_feat> = "<child_feat>")
 
-glb_nzv_freqCut <- 19 # 19 : caret default
-glb_nzv_uniqueCut <- 10 # 10 : caret default
+glbFeatsNzvFreqMax <- 19 # 19 : caret default
+glbFeatsNzvUniqMin <- 10 # 10 : caret default
 
 glbRFESizes <- list()
 #glbRFESizes[["mdlFamily"]] <- c(4, 8, 16, 32, 64, 67, 68, 69) # Accuracy@69/70 = 0.8258
@@ -586,10 +590,12 @@ if (glb_is_regression) {
             , "earth"
         ) else
         glbMdlMethods <- c(NULL
+        # deterministic
+            ,"glmnet"
         # non-deterministic 
-            , "rf"       
+            ,"rf"       
         # Unknown
-            , "gbm", "rpart"
+            ,"gbm","rpart"
         )
 
 glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
@@ -799,13 +805,13 @@ glb_analytics_pn <- petrinet(name = "glb_analytics_pn",
     y=c(    0,     0,                      0,                 0),
     M0=c(   3,     0,                      0,                 0)
                         ),
-                        arcs_df=data.frame(
-    begin=c("bgn","bgn","bgn",        
+                        arcs_df = data.frame(
+    begin = c("bgn","bgn","bgn",        
             "data.training.all","model.selected","fit.data.training.all",
             "fit.data.training.all","model.final",    
             "data.new","predict.data.new",
             "data.training.all.prediction","data.new.prediction"),
-    end  =c("data.training.all","data.new","model.selected",
+    end   = c("data.training.all","data.new","model.selected",
             "fit.data.training.all","fit.data.training.all","model.final",
             "data.training.all.prediction","predict.data.new",
             "predict.data.new","data.new.prediction",
@@ -1106,7 +1112,10 @@ dsp_class_dstrb <- function(var) {
 glb_chk_data <- function(featsExclude = glbFeatsExclude, 
                          fctrMaxUniqVals = glbFctrMaxUniqVals) {
     # Histogram of predictor in glbObsTrn & glbObsNew
-    print(myplot_histogram(glbObsAll, glb_rsp_var_raw) + facet_wrap(~ .src))
+    if (is.numeric(glbObsAll[, glb_rsp_var_raw]))
+        print(myplot_histogram(glbObsAll, glb_rsp_var_raw) + facet_wrap(~ .src)) else
+        print(ggplot(glbObsAll, aes_string(x = glb_rsp_var_raw)) + 
+                  geom_bar(stat = "count") + facet_wrap(~ .src))
     
     if (glb_is_classification) 
         dsp_class_dstrb(var=ifelse(glb_rsp_var %in% names(glbObsAll), 
@@ -1453,6 +1462,13 @@ extract.features_chunk_df <- myadd_chunk(NULL, "extract.features_bgn")
 # 
 # glbObsNew <- mutate(glbObsNew,
 #                     )
+
+# Create dummy category if glbFeatsCategory is NULL
+if (is.null(glbFeatsCategory)) {
+    glbFeatsCategory <- ".category"
+    glbObsAll[, glbFeatsCategory] <- as.factor(".dummy")
+    glbFeatsExclude <- union(glbFeatsExclude, glbFeatsCategory)
+}
 
 #   Create factors of string variables excl. dates/times since they come in as chars
 extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
@@ -1866,17 +1882,17 @@ if (!is.null(glbFeatsText)) {
             }
         }
         
-        nzv_df <- nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glb_nzv_freqCut,
-                   uniqueCut = glb_nzv_uniqueCut, saveMetrics = TRUE)
+        nzv_df <- nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glbFeatsNzvFreqMax,
+                   uniqueCut = glbFeatsNzvUniqMin, saveMetrics = TRUE)
         terms_df$nzv.freqRatio <- nzv_df$freqRatio
 #         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
 #                                                 breaks = sort(c(min(terms_df$nzv.freqRatio), 
-#                                                                 glb_nzv_freqCut,
+#                                                                 glbFeatsNzvFreqMax,
 #                                                                 max(terms_df$nzv.freqRatio))))
         terms_df$nzv.percentUnique <- nzv_df$percentUnique
 #         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
 #                     breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
-#                                                             glb_nzv_uniqueCut,
+#                                                             glbFeatsNzvUniqMin,
 #                                                             max(terms_df$nzv.percentUnique))))
 #         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:", terms_df$nzv.freqRatio.cut.fctr,
 #                                             "\n%Unq:", terms_df$nzv.percentUnique.cut.fctr))
@@ -2030,11 +2046,11 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
         plt_df <- subset(glb_post_stem_words_terms_df_lst[[txt_var]], !is.na(cor.y))
         plt_df$nzv.freqRatio.cut.fctr <- cut(plt_df$nzv.freqRatio, 
                                             breaks = sort(c(min(plt_df$nzv.freqRatio), 
-                                                                glb_nzv_freqCut,
+                                                                glbFeatsNzvFreqMax,
                                                             max(plt_df$nzv.freqRatio))))
         plt_df$nzv.percentUnique.cut.fctr <- cut(plt_df$nzv.percentUnique, 
                 breaks = sort(c(min(plt_df$nzv.percentUnique) - .Machine$double.neg.eps, 
-                                                            glb_nzv_uniqueCut,
+                                                            glbFeatsNzvUniqMin,
                                                         max(plt_df$nzv.percentUnique))))
         plt_df$nzv.quad.fctr <- as.factor(paste0("fRatio:", plt_df$nzv.freqRatio.cut.fctr,
                                             "\n%Unq:", plt_df$nzv.percentUnique.cut.fctr))
@@ -2887,20 +2903,20 @@ print(glb_feats_df <- myselect_features(entity_df=glbObsTrn,
 
 print(glb_feats_df <- orderBy(~-cor.y, 
           myfind_cor_features(feats_df=glb_feats_df, obs_df=glbObsTrn, rsp_var=glb_rsp_var,
-                              nzv.freqCut=glb_nzv_freqCut, nzv.uniqueCut=glb_nzv_uniqueCut)))
+                              nzv.freqCut=glbFeatsNzvFreqMax, nzv.uniqueCut=glbFeatsNzvUniqMin)))
 plt_feats_df <- glb_feats_df
 print(myplot_scatter(plt_feats_df, "percentUnique", "freqRatio", 
                      colorcol_name="nzv", jitter=TRUE) + 
           #geom_point(aes(shape=nzv)) +           
           geom_point() + 
           xlim(-5, 25) + 
-          geom_hline(yintercept=glb_nzv_freqCut) +
-          geom_vline(xintercept=glb_nzv_uniqueCut))
+          geom_hline(yintercept=glbFeatsNzvFreqMax) +
+          geom_vline(xintercept=glbFeatsNzvUniqMin))
 print(subset(glb_feats_df, nzv))
 
 tmp_allobs_df <- 
     glbObsAll[, union(setdiff(names(glbObsAll), subset(glb_feats_df, nzv)$id),
-                          glb_cluster_entropy_var)]
+                      c(glbFeatsCategory, glb_cluster_entropy_var))]
 glbObsTrn <- subset(tmp_allobs_df, .src == "Train")
 glbObsNew <- subset(tmp_allobs_df, .src == "Test")
 
@@ -2911,11 +2927,15 @@ for (feat in names(glbFeatsInteractionOnly))
         
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
 indep_vars <- subset(glb_feats_df, !nzv & (exclude.as.feat != 1))[, "id"]
-numeric_indep_vars <- indep_vars[!grepl(".fctr", indep_vars, fixed=TRUE)]
+numeric_indep_vars <- indep_vars[!grepl(".fctr", indep_vars, fixed = TRUE)]
 glb_feats_df$shapiro.test.p.value <- NA
 glb_feats_df[glb_feats_df$id %in% numeric_indep_vars, "shapiro.test.p.value"] <- 
-    sapply(numeric_indep_vars, function(var) 
-        shapiro.test(glbObsTrn[, var][1:min(5000, nrow(glbObsTrn))])$p.value)
+    sapply(numeric_indep_vars, function(feat) {
+        # shapiro.test(glbObsTrn[, var][1:min(5000, nrow(glbObsTrn))])$p.value)
+        if (nrow(glbObsTrn) <= 5000) smplVals <- glbObsTrn[, feat] else
+            smplVals <- glbObsTrn[, feat][sample.int(nrow(glbObsTrn), 5000)]
+        return(shapiro.test(smplVals)$p.value) })
+
 not_nrml_feats_df <- glb_feats_df %>%
                         subset(!is.na(shapiro.test.p.value)) %>%
                     subset((shapiro.test.p.value < 0.05) || (id == ".rnorm")) %>%
@@ -3336,18 +3356,21 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
                     paste0("fit.models_0_", "Interact.High.cor.Y"), major.inc = FALSE,
                                     label.minor = "glmnet")
 
-    ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
-        id.prefix="Interact.High.cor.Y", 
-        type=glb_model_type, trainControl.method="repeatedcv",
-        trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
-            trainControl.classProbs = glb_is_classification,
-            trainControl.summaryFunction = glbMdlMetricSummaryFn,
-            train.metric = glbMdlMetricSummary, 
-            train.maximize = glbMdlMetricMaximize,    
-        train.method="glmnet")),
-        indep_vars=c(max_cor_y_x_vars, paste(max_cor_y_x_vars[1], int_feats, sep=":")),
-        rsp_var=glb_rsp_var, 
-        fit_df=glbObsFit, OOB_df=glbObsOOB)
+    ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+        id.prefix = "Interact.High.cor.Y", 
+        type = glb_model_type, trainControl.method = "repeatedcv",
+        trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
+        trainControl.classProbs = glb_is_classification,
+        trainControl.summaryFunction = glbMdlMetricSummaryFn,
+        trainControl.allowParallel = glbMdlAllowParallel,                                
+        train.metric = glbMdlMetricSummary, 
+        train.maximize = glbMdlMetricMaximize,    
+        train.method = "glmnet")),
+        indep_vars = c(max_cor_y_x_vars, 
+                       paste(max_cor_y_x_vars[1], 
+                             setdiff(int_feats, max_cor_y_x_vars[1]), sep = ":")),        
+        rsp_var = glb_rsp_var, 
+        fit_df = glbObsFit, OOB_df = glbObsOOB)
 }    
 
 # Low.cor.X
@@ -3357,19 +3380,20 @@ fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df,
 indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
                               (exclude.as.feat != 1))[, "id"]  
 indep_vars <- myadjust_interaction_feats(indep_vars)
-ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
-        id.prefix="Low.cor.X", 
-        type=glb_model_type, 
+ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+        id.prefix = "Low.cor.X", 
+        type = glb_model_type, 
         tune.df = glbMdlTuneParams,        
-        trainControl.method="repeatedcv",
-        trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
-            trainControl.classProbs = glb_is_classification,
-            trainControl.summaryFunction = glbMdlMetricSummaryFn,
-            train.metric = glbMdlMetricSummary, 
-            train.maximize = glbMdlMetricMaximize,    
-        train.method="glmnet")),
-        indep_vars=indep_vars, rsp_var=glb_rsp_var, 
-        fit_df=glbObsFit, OOB_df=glbObsOOB)
+        trainControl.method = "repeatedcv",
+        trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
+        trainControl.classProbs = glb_is_classification,
+        trainControl.summaryFunction = glbMdlMetricSummaryFn,
+        trainControl.allowParallel = glbMdlAllowParallel,        
+        train.metric = glbMdlMetricSummary, 
+        train.maximize = glbMdlMetricMaximize,    
+        train.method = "glmnet")),
+        indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+        fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 fit.models_0_chunk_df <- 
     myadd_chunk(fit.models_0_chunk_df, "fit.models_0_end", major.inc = FALSE,
@@ -3510,16 +3534,29 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
             id.prefix = mdl_id_pfx, 
             type = glb_model_type, 
             tune.df = glbMdlTuneParams,
-            trainControl.method = "repeatedcv",
+            trainControl.method = "repeatedcv", # or "none" if nominalWorkflow is crashing
             trainControl.number = glb_rcv_n_folds,
             trainControl.repeats = glb_rcv_n_repeats,
             trainControl.classProbs = glb_is_classification,
             trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            trainControl.allowParallel = glbMdlAllowParallel,            
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method = method)),
             indep_vars = indep_vars, rsp_var = glb_rsp_var, 
             fit_df = fitobs_df, OOB_df = glbObsOOB)
+        
+#         ntv_mdl <- glmnet(x = as.matrix(
+#                               fitobs_df[, indep_vars]), 
+#                           y = as.factor(as.character(
+#                               fitobs_df[, glb_rsp_var])),
+#                           family = "multinomial")
+#         bgn = 1; end = 100;
+#         ntv_mdl <- glmnet(x = as.matrix(
+#                               subset(fitobs_df, pop.fctr != "crypto")[bgn:end, indep_vars]), 
+#                           y = as.factor(as.character(
+#                               subset(fitobs_df, pop.fctr != "crypto")[bgn:end, glb_rsp_var])),
+#                           family = "multinomial")
     }
 }
 
@@ -3904,9 +3941,27 @@ glb_get_predictions <- function(df, mdl_id, rsp_var, prob_threshold_def=NULL, ve
     
     if (glb_is_classification && !glb_is_binomial) {
         df[, predct_var_name] <- predict(mdl, newdata = df, type = "raw")
-        df[, paste0(predct_var_name, ".prob")] <- 
-            predict(mdl, newdata = df, type = "prob")
-        stop("Multinomial prediction error calculation needs to be implemented...")
+        probCls <- predict(mdl, newdata = df, type = "prob")        
+        df[, predct_prob_var_name] <- NA
+        for (cls in names(probCls)) {
+            mask <- (df[, predct_var_name] == cls)
+            df[mask, predct_prob_var_name] <- probCls[mask, cls]
+        }    
+        if (verbose) print(myplot_histogram(df, predct_prob_var_name, 
+                                            fill_col_name = predct_var_name))
+        if (verbose) print(myplot_histogram(df, predct_prob_var_name, 
+                                            facet_frmla = paste0("~", glb_rsp_var)))
+        
+        df[, predct_error_var_name] <- df[, predct_var_name] != df[, glb_rsp_var]
+        
+        # if prediction is erroneous, measure predicted class prob from actual class prob
+        df[, predct_erabs_var_name] <- 0
+        for (cls in names(probCls)) {
+            mask <- (df[, glb_rsp_var] == cls) & (df[, predct_error_var_name])
+            df[mask, predct_erabs_var_name] <- probCls[mask, cls]
+        }    
+
+        df[, predct_accurate_var_name] <- (df[, glb_rsp_var] == df[, predct_var_name])        
     }
 
     return(df)
@@ -4074,13 +4129,10 @@ print(sprintf("%s OOB prediction diagnostics:", glb_sel_mdl_id))
 glbObsOOB <- glb_get_predictions(df = glbObsOOB, mdl_id = glb_sel_mdl_id, 
                                      rsp_var = glb_rsp_var)
 
-glb_featsimp_df <- 
-    myget_feats_importance(mdl=glb_sel_mdl, featsimp_df=NULL)
-glb_featsimp_df[, paste0(glb_sel_mdl_id, ".imp")] <- glb_featsimp_df$imp
+print(glb_featsimp_df <- myget_feats_importance(mdl = glb_sel_mdl, featsimp_df = NULL))
 #mdl_id <-"RFE.X.glmnet"; glb_featsimp_df <- myget_feats_importance(glb_models_lst[[mdl_id]], glb_featsimp_df); glb_featsimp_df[, paste0(mdl_id, ".imp")] <- glb_featsimp_df$imp; print(glb_featsimp_df)
 #print(head(sbst_featsimp_df <- subset(glb_featsimp_df, is.na(RFE.X.glmnet.imp) | (abs(RFE.X.YeoJohnson.glmnet.imp - RFE.X.glmnet.imp) > 0.0001), select=-imp)))
 #print(orderBy(~ -cor.y.abs, subset(glb_feats_df, id %in% c(row.names(sbst_featsimp_df), "startprice.dcm1.is9", "D.weight.post.stop.sum"))))
-print(glb_featsimp_df)
 
 # Used again in fit.data.training & predict.data.new chunks
 glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
@@ -4534,9 +4586,6 @@ if (glb_is_classification) {
 #myprint_df(errObsNew[(errObsNew[, glbFeatsCategory] %in% tmpLvlCategory[errLvlIx, glbFeatsCategory]) & (errObsNew[, predctId] == "Y"), union(c(glb_id_var, glbFeatsCategory, predctId), myextract_actual_feats(row.names(glb_featsimp_df[glb_featsimp_df[, paste0(glb_fin_mdl_id, ".imp")] > 10, ])))])
 #myprint_df(errObsNew[(errObsNew[, glbFeatsCategory] %in% "Foreign#World#") & (errObsNew[, predctId] == "Y"), union(c(glb_id_var, glbFeatsCategory, predctId), myextract_actual_feats(row.names(glb_featsimp_df[glb_featsimp_df[, paste0(glb_fin_mdl_id, ".imp")] > 10, ])))])
     }
-    
-        
-    tmp_newobs_df <- cbind(glbObsNew, obsout_df[, "Probability1", FALSE])
     
     # Check predictions that are outside of data ranges
 #stop(here")    

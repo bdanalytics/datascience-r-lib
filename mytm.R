@@ -1,5 +1,5 @@
 myreplacePunctuation <- function(x) {
-    return(gsub("[[:punct:]]+", " ", gsub("('|-)", "", x)))
+    return(gsub("[[:punct:]]+", " ", gsub("\\b's", "", x)))
 }
 
 # myweightTfIdf <- function (m, normalize = TRUE) {
