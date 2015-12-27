@@ -33,7 +33,11 @@ Time period:
 ```{r set_global_options_wd, echo=FALSE}
 # Rename 
 #   indep_vars_vctr -> indep_vars ; create a function ?
-setwd("~/Documents/Work/<scriptPath>")
+setwd("~/Documents/Work/Courses/MIT/Analytics_Edge_15_071x/Assignments/Kaggle_NYTimes_blogs3")
+print(names(sys.frame(1)))
+print(getSrcFilename(function (x) { x }))
+#print(sys.frame(1)$file)
+# stop(here")
 ```
 
 # Synopsis:
@@ -51,13 +55,6 @@ Summary of key steps & error improvement stats:
     - Fill missing numerics with a different algorithm
     - Fill missing chars with data based on clusters 
     
-- extract.features chunk:
-    - Text variables: move to date extraction chunk ???
-        - Mine acronyms
-        - Mine places
-
-- Review set_global_options chunk after features are finalized
-
 ### ![](<filename>.png)
 
 ## Potential next steps include:
@@ -78,7 +75,6 @@ Summary of key steps & error improvement stats:
 - extract.features chunk:
     - Add n-grams for glbFeatsText
         - "RTextTools", "tau", "RWeka", and "textcat" packages
-    - Convert user-specified mutate code to config specs
     
 - fit.models chunk:
     - Prediction accuracy scatter graph:
@@ -93,8 +89,6 @@ Summary of key steps & error improvement stats:
 - Probability handling for multinomials vs. desired binomial outcome
 -   ROCR currently supports only evaluation of binary classification tasks (version 1.0.7)
 -   extensions toward multiclass classification are scheduled for the next release
-
-- Skip trControl.method="cv" for dummy classifier ?
 
 - fit.all.training chunk:
     - myplot_prediction_classification: displays 'x' instead of '+' when there are no prediction errors 
@@ -138,8 +132,10 @@ require(dplyr)
 
 # Analysis control global variables
 # Inputs
-#   url/name = "<obsTrnFileName>"; sep = choose from c(NULL, "\t")
+#   url/name = "<pointer>"; sep = choose from c(NULL, "\t")
 glbObsTrnFile <- list(url = "<obsTrnFileName>") 
+
+# splitSpecs = list (method <- # select from c(NULL, "condition", "sample", "copy"))
 glbObsNewFile <- list(url = "<obsNewFileName>")
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
@@ -190,7 +186,6 @@ glb_map_rsp_raw_to_var <- NULL
 #if glb_rsp_var_raw is character:
 #print(table(glbObsAll[, glb_rsp_var_raw]))
 #glb_map_rsp_raw_to_var(tst <- c(NA, names(table(glbObsAll[, glb_rsp_var_raw])))) 
-
 
 glb_map_rsp_var_to_raw <- NULL 
 # function(var) {
@@ -264,15 +259,20 @@ glbFeatsDerive <- list();
 #         mod_raw <- gsub(paste0(c("\n", "\211", "\235", "\317", "\333"), collapse = "|"), " ", mod_raw)
     # Don't parse for "." because of ".com"; use customized gsub for that text
 #         mod_raw <- gsub("(\\w)(!|\\*|,|-|/)(\\w)", "\\1\\2 \\3", mod_raw);
+    # Some state acrnoyms need context for separation e.g. 
+    #   LA/L.A. could either be "Louisiana" or "LosAngeles"
+        modRaw <- gsub("\\bL\\.A\\.( |,|')", "LosAngeles\\1", modRaw);
+    #   OK/O.K. could either be "Oklahoma" or "Okay"
+        modRaw <- gsub("\\bACA OK\\b", "ACA OKay", modRaw); 
+        modRaw <- gsub("\\bNow O\\.K\\.\\b", "Now OKay", modRaw);        
+    #   PR/P.R. could either be "PuertoRico" or "Public Relations"        
+        modRaw <- gsub("\\bP\\.R\\. Campaign", "PublicRelations Campaign", modRaw);        
+    #   VA/V.A. could either be "Virginia" or "VeteransAdministration"        
+        modRaw <- gsub("\\bthe V\\.A\\.\\:", "the VeteranAffairs:", modRaw);
+    #   
+    # Custom mods
+
 #         return(mod_raw) }
-#print(mod_raw <- grep("&#034;", glbObsAll[, txt_var], value = TRUE)) 
-#print(mod_raw <- glbObsAll[c(88,187,280,1040,1098), txt_var])
-#print(mod_raw <- glbObsAll[sel_obs(list(descr.my.contains="\\bdoes( +)not\\b")), glbFeatsText])
-#print(mod_raw <- glbObsAll[sel_obs(list(descr.my.contains="\\bipad [[:digit:]]\\b")), glbFeatsText][01:10])
-#print(mod_raw <- glbObsAll[sel_obs(list(descr.my.contains="pad mini")), glbFeatsText][11:20])
-#print(mod_raw <- glbObsAll[sel_obs(list(descr.my.contains="pad mini")), glbFeatsText][21:30])
-#print(mod_raw <- glbObsAll[sel_obs(list(descr.my.contains="pad mini")), glbFeatsText][31:40])
-#glbObsAll[which(glb_post_stop_words_terms_mtrx_lst[[txt_var]][, subset(glb_post_stop_words_terms_df_lst[[txt_var]], term %in% c("conditionminimal"))$pos] > 0), "description"]
 
     # numeric
 # Create feature based on record position/id in data   
@@ -355,12 +355,18 @@ glb_txt_stop_words <- list()
 # Remember to use unstemmed words
 if (!is.null(glbFeatsText)) {
     require(tm)
+    require(stringr)
 
-    glb_txt_stop_words[["<txt_var>"]] <- sort(c(NULL    
-
+    glb_txt_stop_words[["<txt_var>"]] <- sort(myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
         # Remove any words from stopwords            
 #         , setdiff(myreplacePunctuation(stopwords("english")), c("<keep_wrd1>", <keep_wrd2>"))
                                 
+        # Remove salutations
+        ,"mr","mrs","dr","Rev"                                
+
+        # Remove misc
+        #,"th" # Happy [[:digit::]]+th birthday 
+
         # cor.y.train == NA
 #         ,unlist(strsplit(paste(c(NULL
 #           ,"<comma-separated-terms>"
@@ -374,75 +380,85 @@ if (!is.null(glbFeatsText)) {
 
         # nzv.freqRatio high (e.g. >= glbFeatsNzvFreqMax); keep c("<comma-separated-terms-to-keep>")
             # ,<comma-separated-terms>        
-                                            ))
+                                            )))))
 }
-#orderBy(~term, glb_post_stem_words_terms_df_lst[[txt_var]][grep("^2", glb_post_stem_words_terms_df_lst[[txt_var]]$term), ])
-#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txt_var]][, 6] > 0, glbFeatsText]
+#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^qua", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
+#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, 8640] > 0, glbFeatsText]
 
 # To identify terms with a specific freq
-#paste0(sort(subset(glb_post_stop_words_terms_df_lst[[txt_var]], freq == 1)$term), collapse = ",")
-#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txt_var]], freq <= 2)$term), collapse = ",")
+#paste0(sort(subset(glb_post_stop_words_terms_df_lst[[txtFeat]], freq == 1)$term), collapse = ",")
+#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], freq <= 2)$term), collapse = ",")
+#subset(glb_post_stem_words_terms_df_lst[[txtFeat]], term %in% c("zinger"))
 
 # To identify terms with a specific freq & 
 #   are not stemmed together later OR is value of color.fctr (e.g. gold)
-#paste0(sort(subset(glb_post_stop_words_terms_df_lst[[txt_var]], (freq == 1) & !(term %in% c("blacked","blemish","blocked","blocks","buying","cables","careful","carefully","changed","changing","chargers","cleanly","cleared","connect","connects","connected","contains","cosmetics","default","defaulting","defective","definitely","describe","described","devices","displays","drop","drops","engravement","excellant","excellently","feels","fix","flawlessly","frame","framing","gentle","gold","guarantee","guarantees","handled","handling","having","install","iphone","iphones","keeped","keeps","known","lights","line","lining","liquid","liquidation","looking","lots","manuals","manufacture","minis","most","mostly","network","networks","noted","opening","operated","performance","performs","person","personalized","photograph","physically","placed","places","powering","pre","previously","products","protection","purchasing","returned","rotate","rotation","running","sales","second","seconds","shipped","shuts","sides","skin","skinned","sticker","storing","thats","theres","touching","unusable","update","updates","upgrade","weeks","wrapped","verified","verify") ))$term), collapse = ",")
+#paste0(sort(subset(glb_post_stop_words_terms_df_lst[[txtFeat]], (freq == 1) & !(term %in% c("blacked","blemish","blocked","blocks","buying","cables","careful","carefully","changed","changing","chargers","cleanly","cleared","connect","connects","connected","contains","cosmetics","default","defaulting","defective","definitely","describe","described","devices","displays","drop","drops","engravement","excellant","excellently","feels","fix","flawlessly","frame","framing","gentle","gold","guarantee","guarantees","handled","handling","having","install","iphone","iphones","keeped","keeps","known","lights","line","lining","liquid","liquidation","looking","lots","manuals","manufacture","minis","most","mostly","network","networks","noted","opening","operated","performance","performs","person","personalized","photograph","physically","placed","places","powering","pre","previously","products","protection","purchasing","returned","rotate","rotation","running","sales","second","seconds","shipped","shuts","sides","skin","skinned","sticker","storing","thats","theres","touching","unusable","update","updates","upgrade","weeks","wrapped","verified","verify") ))$term), collapse = ",")
 
-#print(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (freq <= 2)))
+#print(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (freq <= 2)))
 #glbObsAll[which(terms_mtrx[, 229] > 0), glbFeatsText]
 
 # To identify terms with cor.y == NA
-#orderBy(~-freq+term, subset(glb_post_stop_words_terms_df_lst[[txt_var]], is.na(cor.y)))
-#paste(sort(subset(glb_post_stop_words_terms_df_lst[[txt_var]], is.na(cor.y))[, "term"]), collapse=",")
-#orderBy(~-freq+term, subset(glb_post_stem_words_terms_df_lst[[txt_var]], is.na(cor.y)))
+#orderBy(~-freq+term, subset(glb_post_stop_words_terms_df_lst[[txtFeat]], is.na(cor.y)))
+#paste(sort(subset(glb_post_stop_words_terms_df_lst[[txtFeat]], is.na(cor.y))[, "term"]), collapse=",")
+#orderBy(~-freq+term, subset(glb_post_stem_words_terms_df_lst[[txtFeat]], is.na(cor.y)))
 
 # To identify terms with low cor.y.abs
-#head(orderBy(~cor.y.abs+freq+term, subset(glb_post_stem_words_terms_df_lst[[txt_var]], !is.na(cor.y))), 5)
+#head(orderBy(~cor.y.abs+freq+term, subset(glb_post_stem_words_terms_df_lst[[txtFeat]], !is.na(cor.y))), 5)
 
 # To identify terms with high chisq.pval
-#subset(glb_post_stem_words_terms_df_lst[[txt_var]], chisq.pval > 0.99)
-#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (chisq.pval > 0.99) & (freq <= 10))$term), collapse=",")
-#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (chisq.pval > 0.9))$term), collapse=",")
-#head(orderBy(~-chisq.pval+freq+term, glb_post_stem_words_terms_df_lst[[txt_var]]), 5)
-#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txt_var]][, 68] > 0, glbFeatsText]
-#orderBy(~term, glb_post_stem_words_terms_df_lst[[txt_var]][grep("^m", glb_post_stem_words_terms_df_lst[[txt_var]]$term), ])
+#subset(glb_post_stem_words_terms_df_lst[[txtFeat]], chisq.pval > 0.99)
+#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (chisq.pval > 0.99) & (freq <= 10))$term), collapse=",")
+#paste0(sort(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (chisq.pval > 0.9))$term), collapse=",")
+#head(orderBy(~-chisq.pval+freq+term, glb_post_stem_words_terms_df_lst[[txtFeat]]), 5)
+#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, 68] > 0, glbFeatsText]
+#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^m", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
 
 # To identify terms with high nzv.freqRatio
-#summary(glb_post_stem_words_terms_df_lst[[txt_var]]$nzv.freqRatio)
-#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txt_var]], (nzv.freqRatio >= glbFeatsNzvFreqMax) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
+#summary(glb_post_stem_words_terms_df_lst[[txtFeat]]$nzv.freqRatio)
+#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (nzv.freqRatio >= glb_nzv_freqCut) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
 
 # To identify obs with a txt term
-#tail(orderBy(~-freq+term, glb_post_stop_words_terms_df_lst[[txt_var]]), 20)
+#tail(orderBy(~-freq+term, glb_post_stop_words_terms_df_lst[[txtFeat]]), 20)
 #mydspObs(list(descr.my.contains="non"), cols=c("color", "carrier", "cellular", "storage"))
 #grep("ever", dimnames(terms_stop_mtrx)$Terms)
 #which(terms_stop_mtrx[, grep("ipad", dimnames(terms_stop_mtrx)$Terms)] > 0)
-#glbObsAll[which(terms_stop_mtrx[, grep("16", dimnames(terms_stop_mtrx)$Terms)[1]] > 0), c(glbFeatsCategory, "storage", txt_var)]
+#glbObsAll[which(terms_stop_mtrx[, grep("16", dimnames(terms_stop_mtrx)$Terms)[1]] > 0), c(glbFeatsCategory, "storage", txtFeat)]
+
+glbFeatsTextVldWords <- myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
+        # custom names/terms for names screening
+                                    ))))
+
+# To identify char vectors post glbFeatsTextMap
+#grep("six(.*)hour", glb_txt_chr_lst[[txtFeat]], ignore.case = TRUE, value = TRUE)
+#grep("[S|s]ix(.*)[H|h]our", glb_txt_chr_lst[[txtFeat]], value = TRUE)
 
 # To identify whether terms shd be synonyms
-#orderBy(~term, glb_post_stop_words_terms_df_lst[[txt_var]][grep("^moder", glb_post_stop_words_terms_df_lst[[txt_var]]$term), ])
-# term_row_df <- glb_post_stop_words_terms_df_lst[[txt_var]][grep("^came$", glb_post_stop_words_terms_df_lst[[txt_var]]$term), ]
+#orderBy(~term, glb_post_stop_words_terms_df_lst[[txtFeat]][grep("^moder", glb_post_stop_words_terms_df_lst[[txtFeat]]$term), ])
+# term_row_df <- glb_post_stop_words_terms_df_lst[[txtFeat]][grep("^came$", glb_post_stop_words_terms_df_lst[[txtFeat]]$term), ]
 # 
-# cor(glb_post_stop_words_terms_mtrx_lst[[txt_var]][glbObsAll$.lcn == "Fit", term_row_df$pos], glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
+# cor(glb_post_stop_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.lcn == "Fit", term_row_df$pos], glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
 
 # To identify which stopped words are "close" to a txt term
 #sort(cluster_vars)
 
 # Text Processing Step: stemDocument
 # To identify stemmed txt terms
-#glb_post_stop_words_terms_df_lst[[txt_var]][grep("condit", glb_post_stop_words_terms_df_lst[[txt_var]]$term), ]
-#orderBy(~term, glb_post_stem_words_terms_df_lst[[txt_var]][grep("^con", glb_post_stem_words_terms_df_lst[[txt_var]]$term), ])
-#glbObsAll[which(terms_stem_mtrx[, grep("use", dimnames(terms_stem_mtrx)$Terms)[[1]]] > 0), c(glb_id_var, "productline", txt_var)]
-#glbObsAll[which(TfIdf_stem_mtrx[, 191] > 0), c(glb_id_var, glbFeatsCategory, txt_var)]
+#glb_post_stop_words_terms_df_lst[[txtFeat]][grep("^la$", glb_post_stop_words_terms_df_lst[[txtFeat]]$term), ]
+#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^con", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
+#glbObsAll[which(terms_stem_mtrx[, grep("use", dimnames(terms_stem_mtrx)$Terms)[[1]]] > 0), c(glb_id_var, "productline", txtFeat)]
+#glbObsAll[which(TfIdf_stem_mtrx[, 191] > 0), c(glb_id_var, glbFeatsCategory, txtFeat)]
+#glbObsAll[which(glb_post_stop_words_terms_mtrx_lst[[txtFeat]][, 6165] > 0), c(glb_id_var, glbFeatsCategory, txtFeat)]
 #which(glbObsAll$UniqueID %in% c(11915, 11926, 12198))
 
 # Text Processing Step: mycombineSynonyms
 #   To identify which terms are associated with not -> combine "could not" & "couldn't"
-#findAssocs(glb_full_DTM_lst[[txt_var]], "not", 0.05)
+#findAssocs(glb_full_DTM_lst[[txtFeat]], "not", 0.05)
 #   To identify which synonyms should be combined
-#orderBy(~term, glb_post_stem_words_terms_df_lst[[txt_var]][grep("^c", glb_post_stem_words_terms_df_lst[[txt_var]]$term), ])
+#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^c", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
 chk_comb_cor <- function(syn_lst) {
 #     cor(terms_stem_mtrx[glbObsAll$.src == "Train", grep("^(damag|dent|ding)$", dimnames(terms_stem_mtrx)[[2]])], glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
-    print(subset(glb_post_stem_words_terms_df_lst[[txt_var]], term %in% syn_lst$syns))
-    print(subset(get_corpus_terms(tm_map(glb_txt_corpus_lst[[txt_var]], mycombineSynonyms, list(syn_lst), lazy=FALSE)), term == syn_lst$word))
+    print(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], term %in% syn_lst$syns))
+    print(subset(get_corpus_terms(tm_map(glbFeatsTextCorpus[[txtFeat]], mycombineSynonyms, list(syn_lst), lazy=FALSE)), term == syn_lst$word))
 #     cor(terms_stop_mtrx[glbObsAll$.src == "Train", grep("^(damage|dent|ding)$", dimnames(terms_stop_mtrx)[[2]])], glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
 #     cor(rowSums(terms_stop_mtrx[glbObsAll$.src == "Train", grep("^(damage|dent|ding)$", dimnames(terms_stop_mtrx)[[2]])]), glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
 }
@@ -451,13 +467,62 @@ chk_comb_cor <- function(syn_lst) {
 #chk_comb_cor(syn_lst=list(word="dent",  syns=c("dent", "ding")))
 #chk_comb_cor(syn_lst=list(word="use",  syns=c("use", "usag")))
 
-glb_txt_synonyms <- list()
-#glb_txt_synonyms[["<txt_var>"]] <- list(NULL
+glbFeatsTextSynonyms <- list()
+# list parsed to collect vldWords
+glbFeatsTextSynonyms[["Hdln.my"]] <- list(NULL
+    # people in places
+    , list(word = "australia", syns = c("australia", "australian"))
+    , list(word = "italy", syns = c("italy", "Italian"))
+    , list(word = "newyork", syns = c("newyork", "newyorker"))    
+    , list(word = "Pakistan", syns = c("Pakistan", "Pakistani"))    
+    , list(word = "peru", syns = c("peru", "peruvian"))
+    , list(word = "qatar", syns = c("qatar", "qatari"))
+    , list(word = "scotland", syns = c("scotland", "scotish"))
+    , list(word = "Shanghai", syns = c("Shanghai", "Shanzhai"))    
+    , list(word = "venezuela", syns = c("venezuela", "venezuelan"))    
+
+    # companies - needs to be data dependent 
+    #   - e.g. ensure BNP in this experiment/feat always refers to BNPParibas
+        
+    # general synonyms
+    , list(word = "theater",  syns = c("theater", "theatre", "theatres")) 
+    , list(word = "understand",  syns = c("understand", "understood"))    
+    , list(word = "weak",  syns = c("weak", "weaken", "weaker", "weakest"))
+    , list(word = "wealth",  syns = c("wealth", "wealthi"))    
+    
+    # custom synonyms (phrases)
+    
+    # custom synonyms (names)
+                                      )
+#glbFeatsTextSynonyms[["<txtFeat>"]] <- list(NULL
 #     , list(word="<stem1>",  syns=c("<stem1>", "<stem1_2>"))
 #                                       )
 
-# options include: "weightTf", "myweightTflog1p", "myweightTfsqrt", "weightTfIdf", "weightBM25"
-glb_txt_terms_control <- list(weighting = "weightTfIdf" # : default
+for (txtFeat in names(glbFeatsTextSynonyms))
+    for (entryIx in 1:length(glbFeatsTextSynonyms[[txtFeat]])) {
+        glbFeatsTextSynonyms[[txtFeat]][[entryIx]]$word <-
+            str_to_lower(glbFeatsTextSynonyms[[txtFeat]][[entryIx]]$word)
+        glbFeatsTextSynonyms[[txtFeat]][[entryIx]]$syns <-
+            str_to_lower(glbFeatsTextSynonyms[[txtFeat]][[entryIx]]$syns)        
+    }        
+
+glbFeatsTextSeed <- 181
+# tm options include: check tm::weightSMART 
+glb_txt_terms_control <- list( # Gather model performance & run-time stats
+                    # weighting = function(x) weightSMART(x, spec = "nnn")
+                    # weighting = function(x) weightSMART(x, spec = "lnn")
+                    # weighting = function(x) weightSMART(x, spec = "ann")
+                    # weighting = function(x) weightSMART(x, spec = "bnn")
+                    # weighting = function(x) weightSMART(x, spec = "Lnn")
+                    # 
+                    weighting = function(x) weightSMART(x, spec = "ltn") # default
+                    # weighting = function(x) weightSMART(x, spec = "lpn")                    
+                    # 
+                    # weighting = function(x) weightSMART(x, spec = "ltc")                    
+                    # 
+                    # weighting = weightBin 
+                    # weighting = weightTf 
+                    # weighting = weightTfIdf # : default
                 # termFreq selection criteria across obs: tm default: list(global=c(1, Inf))
                     , bounds = list(global = c(1, Inf)) 
                 # wordLengths selection criteria: tm default: c(3, Inf)
@@ -480,15 +545,15 @@ glb_important_terms <- list()
 
 # Text Processing Step: extractPatterns (ngrams)
 glbFeatsTextPatterns <- list()
-#glbFeatsTextPatterns[[<txt_var>>]] <- list()
-#glbFeatsTextPatterns[[<txt_var>>]] <- c(metropolitan.diary.colon = "Metropolitan Diary:")
+#glbFeatsTextPatterns[[<txtFeat>>]] <- list()
+#glbFeatsTextPatterns[[<txtFeat>>]] <- c(metropolitan.diary.colon = "Metropolitan Diary:")
 
 # Have to set it even if it is not used
 # Properties:
 #   numrows(glb_feats_df) << numrows(glbObsFit
 #   Select terms that appear in at least 0.2 * O(FP/FN(glbObsOOB)) ???
 #       numrows(glbObsOOB) = 1.1 * numrows(glbObsNew) ???
-glb_sprs_thresholds <- NULL # or c(<txt_var1> = 0.988, <txt_var2> = 0.970, <txt_var3> = 0.970)
+glb_sprs_thresholds <- NULL # or c(<txtFeat1> = 0.988, <txtFeat2> = 0.970, <txtFeat3> = 0.970)
 
 glbFctrMaxUniqVals <- 20 # default: 20
 glb_impute_na_data <- FALSE # or TRUE
@@ -770,7 +835,7 @@ glb_dsp_cols <- c(glb_id_var, glbFeatsCategory, glb_rsp_var
 
 # Output specs
 glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
-glb_out_obs <- NULL # select from c(NULL, "all", "new", "trn")
+glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
 glb_out_vars_lst <- list()
 # glb_id_var will be the first output column, by default
 
@@ -842,6 +907,9 @@ glb2Sav <- function() {
         savObsNew <<- glbObsNew    
     }
 
+    if (any(grepl("^glbFeatsTextCorpus$", ls(envir=globalenv()))) &&
+        !is.null(glbFeatsTextCorpus)) savFeatsTextCorpus <<- glbFeatsTextCorpus
+
     if (any(grepl("^glbLvlCategory$", ls(envir=globalenv()))) &&
         !is.null(glbLvlCategory)) savLvlCategory <<- glbLvlCategory    
 
@@ -862,6 +930,15 @@ glbObsTrn <- myimport_data(specs = glbObsTrnFile, comment = "glbObsTrn", force_h
 # glbObsTrn$review <- readLines("data/hygiene.dat", n =-1)
 # comment(glbObsTrn) <- "glbObsTrn"                                
 
+# glbObsTrn <- data.frame()
+# for (symbol in c("Boeing", "CocaCola", "GE", "IBM", "ProcterGamble")) {
+#     sym_trnobs_df <- 
+#         myimport_data(url=gsub("IBM", symbol, glbObsTrnFile), comment="glbObsTrn", 
+#                                     force_header=TRUE)
+#     sym_trnobs_df$Symbol <- symbol
+#     glbObsTrn <- myrbind_df(glbObsTrn, sym_trnobs_df)
+# }
+                                
 # glbObsTrn <- 
 #     glbObsTrn %>% dplyr::filter(Year >= 1999)
                                 
@@ -1158,34 +1235,9 @@ dsp_numeric_feats_dstrb <- function(feats_vctr) {
 }
 # dsp_numeric_feats_dstrb(setdiff(names(glbObsAll), union(myfind_chr_cols_df(glbObsAll), c(glb_rsp_var_raw, glb_rsp_var)))[2:6])              # dsp_numeric_feats_dstrb(c("startprice", "sprice.root3", "sprice.predict.diff"))                                      
 add_new_diag_feats <- function(obs_df, ref_df=glbObsAll) {
-    require(plyr)
     
     set.seed(169)
     obs_df <- mutate(obs_df,
-#         <col_name>.NA=is.na(<col_name>),
-
-#         <col_name>.fctr=factor(<col_name>, 
-#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))), 
-#         <col_name>.fctr=relevel(factor(<col_name>, 
-#                     as.factor(union(obs_df$<col_name>, obs_twin_df$<col_name>))),
-#                                   "<ref_val>"), 
-#         <col2_name>.fctr=relevel(factor(ifelse(<col1_name> == <val>, "<oth_val>", "<ref_val>")), 
-#                               as.factor(c("R", "<ref_val>")),
-#                               ref="<ref_val>"),
-
-          # This doesn't work - use sapply instead
-#         <col_name>.fctr_num=grep(<col_name>, levels(<col_name>.fctr)), 
-#         
-#         Date.my=as.Date(strptime(Date, "%m/%d/%y %H:%M")),
-#         Year=year(Date.my),
-#         Month=months(Date.my),
-#         Weekday=weekdays(Date.my)
-
-#         <col_name>=<table>[as.character(<col2_name>)],
-#         <col_name>=as.numeric(<col2_name>),
-
-#         <col_name> = trunc(<col2_name> / 100),
-
         .rnorm = rnorm(n=nrow(obs_df))
                         )
 
@@ -1614,12 +1666,14 @@ if (!is.null(glbFeatsText)) {
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
                                 paste0("extract.features_", "xtract.Text.vars"), major.inc = TRUE)
     
-    print(sprintf("Extracting features from Text(s): %s"), glbFeatsText)
+    print(sprintf("Extracting features from Text(s): %s", glbFeatsText))
     
-    chk_pattern_freq <- function(rex_str, ignore.case=TRUE) {
-        match_mtrx <- str_extract_all(txt_vctr, regex(rex_str, ignore_case=ignore.case), 
-                                      simplify=TRUE)
+    chk_pattern_freq <- function(rex_str, ignore.case = TRUE) {
+        match_mtrx <- str_extract_all(txt_vctr, regex(rex_str, ignore_case = ignore.case), 
+                                      simplify = TRUE)
         match_df <- as.data.frame(match_mtrx[match_mtrx != ""])
+        if (nrow(match_df) <= 10)
+            print(txt_vctr[match_mtrx != ""])
         names(match_df) <- "pattern"
         return(mycreate_sqlxtab_df(match_df, "pattern"))        
     }
@@ -1642,36 +1696,26 @@ if (!is.null(glbFeatsText)) {
                                     (match_pos[[1]] / 100) * 100 + 100))        
     }
 
-    myapply_gsub <- function(...) {
-        if ((length_lst <- length(names(gsub_map_lst))) == 0)
-            return(txt_vctr)
-        for (ptn_ix in 1:length_lst) {
+    myapply_txtmap <- function(txt_vctr, bgn = 1, end = nrow(glbFeatsTextMap), ...) {
+        #nrows <- nrow(glbFeatsTextMap)
+        for (ptn_ix in bgn:end) {
             if ((ptn_ix %% 10) == 0)
                 print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
-                                length(names(gsub_map_lst)), names(gsub_map_lst)[ptn_ix]))
-            txt_vctr <- gsub(names(gsub_map_lst)[ptn_ix], gsub_map_lst[[ptn_ix]], 
+                                # nrows, glbFeatsTextMap[ptn_ix, "rex_str"]))
+                                end, glbFeatsTextMap[ptn_ix, "rex_str"]))            
+            txt_vctr <- gsub(glbFeatsTextMap[ptn_ix, "rex_str"], 
+                             glbFeatsTextMap[ptn_ix, "rpl_str"], 
                                txt_vctr, ...)
         }
         return(txt_vctr)
-    }    
-
-    myapply_txtmap <- function(txt_vctr, ...) {
-        nrows <- nrow(glb_txt_map_df)
-        for (ptn_ix in 1:nrows) {
-            if ((ptn_ix %% 10) == 0)
-                print(sprintf("running gsub for %02d (of %02d): #%s#...", ptn_ix, 
-                                nrows, glb_txt_map_df[ptn_ix, "rex_str"]))
-            txt_vctr <- gsub(glb_txt_map_df[ptn_ix, "rex_str"], 
-                             glb_txt_map_df[ptn_ix, "rpl_str"], 
-                               txt_vctr, ...)
-        }
-        return(txt_vctr)
-        #print(txt_vctr <- glbObsAll[glbObsAll$UniqueID == 11329, "descr.my"])
+        #print(txt_vctr <- glbObsAll[7322, txtFeat])
+        #print(glbFeatsTextMap[grepl("upper", glbFeatsTextMap$rex_str), ])
         #strsplit(txt_vctr, "")[[1]][1]
-        #ptn_ix <- 2; glb_txt_map_df[ptn_ix, ]
-        #gsub(glb_txt_map_df[ptn_ix, "rex_str"], glb_txt_map_df[ptn_ix, "rpl_str"], txt_vctr)
-        #print(match_lst <- gregexpr(glb_txt_map_df[ptn_ix, "rex_str"], txt_vctr))
-        #strsplit(glb_txt_map_df[ptn_ix, "rex_str"], "")[[1]]
+        #ptn_ix <- 2; glbFeatsTextMap[ptn_ix, ]
+        #gsub(glbFeatsTextMap[ptn_ix <- 109, "rex_str"], glbFeatsTextMap[ptn_ix, "rpl_str"], txt_vctr)
+        #myapply_txtmap(txt_vctr, bgn = 1, end = 153)
+        #print(match_lst <- gregexpr(glbFeatsTextMap[ptn_ix, "rex_str"], txt_vctr))
+        #strsplit(glbFeatsTextMap[ptn_ix, "rex_str"], "")[[1]]
     }    
 
     chk.equal <- function(bgn, end) {
@@ -1690,50 +1734,55 @@ if (!is.null(glbFeatsText)) {
     txt_map_filename <- paste0(glb_txt_munge_filenames_pfx, "map.csv")
     if (!file.exists(txt_map_filename))
         stop(txt_map_filename, " not found!")
-    glb_txt_map_df <- read.csv(txt_map_filename, comment.char="#", strip.white=TRUE)
+    glbFeatsTextMap <- read.csv(txt_map_filename, comment.char = "#", strip.white = TRUE)
+    # If nchar(rpl_str) == 0, strip all blanks from rex_str along with first word delimiter
+    mask <- (nchar(glbFeatsTextMap$rpl_str) == 0)
+    glbFeatsTextMap[mask, "rpl_str"] <- 
+        gsub(" ", "", gsub("^\\\\b", "", glbFeatsTextMap[mask, "rex_str"]))
+
     glb_txt_chr_lst <- list(); 
     print(sprintf("Building glb_txt_chr_lst..."))
-    glb_txt_chr_lst <- foreach(txt_var = glbFeatsText) %dopar% {   
-#     for (txt_var in glbFeatsText) {
-        txt_vctr <- glbObsAll[, txt_var]
+    glb_txt_chr_lst <- foreach(txtFeat = glbFeatsText) %dopar% {   
+#     for (txtFeat in glbFeatsText) {
+        txt_vctr <- glbObsAll[, txtFeat]
         names(txt_vctr) <- glbObsAll[, glb_id_var]
         
         # myapply_txtmap shd be created as a tm_map::content_transformer ?
-        #print(glb_txt_map_df)
-        #txt_var=glbFeatsText[3]; txt_vctr <- glb_txt_chr_lst[[txt_var]]
-        #print(rex_str <- glb_txt_map_df[3, "rex_str"])
-        #print(rex_str <- glb_txt_map_df[glb_txt_map_df$rex_str == "\\bWall St\\.", "rex_str"])
-        #print(rex_str <- glb_txt_map_df[grepl("du Pont", glb_txt_map_df$rex_str), "rex_str"])        
-        #print(rex_str <- glb_txt_map_df[glb_txt_map_df$rpl_str == "versus", "rex_str"])             
-        #print(tmp_vctr <- grep(rex_str, txt_vctr, value=TRUE, ignore.case=FALSE))
+        # 
+        #txtFeat=glbFeatsText[3]; txt_vctr <- glb_txt_chr_lst[[txtFeat]]
+        #print(rex_str <- glbFeatsTextMap[glbFeatsTextMap$rex_str == "&(.+)circ;", "rex_str"])
+        #print(rex_str <- glbFeatsTextMap[grepl("du Pont", glbFeatsTextMap$rex_str), "rex_str"])        
+        #print(rex_str <- glbFeatsTextMap[glbFeatsTextMap$rpl_str == "versus", "rex_str"])             
+        #print(tmp_vctr <- grep(rex_str, "Anniversary Dinners for Relais & Ch&acirc;teaux", value=TRUE, ignore.case=FALSE))
         #ret_lst <- regexec(rex_str, txt_vctr, ignore.case=FALSE); ret_lst <- regmatches(txt_vctr, ret_lst); ret_vctr <- sapply(1:length(ret_lst), function(pos_ix) ifelse(length(ret_lst[[pos_ix]]) > 0, ret_lst[[pos_ix]], "")); print(ret_vctr <- ret_vctr[ret_vctr != ""])
-        #gsub(rex_str, glb_txt_map_df[glb_txt_map_df$rex_str == rex_str, "rpl_str"], tmp_vctr, ignore.case=FALSE)
+        #gsub(rex_str, glbFeatsTextMap[glbFeatsTextMap$rex_str == rex_str, "rpl_str"], tmp_vctr, ignore.case=FALSE)
         #grep("Hong Hong", txt_vctr, value=TRUE)
     
-        txt_vctr <- myapply_txtmap(txt_vctr, ignore.case=FALSE)    
+        txt_vctr <- myapply_txtmap(txt_vctr, ignore.case = FALSE)    
     }
     names(glb_txt_chr_lst) <- glbFeatsText
 
-    for (txt_var in glbFeatsText) {
-        print(sprintf("Remaining OK in %s:", txt_var))
-        txt_vctr <- glb_txt_chr_lst[[txt_var]]
+#stop(here")    
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Remaining & in %s:", txtFeat))
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]
         
-        print(chk_pattern_freq(rex_str <- "(?<!(BO|HO|LO))OK(?!(E\\!|ED|IE|IN|S ))",
-                               ignore.case=FALSE))
-        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
-        for (row in row.names(match_df))
-            dsp_matches(rex_str, ix=as.numeric(row))
-
-        print(chk_pattern_freq(rex_str <- "Ok(?!(a\\.|ay|in|ra|um))", ignore.case=FALSE))
-        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
-        for (row in row.names(match_df))
-            dsp_matches(rex_str, ix=as.numeric(row))
-
-        print(chk_pattern_freq(rex_str <- "(?<!( b| B| c| C| g| G| j| M| p| P| w| W| r| Z|\\(b|ar|bo|Bo|co|Co|Ew|gk|go|ho|ig|jo|kb|ke|Ke|ki|lo|Lo|mo|mt|no|No|po|ra|ro|sm|Sm|Sp|to|To))ok(?!(ay|bo|e |e\\)|e,|e\\.|eb|ed|el|en|er|es|ey|i |ie|in|it|ka|ke|ki|ly|on|oy|ra|st|u |uc|uy|yl|yo))",
-                               ignore.case=FALSE))
-        match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
-        for (row in row.names(match_df))
-            dsp_matches(rex_str, ix=as.numeric(row))
+        print(chk_pattern_freq(rex_str <- "\\w&\\w", ignore.case = FALSE))        
+        print(chk_pattern_freq(rex_str <- "\\w&", ignore.case = FALSE))
+        print(chk_pattern_freq(rex_str <- "&\\w", ignore.case = FALSE))        
+#         match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+#         for (row in row.names(match_df))
+#             dsp_matches(rex_str, ix=as.numeric(row))
+    }    
+    
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Remaining OK in %s:", txtFeat))
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]
+        
+        print(chk_pattern_freq(rex_str <- "\\bOK\\b", ignore.case = FALSE))
+#         match_df <- dsp_pattern(rex_str, ignore.case=FALSE, print.all=FALSE)
+#         for (row in row.names(match_df))
+#             dsp_matches(rex_str, ix=as.numeric(row))
     }    
     # txt_vctr <- glb_txt_chr_lst[[glbFeatsText[1]]]
     # print(chk_pattern_freq(rex_str <- "(?<!( b| c| C| p|\\(b|bo|co|lo|Lo|Sp|to|To))ok(?!(ay|e |e\\)|e,|e\\.|ed|el|en|es|ey|ie|in|on|ra))", ignore.case=FALSE))
@@ -1744,16 +1793,15 @@ if (!is.null(glbFeatsText)) {
     # substr(glbObsAll[301, "review"], 550, 650)
 
 #stop(here"); sav_txt_lst <- glb_txt_chr_lst    
-    for (txt_var in glbFeatsText) {
-        print(sprintf("Remaining Acronyms in %s:", txt_var))
-        txt_vctr <- glb_txt_chr_lst[[txt_var]]
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Remaining Acronyms in %s:", txtFeat))
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]
         
-        print(chk_pattern_freq(rex_str <- "([[:upper:]]\\.( *)){2,}", ignore.case=FALSE))
+        print(chk_pattern_freq(rex_str <- "([[:upper:]]\\.( *)){2,}", ignore.case = FALSE))
         
         # Check for names
-        print(subset(chk_pattern_freq(rex_str <- "(([[:upper:]]+)\\.( *)){1}",
-                                      ignore.case=FALSE),
-                     .n > 1))
+        print(subset(chk_pattern_freq(rex_str <- "(([[:upper:]]+)\\.( *)){1}"),
+                     !grepl("^[Jan|Feb|Apr|Jun|Jul|Sep|Oct|Nov|Dec|Mr|Mrs|Ms|Rev]", pattern)))
         # dsp_pattern(rex_str="(OK\\.( *)){1}", ignore.case=FALSE)
         # dsp_matches(rex_str="(OK\\.( *)){1}", ix=557)
         #dsp_matches(rex_str="\\bR\\.I\\.P(\\.*)(\\B)", ix=461)
@@ -1762,11 +1810,11 @@ if (!is.null(glbFeatsText)) {
         #print(str_sub(txt_vctr[74], 1, -1))        
     }
 
-    for (txt_var in glbFeatsText) {
-        re_str <- "\\b(Fort|Ft\\.|Hong|Las|Los|New|Puerto|Saint|San|St\\.)( |-)(\\w)+"
-        print(sprintf("Remaining #%s# terms in %s: ", re_str, txt_var))
-        txt_vctr <- glb_txt_chr_lst[[txt_var]]        
-        print(orderBy(~ -.n +pattern, subset(chk_pattern_freq(re_str, ignore.case=FALSE), 
+    for (txtFeat in glbFeatsText) {
+        re_str <- "\\b(Fort|Ft\\.|Hong|Las|Los|New|Puerto|Saint|San|Santa|St\\.)( |-)(\\w)+"
+        print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]        
+        print(orderBy(~ -.n +pattern, subset(chk_pattern_freq(re_str, ignore.case = FALSE), 
                                              grepl("( |-)[[:upper:]]", pattern))))
         print("    consider cleaning if relevant to problem domain; geography name; .n > 1")
         #grep("New G", txt_vctr, value=TRUE, ignore.case=FALSE)
@@ -1774,19 +1822,19 @@ if (!is.null(glbFeatsText)) {
     }        
         
 #stop(here"); sav_txt_lst <- glb_txt_chr_lst    
-    for (txt_var in glbFeatsText) {
+    for (txtFeat in glbFeatsText) {
         re_str <- "\\b(N|S|E|W|C)( |\\.)(\\w)+"
-        print(sprintf("Remaining #%s# terms in %s: ", re_str, txt_var))        
-        txt_vctr <- glb_txt_chr_lst[[txt_var]]                
+        print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))        
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]                
         print(orderBy(~ -.n +pattern, subset(chk_pattern_freq(re_str, ignore.case=FALSE), 
                                              grepl(".", pattern))))
         #grep("N Weaver", txt_vctr, value=TRUE, ignore.case=FALSE)        
     }    
 
-    for (txt_var in glbFeatsText) {
+    for (txtFeat in glbFeatsText) {
         re_str <- "\\b(North|South|East|West|Central)( |\\.)(\\w)+"
-        print(sprintf("Remaining #%s# terms in %s: ", re_str, txt_var))        
-        txt_vctr <- glb_txt_chr_lst[[txt_var]]                        
+        print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))        
+        txt_vctr <- glb_txt_chr_lst[[txtFeat]]                        
         if (nrow(filtered_df <- subset(chk_pattern_freq(re_str, ignore.case=FALSE), 
                                              grepl(".", pattern))) > 0)
             print(orderBy(~ -.n +pattern, filtered_df))
@@ -1797,71 +1845,78 @@ if (!is.null(glbFeatsText)) {
         #grep("St\\. Martins", txt_vctr, value=TRUE, ignore.case=FALSE)
     }    
 
-    find_cmpnd_wrds <- function(txt_vctr) {
-        # Enhancements:
-        #   - arg should be txt_corpus instead of txt_vctr
+#     find_cmpnd_wrds <- function(txt_vctr) {
+#         # Enhancements:
+#         #   - arg should be txt_corpus instead of txt_vctr
+#         
+#         txt_corpus <- Corpus(VectorSource(txt_vctr))
+#         txt_corpus <- tm_map(txt_corpus, content_transformer(tolower), lazy = TRUE)
+#         txt_corpus <- tm_map(txt_corpus, PlainTextDocument, lazy = TRUE)
+#         txt_corpus <- tm_map(txt_corpus, removePunctuation, 
+#                              preserve_intra_word_dashes = TRUE, lazy = FALSE)
+#         
+#         # Defaulting to Tf since TfIdf with normalize = TRUE throws a warning for empty docs
+#         terms_mtrx <- as.matrix(TermDocumentMatrix(txt_corpus,
+#                                                    control = list(weighting = weightTf)))
+#         terms_df <- orderBy(~ -Tf, data.frame(term = dimnames(terms_mtrx)$Terms,
+#                                               Tf = rowSums(terms_mtrx)))
+#         
+#         cmpnd_df <- subset(terms_df, grepl("-", term))
+#         if (nrow(cmpnd_df) == 0) {
+#             print("   No compounded terms found")
+#             return(FALSE)
+#         }
+#         
+#         txt_compound_filename <- paste0(glb_txt_munge_filenames_pfx, "compound.csv")
+#         if (!file.exists(txt_compound_filename))
+#             stop(txt_compound_filename, " not found!")
+#         filter_df <- read.csv(txt_compound_filename, comment.char="#", strip.white=TRUE)
+#         cmpnd_df$filter <- FALSE
+#         for (row_ix in 1:nrow(filter_df))
+#             cmpnd_df[!cmpnd_df$filter, "filter"] <- 
+#             grepl(filter_df[row_ix, "rex_str"], 
+#                   cmpnd_df[!cmpnd_df$filter, "term"], ignore.case=TRUE)
+#         cmpnd_df <- subset(cmpnd_df, !filter)
+#         # Bug in tm_map(txt_corpus, removePunctuation, preserve_intra_word_dashes=TRUE) ???
+#         #   "net-a-porter" gets converted to "net-aporter"
+#         #grep("net-a-porter", txt_vctr, ignore.case=TRUE, value=TRUE)
+#         #grep("maser-laser", txt_vctr, ignore.case=TRUE, value=TRUE)
+#         #txt_corpus[[which(grepl("net-a-porter", txt_vctr, ignore.case=TRUE))]]
+#         #grep("\\b(across|longer)-(\\w)", cmpnd_df$term, ignore.case=TRUE, value=TRUE)
+#         #grep("(\\w)-(affected|term)\\b", cmpnd_df$term, ignore.case=TRUE, value=TRUE)
+#         
+#         print(sprintf("nrow(cmpnd_df): %d", nrow(cmpnd_df)))
+#         myprint_df(cmpnd_df)
+#     }
         
-        txt_corpus <- Corpus(VectorSource(txt_vctr))
-        txt_corpus <- tm_map(txt_corpus, content_transformer(tolower), lazy = TRUE)
-        txt_corpus <- tm_map(txt_corpus, PlainTextDocument, lazy = TRUE)
-        txt_corpus <- tm_map(txt_corpus, removePunctuation, 
-                             preserve_intra_word_dashes = TRUE, lazy = FALSE)
+    # This should be run after glbFeatsTextCorpus is created with tolower
+#     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+#             paste0("extract.features_", "process.text_reporting_compound_terms"), major.inc=FALSE)
         
-        # Defaulting to Tf since TfIdf with normalize = TRUE throws a warning for empty docs
-        terms_mtrx <- as.matrix(TermDocumentMatrix(txt_corpus,
-                                                   control = list(weighting = weightTf)))
-        terms_df <- orderBy(~ -Tf, data.frame(term = dimnames(terms_mtrx)$Terms,
-                                              Tf = rowSums(terms_mtrx)))
-        
-        cmpnd_df <- subset(terms_df, grepl("-", term))
-        if (nrow(cmpnd_df) == 0) {
-            print("   No compounded terms found")
-            return(FALSE)
-        }
-        
-        txt_compound_filename <- paste0(glb_txt_munge_filenames_pfx, "compound.csv")
-        if (!file.exists(txt_compound_filename))
-            stop(txt_compound_filename, " not found!")
-        filter_df <- read.csv(txt_compound_filename, comment.char="#", strip.white=TRUE)
-        cmpnd_df$filter <- FALSE
-        for (row_ix in 1:nrow(filter_df))
-            cmpnd_df[!cmpnd_df$filter, "filter"] <- 
-            grepl(filter_df[row_ix, "rex_str"], 
-                  cmpnd_df[!cmpnd_df$filter, "term"], ignore.case=TRUE)
-        cmpnd_df <- subset(cmpnd_df, !filter)
-        # Bug in tm_map(txt_corpus, removePunctuation, preserve_intra_word_dashes=TRUE) ???
-        #   "net-a-porter" gets converted to "net-aporter"
-        #grep("net-a-porter", txt_vctr, ignore.case=TRUE, value=TRUE)
-        #grep("maser-laser", txt_vctr, ignore.case=TRUE, value=TRUE)
-        #txt_corpus[[which(grepl("net-a-porter", txt_vctr, ignore.case=TRUE))]]
-        #grep("\\b(across|longer)-(\\w)", cmpnd_df$term, ignore.case=TRUE, value=TRUE)
-        #grep("(\\w)-(affected|term)\\b", cmpnd_df$term, ignore.case=TRUE, value=TRUE)
-        
-        print(sprintf("nrow(cmpnd_df): %d", nrow(cmpnd_df)))
-        myprint_df(cmpnd_df)
-    }
-
-    # This should be run after glb_txt_corpus_lst is created with tolower
-    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
-            paste0("extract.features_", "process.text_reporting_compound_terms"), major.inc=FALSE)
-    
-#     for (txt_var in glbFeatsText) {
-#         print(sprintf("Remaining compound terms in %s: ", txt_var))        
-#         find_cmpnd_wrds(txt_vctr = glb_txt_chr_lst[[txt_var]])
+#     for (txtFeat in glbFeatsText) {
+#         print(sprintf("Remaining compound terms in %s: ", txtFeat))        
+#         find_cmpnd_wrds(txt_vctr = glb_txt_chr_lst[[txtFeat]])
 #         #grep("thirty-five", txt_vctr, ignore.case=TRUE, value=TRUE)
-#         #rex_str <- glb_txt_map_df[grepl("hirty", glb_txt_map_df$rex_str), "rex_str"]
+#         #rex_str <- glbFeatsTextMap[grepl("hirty", glbFeatsTextMap$rex_str), "rex_str"]
 #     }
 
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
-            paste0("extract.features_", "build.corpus"), major.inc=TRUE)
+            paste0("extract.features_", "build.corpus"), major.inc = TRUE)
     
-    get_txt_terms <- function(terms_TDM) {
+    get_txt_terms <- function(terms_TDM, compute.chisq = TRUE, compute.nzv = TRUE) {
+        tmEnter <- as.numeric(proc.time()["elapsed"])
+        print(sprintf("get_txt_terms: enter: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+    
         terms_mtrx <- as.matrix(as.TermDocumentMatrix(terms_TDM))
         docms_mtrx <- as.matrix(as.DocumentTermMatrix(terms_TDM))        
         terms_df <- data.frame(term = dimnames(terms_mtrx)$Terms,
                                weight = rowSums(terms_mtrx),
                                freq = rowSums(terms_mtrx > 0))
         terms_df$pos <- 1:nrow(terms_df)
+        print(sprintf("get_txt_terms: terms_df setup: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
         terms_df$cor.y <- 
             cor(docms_mtrx[glbObsAll$.src == "Train",], 
                 as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
@@ -1870,66 +1925,102 @@ if (!is.null(glbFeatsText)) {
 #         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
 #                         as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
 #                                 use = "pairwise.complete.obs"))
+        print(sprintf("get_txt_terms: terms_df cor.y: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
         
-        terms_df$chisq.stat <- NA; terms_df$chisq.pval <- NA
-        for (ix in 1:nrow(terms_df)) {
-        #for (ix in 1:743) {
-            if (length(unique(docms_mtrx[glbObsAll$.src == "Train", ix])) > 1) {
-                chisq <- chisq.test(docms_mtrx[glbObsAll$.src == "Train", ix], 
-                                    glbObsAll[glbObsAll$.src == "Train", glb_rsp_var])
-                terms_df[ix, "chisq.stat"] <- chisq$statistic
-                terms_df[ix, "chisq.pval"] <- chisq$p.value 
-            }
+        # compute nzv before chisq.test since terms with nzv.freqRatio beyond a max threshold are not chisq.significant ???
+        if (compute.nzv) {
+            nzv_df <- 
+#                 caret::nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glb_nzv_freqCut,
+#                             uniqueCut = glb_nzv_uniqueCut, saveMetrics = TRUE)
+                # caret::nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",], 
+                mycaret.nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",],
+                                   freqCut = glb_nzv_freqCut, uniqueCut = glb_nzv_uniqueCut,
+                                   saveMetrics = TRUE, foreach = TRUE)
+            terms_df$nzv.freqRatio <- nzv_df$freqRatio
+    #         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
+    #                                                breaks = sort(c(min(terms_df$nzv.freqRatio), 
+    #                                                                 glb_nzv_freqCut,
+    #                                                            max(terms_df$nzv.freqRatio))))
+            terms_df$nzv.percentUnique <- nzv_df$percentUnique
+    #         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
+    #               breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
+    #                                                             glb_nzv_uniqueCut,
+    #                                                       max(terms_df$nzv.percentUnique))))
+    #         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:",
+    #          terms_df$nzv.freqRatio.cut.fctr,
+    #                                             "\n%Unq:", terms_df$nzv.percentUnique.cut.fctr))
+            terms_df$nzv <- nzv_df$nzv
+            print(sprintf("get_txt_terms: terms_df nzv: elapsed: %0.2f secs",
+                          as.numeric(proc.time()["elapsed"]) - tmEnter))
         }
         
-        nzv_df <- nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glbFeatsNzvFreqMax,
-                   uniqueCut = glbFeatsNzvUniqMin, saveMetrics = TRUE)
-        terms_df$nzv.freqRatio <- nzv_df$freqRatio
-#         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
-#                                                 breaks = sort(c(min(terms_df$nzv.freqRatio), 
-#                                                                 glbFeatsNzvFreqMax,
-#                                                                 max(terms_df$nzv.freqRatio))))
-        terms_df$nzv.percentUnique <- nzv_df$percentUnique
-#         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
-#                     breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
-#                                                             glbFeatsNzvUniqMin,
-#                                                             max(terms_df$nzv.percentUnique))))
-#         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:", terms_df$nzv.freqRatio.cut.fctr,
-#                                             "\n%Unq:", terms_df$nzv.percentUnique.cut.fctr))
-        terms_df$nzv <- nzv_df$nzv
+        # to check is nzv.freqRatio max threshold is properly set
+# summary(full_terms_df$nzv.freqRatio)
+# full_terms_df$chisq.pval.significant <-
+#     cut(full_terms_df$chisq.pval, breaks = c(0, 0.05, max(full_terms_df$chisq.pval, na.rm = TRUE)))
+# ggplot(full_terms_df, mapping = aes(x = nzv.percentUnique, y = nzv.freqRatio)) +
+#     geom_point(aes(color = chisq.pval.significant), position = "jitter")
+# significant_terms_df <- subset(full_terms_df, chisq.pval < 0.05)
+# summary(significant_terms_df$nzv.freqRatio)
+        
+        if (compute.chisq) {
+            naDf <- data.frame(chisq.stat = NA, chisq.pval = NA)
+            trnObsIx <- (glbObsAll$.src == "Train")
+            chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %dopar% 
+            # chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %do% 
+            # chisqDf <- foreach(ix = 1:30, .combine = rbind) %do% 
+                if ((length(unique(docms_mtrx[trnObsIx, ix])) > 1) && 
+                    (terms_df[ix, "nzv.freqRatio"] <= 3265)) # Empirical setting
+                {
+                    chisq <- chisq.test(docms_mtrx[trnObsIx, ix], 
+                                        glbObsAll[trnObsIx, glb_rsp_var])
+                    tmpDf <- data.frame(chisq.stat = chisq$statistic,
+                                        chisq.pval = chisq$p.value)
+                } else {
+                    tmpDf <- naDf
+                }
+    #         terms_df[ix, "chisq.stat"] <- chisq$statistic
+    #         terms_df[ix, "chisq.pval"] <- chisq$p.value 
+            terms_df <- cbind(terms_df, chisqDf)       
+            print(sprintf("get_txt_terms: terms_df chisq.test: elapsed: %0.2f secs",
+                          as.numeric(proc.time()["elapsed"]) - tmEnter))
+        }
         
         for (cls in unique(glbObsAll[, glb_txt_cor_var])) {
-            if (!is.na(cls))
-                terms_df[, paste0("weight.", as.character(cls))] <- 
-                    colSums(t(terms_mtrx) * 
-                            as.numeric(!is.na(glbObsAll[, glb_txt_cor_var]) &
-                                        (glbObsAll[, glb_txt_cor_var] == cls))) else
-                terms_df[, paste0("weight.", as.character(cls))] <- 
-                    colSums(t(terms_mtrx) * 
-                            as.numeric(is.na(glbObsAll[, glb_txt_cor_var])))
+            if (!is.na(cls)) {
+                obsMask <- as.numeric(!is.na(glbObsAll[, glb_txt_cor_var]) &
+                                        (glbObsAll[, glb_txt_cor_var] == cls))
+            } else {
+                obsMask <- as.numeric(is.na(glbObsAll[, glb_txt_cor_var]))
+            }    
+            terms_df[, paste0("weight.mean.", as.character(cls))] <- 
+                colSums(t(terms_mtrx) * obsMask) * 1.0 / sum(obsMask)
         }    
+        
+        print(sprintf("get_txt_terms: terms_df weight.glb_txt_cor_var: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        print(sprintf("get_txt_terms: exit: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
         
         # Check all calls to get_terms_DTM_terms to change returned order assumption
         return(terms_df <- orderBy(~ -weight, terms_df))
     }
-    #plt_full_df <- get_terms_DTM_terms(terms_DTM=glb_full_terms_DTM_lst[[txt_var]])
+    #plt_full_df <- get_terms_DTM_terms(terms_DTM=glb_full_terms_DTM_lst[[txtFeat]])
     
-    get_corpus_terms <- function(txt_corpus) {
-        return(terms_df <- get_txt_terms(terms_TDM = 
-                        TermDocumentMatrix(txt_corpus, control = glb_txt_terms_control)))
-    }
-    
-    myreplacePunctuation <- function(x) {
-        return(gsub("[[:punct:]]+", " ", gsub("('|-)", "", x)))
+    get_corpus_terms <- function(txt_corpus, ...) {
+        set.seed(glbFeatsTextSeed)        
+        terms_TDM <- TermDocumentMatrix(txt_corpus, control = glb_txt_terms_control)
+        return(terms_df <- get_txt_terms(terms_TDM, ...))
     }
     
 #stop(here"); glb2Sav()    
-    glb_txt_corpus_lst <- list()
-    print(sprintf("Building glb_txt_corpus_lst..."))
-    glb_txt_corpus_lst <- foreach(txt_var = glbFeatsText, .verbose = FALSE) %dopar% {
-    #glb_txt_corpus_lst <- foreach(txt_var = glbFeatsText, .verbose = TRUE) %do% {        
-    #for (txt_var in glbFeatsText) {
-        txt_corpus <- Corpus(VectorSource(glb_txt_chr_lst[[txt_var]]))
+    glbFeatsTextCorpus <- list()
+    print(sprintf("Building glbFeatsTextCorpus..."))
+    glbFeatsTextCorpus <- foreach(txtFeat = glbFeatsText, .verbose = FALSE) %dopar% {
+    #glbFeatsTextCorpus <- foreach(txtFeat = glbFeatsText, .verbose = TRUE) %do% {        
+    #for (txtFeat in glbFeatsText) {
+        txt_corpus <- Corpus(VectorSource(glb_txt_chr_lst[[txtFeat]]))
         txt_corpus <- tm_map(txt_corpus, PlainTextDocument, lazy = TRUE)
         txt_corpus <- tm_map(txt_corpus, content_transformer(tolower), lazy = TRUE) #nuppr
         # removePunctuation does not replace with whitespace. Use a custom transformer ???
@@ -1937,60 +2028,419 @@ if (!is.null(glbFeatsText)) {
         txt_corpus <- tm_map(txt_corpus, content_transformer(myreplacePunctuation)
                              , lazy = TRUE) #npnct<chr_ix>
 #         txt-corpus <- tm_map(txt_corpus, content_transformer(function(x, pattern) gsub(pattern, "", x))   
-        if (!is.null(glb_txt_stop_words[[txt_var]]))
-            txt_corpus <- tm_map(txt_corpus, removeWords, glb_txt_stop_words[[txt_var]],
+        if (!is.null(glb_txt_stop_words[[txtFeat]]))
+            txt_corpus <- tm_map(txt_corpus, removeWords, glb_txt_stop_words[[txtFeat]],
                                  lazy = FALSE)#, lazy=TRUE) #nstopwrds
 
         # foreach result is based on .Last.Eval
         txt_corpus <- txt_corpus
-        # glb_txt_corpus_lst[[txt_var]] <- txt_corpus
+        # glbFeatsTextCorpus[[txtFeat]] <- txt_corpus
     }
-    names(glb_txt_corpus_lst) <- glbFeatsText
+    names(glbFeatsTextCorpus) <- glbFeatsText
     
 mycombineSynonyms <- content_transformer(function(x, syn=NULL) { 
     Reduce(function(a,b) {
         gsub(paste0("\\b(", paste(b$syns, collapse = "|"),")\\b"), b$word, a)}, syn, x)   
 })    
     
-#stop(here"); glb2Sav(); sav_txt_corpus <- glb_txt_corpus_lst[[txt_var]]; all.equal(sav_txt_corpus, glb_txt_corpus_lst[[txt_var]]); glb_txt_corpus_lst[[txt_var]] <- sav_txt_corpus
+mytokenize3grams <- content_transformer(function(x) { 
+    tokens <- scan_tokenizer(x)
+    return(paste(head(tokens, -2), 
+                 head(tail(tokens, -1), -1), 
+                 tail(tokens, -2), sep = " "))
+})    
+
+    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+            paste0("extract.features_", "load.validwords"), major.inc = TRUE)
+    vldWordsFilename <- paste0("scowl-2015.08.24-english-american-35.txt")
+    if (!file.exists(vldWordsFilename))
+        stop(vldWordsFilename, " not found!")
+    vldWords <- read.csv(vldWordsFilename, header = FALSE, comment.char = "#", strip.white = TRUE,
+                         encoding = "UTF-8")
+    vldWords <- iconv(vldWords[, 1], "latin1", "UTF-8")
+    vldWords <- myreplacePunctuation(vldWords)
+    vldWords <- vldWords[!duplicated(vldWords)]
+    
+                    # Add "rpl_str" from glb_txt_map (that don't contain \\#)    
+    txtMapRplStr <- glbFeatsTextMap$rpl_str[!grepl("\\\\", glbFeatsTextMap$rpl_str)]
+    txtMapRplStr <- txtMapRplStr[!grepl("[[:punct:]]|[[:digit:]]", txtMapRplStr)]
+    txtMapRplStr <- str_trim(txtMapRplStr)
+    txtMapRplStr <- txtMapRplStr[txtMapRplStr != ""]
+    txtMapRplStr <- str_to_lower(txtMapRplStr[!grepl(" ", txtMapRplStr)])
+    vldWords <- union(vldWords, txtMapRplStr)
+    
+                    # Add "rpl_str" from glbFeatsDerive[[txtFeat]] (that don't contain \\#)
+    for (feat in intersect(glbFeatsText, names(glbFeatsDerive))) {
+        userDefWords <- deparse(glbFeatsDerive[[feat]]$mapfn, width.cutoff = 100)
+        userDefWords <- userDefWords[grepl("gsub", userDefWords)]
+        userDefWords <- gsub("modRaw <- gsub\\(\"(.+)\", \"(.+)\", (.+)\\)", "\\2", userDefWords)
+        #            regexpr("modRaw <- gsub\\(\"(.+)\", \"(.+)\", ",         userDefWords[111])
+        userDefWords <- str_trim(gsub("modRaw (.+)", "\\1", userDefWords))
+        userDefWords <- userDefWords[!grepl("\\\\", userDefWords)]
+        userDefWords <- unique(str_to_lower(unlist(str_split(userDefWords, " "))))
+        vldWords <- union(vldWords, userDefWords)
+    }    
+                        
+                    # Add synonyms from glbFeatsTextSynonyms[[txtFeat]]
+    for (feat in intersect(glbFeatsText, names(glbFeatsTextSynonyms))) {
+        userDefWords <- unlist(sapply(1:length(glbFeatsTextSynonyms[[feat]]), function(elemIx)
+                                                    glbFeatsTextSynonyms[[feat]][[elemIx]]$syns))
+        vldWords <- union(vldWords, userDefWords)
+    }    
+                        
+    vldWords <- union(vldWords, myreplacePunctuation(str_to_lower(c(NULL
+        # Month names
+        ,"jan","feb","mar","April","may","jun","jul","aug","sep","oct","nov","dec"
+        # Day names
+        ,"sunday","monday","tuesday","wednesday","thursday","friday","saturday"
+        
+        # Place names
+        ,"afghan","Afghans","Afghanistan","africa","african","africans","africanamerican"
+            ,"alaska","Alaskan"
+            ,"Amazon","america","americas","american","Americana","americans","Amsterdam"
+            ,"Antwerp"
+            ,"arab","arabia","Argentina","argentine","arizona","Arkansas"
+            ,"asia","Asian"
+            ,"atlanta"
+            ,"Australia","australian","Australias"
+        ,"Baja","beijing","Belgian","Belgians","belgium","benghazi","Berlin","boston"
+            ,"Brazil","Brazilian","britain","british","Britons","broadway","bronx","brooklyn"
+            ,"Burma"
+        ,"Canada","canadian","canadians","caribbean"
+            ,"centralpark"
+            ,"chechnya","chicago","Chicago's","Chile","Chilean","chinese"
+            ,"Cleveland"
+            ,"Colombia","Colombian","Colombians","colorado","Connecticut"
+            ,"cuba","cuba's","cuban","cubans"
+            ,"Cyprus"
+        ,"dallas","Danish","Denmark","detroit","Deutsche","Dutch"
+        ,"Egypt","England","english","euro","europe","european","Europeans","Europes"
+        ,"ferguson","finland","Finnish","Finns","florida","France","frankfurt","Frankfurter"
+        ,"georgia","Georgian","german","Germans","germany","glencore","greece","greek"
+        ,"Haiti","Haitian","havana","Hawaii","Hawaiian","Helsinki","Hertz","Hispanic"
+            ,"hollywood","hongkong","HongKongs","Houston","Hungarian"
+        ,"Ibiza","Iceland","illinois","india","indias","indian","indians","iowa"
+            ,"Iran","Iranian","iraq","iraqi","Ireland","irish"
+            ,"israel","Israeli"
+            ,"Italia","Italian"
+        ,"japan","japanese"
+        ,"kansas","kentucky","Kenya","Kenyans","Kiev"
+        ,"lasvegas","Libya","Libyan","Lima","Lisbon","london","LosAngeles"
+        ,"madrid","maine","malaysia","maryland","massachusetts","mediterranean","Mexican","mexico"
+            ,"Miami","Michigan","milan","minnesota","missouri","moscow","myanmar"
+        ,"NATO"
+            ,"NewDelhi","NewHampshire","neworleans","newyork","newyorker","newyorkers"
+                ,"newzealand"
+            ,"Nigeria","nigerian"
+            ,"NorthAmerican","northcarolina","NorthKorea","NorthKorean","norway","Norwegian"
+        ,"ohio","omaha","ottawa"
+        ,"pakistan","palestine","palestinian","paris","peking","Pennsylvania","peshawar"
+            ,"Philadelphia","philippine"
+            ,"poland","Ponytail","Portland","portugal","portuguese"
+            ,"Prague","PuertoRico"
+        ,"rome","Russia","russian","russians"
+        ,"saigon","saintlouis","sanfrancisco","Saudi"
+            ,"Scandinavian","Scot","scots","scotland","scottish"
+            ,"Seattle","Selma"
+            ,"Shanghai","Singapore"
+            ,"SouthAfrica","SouthAfrican","southcarolina","southdakota","southkorea","southsudan"
+            ,"spain","Spains","spanish"
+            ,"sweden","Swedish","swiss","Switzerland"
+            ,"Sydney","Syria","Syrian","syrians"
+        ,"Taiwan","Taiwanese","Tanzania","Taos","tennessee","texas","thai","Thailand"
+            ,"Tiananmen","Tibetan"
+            ,"Tokyo","toronto"
+            ,"turks","turkish"
+        ,"Uighur","Uighurs","ukraine","Ukraines","Ukrainian","Utah"
+        ,"vermont","Vienna","Vietnam","Vietnamese","Vietnams","virginia","virginia's"
+        ,"Wales","wallstreet's","washington","WashingtonDC","wisconsin"
+        ,"Xinjiang"
+        ,"Zhejiang"
+        
+        # Company names
+        ,"AbbVie","AbbVie's","Actavis","adidas","Aldermore","Airbnb"
+            ,"Alibaba","Alibabas","allergan","Altice","Altuzarra"
+            ,"Amazon","Amgen"
+            ,"Apax","APEC","Arista","Atos","Auxilium","Aviva"
+        ,"Bain","Balenciaga","Balenciaga","barclays","Bayer","BBC","Bellevue","BGC"
+            ,"BlackRock","Blackstone","Blumarine"
+            ,"Braun"
+            ,"BSkyB","bt","Burberry"
+        ,"Caesars","Calpers","Cargill","Cartier","CGG"
+            ,"Chanel","Chanel's","Chiquita","Chiquita's","Chloe"
+                ,"Christian","Christians","Christianity"
+            ,"cisco"
+            ,"citigroup"
+            ,"coinbase","Comcast"
+            ,"csx"
+            ,"cubist"
+        ,"darden","dealogic","Diageo","Dow","DreamWorks","Dresser-Rand"
+        ,"EBay","EE","Electra","Elliott","Ello","EMC","Endo"
+        ,"facebook","Feit","fendi","Filings","Fyffes"
+        ,"Galleon","Givenchy","goldman","goldmans","google","googled","googles"
+            ,"GreeneKing","Groupon"
+            ,"Guggenheim"
+        ,"Hasbro","herbalife","Hermes","HSBC","HSBCs"
+        ,"IBM","ING","intel","Islam"        
+        ,"Jacquemus","Jana","Janus","Jefferies","JetBlue","Judaism"
+        ,"Kenzo","Kering","knick","Knicks"
+        ,"LabCorp","Lazard","Lehman","Lloyds","loeb","Louisiana","luxottica"
+        ,"Margiela","Marni","Marriott","merck","Methane","metlife","Microsoft"
+        ,"Netflix","NewRepublic","newyorktimes","Nike","Nutreco"
+        ,"Oaktree","Ocwen","Oi","okcupid","OnDeck"
+        ,"PayPal","PetSmart","Philips","pimco","Prada","PTA","Puma"
+        ,"qualcomm"
+        ,"RadioShack","Reddit","Repsol","Rodarte"
+        ,"Sacai","Salix","Samsung","Santander","Sherborne","SHV","Siemens"
+            ,"SoftBank","sony","Soviet","Sovietization","soviets"
+            ,"Spotify","Starbucks","Symantec"
+        ,"technip","TianheChemicals","Tibco","Travelport","TUI"
+        ,"uber","UBM","ubs"
+        ,"Valeant","Valeant's","Valentino","Valentino's","Vatican","verizon"
+        ,"Walmart","Walmart's","WHotels","WNYC","WNYCs"
+        ,"Xerox","Xiaomi","xiaomis"
+        ,"yahoo","yahoos","yale","Yara"
+                    
+        # Product names
+        ,"Android","AnonyWatch","ApplePay","botox"
+        ,"Celiac","CFDA","Citizenfour","ClassDojo","cosmo"
+        ,"Duracell"
+        ,"euros","eurozone"
+        ,"Hanukkah","hbo","heineken","Hoverboard","Hoverboards"
+        ,"instagram","ios","iPhone","iPhones","ipads","ipod","itunes","iWatch"
+        ,"Jewish","Jews"
+        ,"LACMA","Longpoint"
+        ,"medicare","minecraft","MOCA","Muslim","Muslims"
+        ,"nazi","nazis","Netrebko","Neverland","nytlnreads"
+        ,"obamacare","oculus"
+        ,"Pabst","pinterest","Postit"
+        ,"Redskins","Reich","REIT","Ruble"
+        ,"SABMiller","Showtime","Simpsons","Smartwatch","Snapchat","Soundcheck","Spanx","Synod"
+        ,"Technicolor","ts"
+        ,"vitamind"
+        ,"WhatsApp"
+        ,"yankees","youtube"
+                    
+        # Words not in this SCOWL db
+        ,"ABC","ABCs","acrostic","Activism","Adoptees","aeroplanes","ageist","Airbags","Airways"
+            ,"alternateside"
+            ,"Analytics","Anthropocene","anti","Antidepressants","Antitrust"
+            ,"Apologists","app","apps"
+            ,"Arent","Artfully","Artsy","artworks"
+            ,"Authoritarianism","Autism","Autocorrect"
+        ,"Backpedals","Backstory","bailout","Banco","Bartending"
+            ,"Beeps","Belle","Benchmark","Benchmarks"
+            ,"Bidders","Billionaire","Billionaires","Biotech","Bipartisanship"
+                ,"bitcoin","bitcoins"
+            ,"bleeping","blower"
+            ,"Bohemian","Bohemians","Bona","Bonanza","Borrowers","Bot","Boxy"
+            ,"Breaker","breakup","Brewer","Broadband","Broadcaster","brutalism","brutalist"
+            ,"Buybacks","Buyout","Buyouts","buzziest"
+        ,"cafe","cafes","camerawearing","Cannabis","Canonizes","Carb","Carbs","Catcher"
+            ,"Cautionary"
+            ,"Cellphone","cellphones","centric","ceos","certifier"
+            ,"chairwoman","changer","Chargers","Chaser","Chemotherapy","Childs","Children"
+                ,"chokehold","christmas"
+            ,"Circusry"
+            ,"classsrooms","Closings"
+            ,"Co" # Co-<something>; not "Company"
+                ,"Colorfully","comity"
+                ,"confusingly","congressional","Conservationists","constructively"
+                    ,"contractionary","controvert"
+                ,"copycat"
+                ,"counteroffer","Couture"
+            ,"Crackdown","craftsmanship","CrossFit","Crowdfunding"
+            ,"cupcakes","Curated","Curates","Curatorial","customizable","cuteness"
+            ,"Cyberattack","cyberattacks","Cyberbullies","Cyberbullying","Cybercriminals"
+                ,"Cyberdefenses","cybersecurity"
+        ,"Dateless","Deflationary","deploy","deployed","deployment","Deporter","derp","derpy"
+                ,"Detox","Detoxing"
+            ,"Diagramless","Didnt","Disinflation","divorcee"
+            ,"dna"
+            ,"Dodger","doesnt","dont","Downside","Downsizing"
+            ,"Dreamboat"
+        ,"ebola","ebolas","EBook","Ebooks","ecigarettes","ECommerce"
+            ,"enhancer","Ensnared","Enterovirus","Entrepreneur","entrepreneurial","entrepreneurs"
+            ,"Epically","Epidurals","Epiphany","Equalizer","Erasable","ESports","Everyones"
+            ,"ex","Exclusivity","Expats","Extravaganza","Extremism"
+        ,"F","Fandom","fashionistas","Faux" # synonym with false ???
+            ,"Fest","Fides","filmmaker","Flyers","followup","Fondation","Footie","Foreclosures"
+            ,"Fracking","Fraudsters","fritz"
+        ,"G","Gallerist","Gamers","Geek" ,"Geeks","Gentrification","ghosthunting","Ghoulish"
+            ,"Giver"
+            ,"glitch","globalization"
+            ,"governance","Gown"
+            ,"Grandma","grandmasters","Gravedigger","groundbreaking"
+        ,"H","halloween","handstands","hashtag","Hashtags","hauntings","Haute","havent","Hawkish"
+            ,"Heartbreaking","Helpline","hermitage"
+            ,"HipHop"
+            ,"Holdings","Holdout","Holdouts"
+                ,"homecoming","Homelessness","Homeowners","homestretch","honorees","hospices"
+        ,"i","Iconic","Illusionists","Immolation"
+            ,"indie","Infighting","influencers","infographics","Innovate","Innovators","insomniac"
+                ,"Interfaith","Internet","Introverted"
+                ,"Invisibles"
+            ,"IPOs"
+            ,"Islamic","islamists","isnt"
+        ,"Journaling","journalistic","Joyless"
+        ,"Kicker","knaves"
+        ,"latin","latinas","latinos","Leftover","Leftovers","Legalization","lender","lenders"
+            ,"libor","Lifespans","Lineup","liquidity"
+            ,"longtime","luddite","Luxe"
+        ,"Macroeconomic","Makeover","marathoner","marathoners","Mayoral"
+            ,"meatless","meatloaf","Medalists","Mega","meltdowns","messaging"
+            ,"Midwest","midterm","midterms","millennial","millennials","Millennium","Millenniums"
+                ,"mini","Minivan","mistreatment"
+            ,"modernist","Mommy","Moviegoers"
+            ,"Multimedia","muslims"
+        ,"narcissist","Nemesis","Nerd","Newsroom","newyear","nightcrawler"
+            ,"nocturnalist","Nonclassical","Novelistic"
+            ,"Nudie","Numberplay"
+        ,"offline","olds","Oligarchs","online","onstage","Oops","Orbiter"
+        ,"outback","Outreach","Outsells","Outsourcing"
+        ,"PAC","PACs","pairings","Payouts","Peacekeeping","Perfumer"
+            ,"philharmonic","philharmonics"
+            ,"piercings","pizzeria"
+            ,"playlist","playlists"
+            ,"podcast","Ponytails","Popcast","Populism","Porn","postmodern"
+            ,"Pre", "Prenuptial","preps"
+                    ,"Preschool","Preschooler","Preschoolers","Preservationist"
+                ,"prioritization","prioritizing"
+                ,"ProDemocracy","protester","protesters"
+        ,"Questioners","quinoa"
+        ,"rapper","radicalized","razings"
+            ,"Reappointed","Rebooting","reboots","Regroup","regulator","Regulators"
+                ,"reimagined","Reinsurance","Reinvent","Reinvents","Reinventing"
+                ,"Relievers"
+                ,"reshape","Residency","Resurgent","retesting","Retro","Retweet"
+            ,"riverbed"
+            ,"roadshow","Robo","Robotic","robotics","rodenticide","rollout","Rooftop","roundup"
+            ,"runoff"
+        ,"salvo","scams","schoolers","screenings","Scrum","Sculptural"
+            ,"SelfControl","selfie","Selfies","senatorial"
+            ,"shags","shhh","shoemaker","Shootings","shortlists","ShortSeller","shouldnt"
+            ,"sightings","Simulcast","Skincare"
+            ,"Sliders","slouchy","Slowdown"
+            ,"smartphone","smartphones","smoothies","smushing"
+            ,"songstress","Soundtracked"
+            ,"SpellCheck","Spinoff","spinoffs","sportier","Sporty"
+            ,"Standalone","startup","startups","steamer","steelmaker","stepmother","storefront"
+                ,"stylist"
+            ,"Subpoena","Subpoenas","subprime","Summery","superfan","superfans","supermodels"
+            ,"swaths","sweatshirt","Sweeties","Switchers"
+        ,"takeovers","Tastings","Taxidermy"
+            ,"tech","Technologist","Telecom","tequila","texting"
+            ,"thanksgiving","Theatrics","Themed","Therapeutics"
+            ,"Timeline","timepiece","timepieces","Titan","Titans"
+            ,"torturers","tourism"
+            ,"tracker","transportive","treaters","trousseau","trove"
+            ,"tshirts","turnabout"
+        ,"UniCredit"
+        ,"valuation","Vegan","Vegans","Volatility"
+        ,"wasnt","Wearable","Wearables","webcasts","Website","Websites","Wellness","werent"
+            ,"Whisperer","whitecollar"
+            ,"winemaking","Winery","Wireless"
+            ,"wmd","wmds"
+            ,"Womens","Wonkish","Workday","workups","Wouldnt"
+        ))))
+#unlist(str_split("second meatless day"," ")) %in% vldWords    
+    vldWords <- union(vldWords, glbFeatsTextVldWords)
+
+#stop(here"); glb2Sav(); all.equal(savFeatsTextCorpus, glbFeatsTextCorpus); glbFeatsTextCorpus[[txtFeat]] <- savFeatsTextCorpus[[txtFeat]]
     glb_post_stop_words_terms_df_lst <- list(); 
     glb_post_stop_words_terms_mtrx_lst <- list();     
     glb_post_stem_words_terms_df_lst <- list(); 
     glb_post_stem_words_terms_mtrx_lst <- list();     
-    for (txt_var in glbFeatsText) {
-        print(sprintf("    Top_n post-stop term weights for %s:", txt_var))
+    glb_full_DTM_lst <- list();     
+    for (txtFeat in glbFeatsText) {
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "post.stop.weights.df.", txtFeat), major.inc = TRUE)
+
+        print(sprintf("    Top_n post-stop term weights for %s:", txtFeat))
         # This impacts stemming probably due to lazy parameter
         print(myprint_df(full_terms_df <-
-                             get_corpus_terms(txt_corpus=glb_txt_corpus_lst[[txt_var]]), 
-                        glbFeatsTextTermsMax[[txt_var]]))
-        glb_post_stop_words_terms_df_lst[[txt_var]] <- full_terms_df
-        terms_stop_mtrx <- as.matrix(DocumentTermMatrix(glb_txt_corpus_lst[[txt_var]], 
+                get_corpus_terms(txt_corpus=glbFeatsTextCorpus[[txtFeat]], 
+                                 compute.chisq = FALSE, compute.nzv = FALSE), 
+                        glbFeatsTextTermsMax[[txtFeat]]))
+        glb_post_stop_words_terms_df_lst[[txtFeat]] <- full_terms_df
+        
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "post.stop.weights.mtrx.", txtFeat), major.inc = TRUE)
+        
+        set.seed(glbFeatsTextSeed)
+        terms_stop_mtrx <- as.matrix(DocumentTermMatrix(glbFeatsTextCorpus[[txtFeat]], 
                                         control=glb_txt_terms_control))
         rownames(terms_stop_mtrx) <- rownames(glbObsAll) # print undreadable otherwise
-        glb_post_stop_words_terms_mtrx_lst[[txt_var]] <- terms_stop_mtrx
+        glb_post_stop_words_terms_mtrx_lst[[txtFeat]] <- terms_stop_mtrx
         
         tmp_allobs_df <- glbObsAll[, c(glb_id_var, glb_rsp_var)]
         tmp_allobs_df$terms.post.stop.n <- rowSums(terms_stop_mtrx > 0)
         tmp_allobs_df$terms.post.stop.n.log <- log(1 + tmp_allobs_df$terms.post.stop.n)
         tmp_allobs_df$weight.post.stop.sum <- rowSums(terms_stop_mtrx)        
         
-        print(sprintf("    Top_n stem term weights for %s:", txt_var))        
-        glb_txt_corpus_lst[[txt_var]] <- tm_map(glb_txt_corpus_lst[[txt_var]], stemDocument,
-                                            "english", lazy=FALSE)
-        if (!is.null(glb_txt_synonyms[[txt_var]])) {
-            syn_lst <- myrmNullObj(glb_txt_synonyms[[txt_var]])
-            glb_txt_corpus_lst[[txt_var]] <- tm_map(glb_txt_corpus_lst[[txt_var]],
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "find.ngrams.", txtFeat), major.inc = TRUE)
+        
+        txt_corpus <- tm_map(glbFeatsTextCorpus[[txtFeat]], removeNumbers, lazy = TRUE)
+        # myngramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+        TdmNgrams <- TermDocumentMatrix(txt_corpus, control = list(tokenize = mytokenize3grams))
+        txtTdmNgrams <- get_txt_terms(TdmNgrams,
+                                      compute.nzv = FALSE, compute.chisq = FALSE)
+        txtTdmNgrams$vldWords <- sapply(1:nrow(txtTdmNgrams), function(rowIx) {
+            tokens <- unlist(str_split(txtTdmNgrams[rowIx, "term"], " ")); 
+            return(all(tokens %in% vldWords)) })
+        invldWords <- subset(txtTdmNgrams, !vldWords)
+        print(sprintf("Remaining invalid words: %d", nrow(invldWords)))
+        myprint_df(subset(invldWords, select = -term))
+        # to id docs that have a specific ngram using txtTdmNgrams[, pos]
+        #glbObsAll[TdmNgrams$j[which(TdmNgrams$i == 19349)], glb_dsp_cols]
+        #glbObsAll[unique(TdmNgrams$j[TdmNgrams$i %in% invldWords$pos]), "Hdln.my"]
+    
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "stem.corpus.", txtFeat), major.inc = TRUE)
+    
+        glbFeatsTextCorpus[[txtFeat]] <- tm_map(glbFeatsTextCorpus[[txtFeat]], stemDocument,
+                                            "english", lazy = FALSE)
+        if (!is.null(glbFeatsTextSynonyms[[txtFeat]])) {
+            # First entry in glbFeatsTextSynonyms[[txtFeat]] is NULL due to programming aesthetics
+            #syn_lst <- myrmNullObj(glbFeatsTextSynonyms[[txtFeat]])
+            syn_lst <- tail(glbFeatsTextSynonyms[[txtFeat]], -1) 
+            glbFeatsTextCorpus[[txtFeat]] <- tm_map(glbFeatsTextCorpus[[txtFeat]],
                                                     mycombineSynonyms,
-                                                    syn_lst, lazy=FALSE)
+                                                    syn_lst, lazy = FALSE)
+            
+#             as.character(glbFeatsTextCorpus[[txtFeat]][c(5732, 5754)])
+#             tmpFeatsTextCorpus <- tm_map(glbFeatsTextCorpus[[txtFeat]],
+#                                                     mycombineSynonyms,
+#                                                     syn_lst[1:133], # Crashes                 
+#                                                     #syn_lst[1:2], 
+#                                                     #syn_lst[1:4], 
+#                                                     #syn_lst[1:8], 
+#                                                     #syn_lst[1:16],
+#                                                     #syn_lst[1:33], 
+#                                                     #syn_lst[1:66], # Works                    
+#                                                     #syn_lst[67:133], # Works
+#                                                     lazy = FALSE)
+#             as.character(tmpFeatsTextCorpus[c(5732, 5754)])
         }    
         
-        print(myprint_df(full_terms_df <- get_corpus_terms(glb_txt_corpus_lst[[txt_var]]), 
-                   glbFeatsTextTermsMax[[txt_var]]))
-        glb_post_stem_words_terms_df_lst[[txt_var]] <- full_terms_df        
-        terms_stem_mtrx <- as.matrix(DocumentTermMatrix(glb_txt_corpus_lst[[txt_var]], 
-                                        control=glb_txt_terms_control))
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "stem.weights.", txtFeat), major.inc = TRUE)
+    
+        print(sprintf("    Top_n stem term weights for %s:", txtFeat))        
+        print(myprint_df(full_terms_df <- 
+                             get_corpus_terms(txt_corpus = glbFeatsTextCorpus[[txtFeat]]), 
+                   glbFeatsTextTermsMax[[txtFeat]]))
+        glb_post_stem_words_terms_df_lst[[txtFeat]] <- full_terms_df    
+        
+        set.seed(glbFeatsTextSeed)
+        glb_full_DTM_lst[[txtFeat]] <- 
+            DocumentTermMatrix(glbFeatsTextCorpus[[txtFeat]], control = glb_txt_terms_control)
+#         terms_stem_mtrx <- as.matrix(DocumentTermMatrix(glbFeatsTextCorpus[[txtFeat]], 
+#                                         control=glb_txt_terms_control))
+        terms_stem_mtrx <- as.matrix(glb_full_DTM_lst[[txtFeat]])
         rownames(terms_stem_mtrx) <- rownames(glbObsAll) # print undreadable otherwise
-        glb_post_stem_words_terms_mtrx_lst[[txt_var]] <- terms_stem_mtrx
+        glb_post_stem_words_terms_mtrx_lst[[txtFeat]] <- terms_stem_mtrx
         
         tmp_allobs_df$terms.post.stem.n <- rowSums(terms_stem_mtrx > 0)
         tmp_allobs_df$terms.post.stem.n.log <- log(1 + tmp_allobs_df$terms.post.stem.n)
@@ -2005,8 +2455,9 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
             stop(n.errors, " obs in tmp_allobs_df have terms.n.stem.stop.Ratio > 1", 
                  " happening due to terms filtered by glb_txt_terms_control$bounds$global[1] but stemmable to other terms")
         #print(head(subset(tmp_allobs_df, terms.n.stem.stop.Ratio > 1)))
-        #glbObsAll[(row_ix <- which(glbObsAll$UniqueID == 10465)), ]
+        #glbObsAll[(row_ix <- which(glbObsAll$UniqueID == 4253)), glb_dsp_cols]
         #terms_stop_mtrx[row_ix, terms_stop_mtrx[row_ix, ] > 0]
+        #terms_stem_mtrx[row_ix, terms_stem_mtrx[row_ix, ] > 0]
         #setdiff(names(terms_stem_mtrx[row_ix, terms_stem_mtrx[row_ix, ] > 0]), names(terms_stop_mtrx[row_ix, terms_stop_mtrx[row_ix, ] > 0]))
         #mydspObs(list(descr.my.contains="updat"))
         
@@ -2016,34 +2467,53 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
                       is.infinite(tmp_allobs_df$weight.sum.stem.stop.Ratio), 
                       "weight.sum.stem.stop.Ratio"] <- 1.0                
         
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "stem.weights.cor.", txtFeat), major.inc = TRUE)
+    
         tmp_trnobs_df <- tmp_allobs_df[!is.na(tmp_allobs_df[, glb_rsp_var]), ]
         print(cor(as.matrix(tmp_trnobs_df[, -c(1, 2)]), 
                   as.numeric(tmp_trnobs_df[, glb_rsp_var])))
 
-        txt_var_pfx <- toupper(substr(txt_var, 1, 1))
+        txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))
         tmp_allobs_df <- tmp_allobs_df[, -c(1, 2)]
-        names(tmp_allobs_df) <- paste(paste0(txt_var_pfx, "."), names(tmp_allobs_df), sep = "")
+        names(tmp_allobs_df) <- paste(paste0(txtFeat_pfx, "."), names(tmp_allobs_df), sep = "")
         glbObsAll <- cbind(glbObsAll, tmp_allobs_df)
         glbFeatsExclude <- c(glbFeatsExclude, 
-                paste(paste0(txt_var_pfx, ".terms.post."), c("stop.n", "stem.n"), sep = ""))
+                paste(paste0(txtFeat_pfx, ".terms.post."), c("stop.n", "stem.n"), sep = ""))
     }
     
+    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+            paste0("extract.features_", "report.corpus.wordcloud"), major.inc = TRUE)
+    
     require(wordcloud)
-    for (txt_var in glbFeatsText) {
-        print(sprintf("    Wordcloud post-stem term weights for %s:", txt_var))
-        m <- glb_post_stem_words_terms_mtrx_lst[[txt_var]]
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("    Wordcloud post-stem term weights for %s:", txtFeat))
+        m <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
         # calculate the frequency of words
         v <- sort(colSums(m), decreasing = TRUE)
         myNames <- names(v)
-        d <- data.frame(word = myNames, freq = v)
-        wordcloud(d$word, d$freq, min.freq = glb_txt_terms_control$bounds$global[1])
+        minFrq <- glb_txt_terms_control$bounds$global[1]
+        d <- subset(data.frame(word = myNames, freq = v), freq >= minFrq)
+        while (nrow(d) > 200) {
+            # wordcloud takes a long time
+            minFrq <- min(d$freq)
+            d <- subset(d, freq > minFrq)
+        }
+        minFrq <- min(d$freq)
+        if (minFrq > glb_txt_terms_control$bounds$global[1])
+            print(sprintf("    Wordcloud filtered for freq: %d vs. control: %d", 
+                          floor(minFrq), glb_txt_terms_control$bounds$global[1]))
+        wordcloud(d$word, d$freq, min.freq = minFrq)
     }    
 
-    for (txt_var in glbFeatsText) {    
+    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+            paste0("extract.features_", "report.corpus.termggplot"), major.inc = TRUE)
+    
+    for (txtFeat in glbFeatsText) {    
         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
                     as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
                                 use = "pairwise.complete.obs"))
-        plt_df <- subset(glb_post_stem_words_terms_df_lst[[txt_var]], !is.na(cor.y))
+        plt_df <- subset(glb_post_stem_words_terms_df_lst[[txtFeat]], !is.na(cor.y))
         plt_df$nzv.freqRatio.cut.fctr <- cut(plt_df$nzv.freqRatio, 
                                             breaks = sort(c(min(plt_df$nzv.freqRatio), 
                                                                 glbFeatsNzvFreqMax,
@@ -2064,45 +2534,42 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
                   # geom_vline(xintercept = 0) + 
             geom_vline(xintercept = c(-1, +1) * .rnorm.cor.y.abs, color = "gray", 
                        linetype = "dashed") + 
-            ggtitle(txt_var))
+            ggtitle(txtFeat))
     }
         
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
-            paste0("extract.features_", "extract.DTM"), major.inc=TRUE)
+            paste0("extract.features_", "extract.DTM"), major.inc = TRUE)
 
-    glb_full_DTM_lst <- list(); glb_sprs_DTM_lst <- list();
-    for (txt_var in glbFeatsText) {
-        print(sprintf("Extracting term weights for %s...", txt_var))        
-        txt_corpus <- glb_txt_corpus_lst[[txt_var]]
+    glb_sprs_DTM_lst <- list();
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Extracting term weights for %s...", txtFeat))        
+#         txt_corpus <- glbFeatsTextCorpus[[txtFeat]]
+#         
+#         full_DTM <- DocumentTermMatrix(txt_corpus, 
+#                                           control=glb_txt_terms_control)
+#         sprs_DTM <- removeSparseTerms(full_DTM, 
+#                                             glb_sprs_thresholds[txtFeat])
+        # glb_full_DTM_lst[[txtFeat]] <- full_DTM
         
-        full_DTM <- DocumentTermMatrix(txt_corpus, 
-                                          control=glb_txt_terms_control)
-        sprs_DTM <- removeSparseTerms(full_DTM, 
-                                            glb_sprs_thresholds[txt_var])
-        
-        glb_full_DTM_lst[[txt_var]] <- full_DTM
-        glb_sprs_DTM_lst[[txt_var]] <- sprs_DTM
+        glb_sprs_DTM_lst[[txtFeat]] <- 
+            removeSparseTerms(glb_full_DTM_lst[[txtFeat]], glb_sprs_thresholds[txtFeat])
     }
 
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "report.DTM"), major.inc=TRUE)
     
     require(reshape2)
-    for (txt_var in glbFeatsText) {
-        print(sprintf("Reporting term weights for %s...", txt_var))        
-        full_DTM <- glb_full_DTM_lst[[txt_var]]
-        sprs_DTM <- glb_sprs_DTM_lst[[txt_var]]        
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Reporting term weights for %s...", txtFeat))        
+        full_DTM <- glb_full_DTM_lst[[txtFeat]]
+        sprs_DTM <- glb_sprs_DTM_lst[[txtFeat]]        
 
         print("   Full TermMatrix:"); print(full_DTM)
-        full_terms_df <- get_txt_terms(full_DTM)
-#         full_terms_df <- full_terms_df[, c(2, 1, 3, 4)]
-#         col_names <- names(full_terms_df)
-#         col_names[2:length(col_names)] <- 
-#             paste(col_names[2:length(col_names)], ".full", sep="")
-#         names(full_terms_df) <- col_names
+        # full_terms_df <- get_txt_terms(full_DTM)
+        terms_full_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]        
 
         print("   Sparse TermMatrix:"); print(sprs_DTM)
-        sprs_terms_df <- get_txt_terms(sprs_DTM)
+        terms_sprs_df <- get_txt_terms(sprs_DTM)
 #         sprs_terms_df <- sprs_terms_df[, c(2, 1, 3, 4)]
 #         col_names <- names(sprs_terms_df)
 #         col_names[2:length(col_names)] <- 
@@ -2110,7 +2577,7 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 #         names(sprs_terms_df) <- col_names
 
         #intersect(names(full_terms_df), names(sprs_terms_df))
-        terms_df <- merge(full_terms_df, sprs_terms_df, by = c("term", "weight", "freq",
+        terms_df <- merge(terms_full_df, terms_sprs_df, by = c("term", "weight", "freq",
                                         grep("weight\\.", names(full_terms_df), value = TRUE)),
                           all.x = TRUE, suffixes = c(".full", ".sprs"))
         terms_df$in.sprs <- !is.na(terms_df$pos.sprs)
@@ -2119,7 +2586,7 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
         plt_terms_df$label <- ""
         plt_terms_df[is.na(plt_terms_df$pos.sprs), "label"] <- 
             plt_terms_df[is.na(plt_terms_df$pos.sprs), "term"]
-#         glb_important_terms[[txt_var]] <- union(glb_important_terms[[txt_var]],
+#         glb_important_terms[[txtFeat]] <- union(glb_important_terms[[txtFeat]],
 #             plt_terms_df[is.na(plt_terms_df$TfIdf.sprs), "term"])
         print(myplot_scatter(plt_terms_df, "freq", "weight", 
                              colorcol_name="in.sprs") + 
@@ -2128,7 +2595,7 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
         melt_terms_df <- orderBy(~ -value, 
                             melt(terms_df, id.vars="term", measure.vars = c("weight", "freq")))
         print(ggplot(melt_terms_df, aes(value, color=variable)) + stat_ecdf() + 
-                  geom_hline(yintercept=glb_sprs_thresholds[txt_var], 
+                  geom_hline(yintercept=glb_sprs_thresholds[txtFeat], 
                              linetype = "dotted"))
         
         melt_terms_df <- orderBy(~ -value, 
@@ -2139,15 +2606,15 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
         melt_terms_df <- orderBy(~ -value, 
                         melt(subset(terms_df, !in.sprs), id.vars="term",
                              measure.vars=grep("weight.", names(terms_df), value=TRUE)))
-        print(myplot_hbar(head(melt_terms_df, glbFeatsTextTermsMax[[txt_var]]), "term", "value",
+        print(myplot_hbar(head(melt_terms_df, glbFeatsTextTermsMax[[txtFeat]]), "term", "value",
                           colorcol_name="variable"))
     }
 
 #     sav_full_DTM_lst <- glb_full_DTM_lst
-#     print(identical(sav_glb_txt_corpus_lst, glb_txt_corpus_lst))
-#     print(all.equal(length(sav_glb_txt_corpus_lst), length(glb_txt_corpus_lst)))
-#     print(all.equal(names(sav_glb_txt_corpus_lst), names(glb_txt_corpus_lst)))
-#     print(all.equal(sav_glb_txt_corpus_lst[["Headline"]], glb_txt_corpus_lst[["Headline"]]))
+#     print(identical(sav_glbFeatsTextCorpus, glbFeatsTextCorpus))
+#     print(all.equal(length(sav_glbFeatsTextCorpus), length(glbFeatsTextCorpus)))
+#     print(all.equal(names(sav_glbFeatsTextCorpus), names(glbFeatsTextCorpus)))
+#     print(all.equal(sav_glbFeatsTextCorpus[["Headline"]], glbFeatsTextCorpus[["Headline"]]))
 
 #     print(identical(sav_full_DTM_lst, glb_full_DTM_lst))
         
@@ -2164,14 +2631,15 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
                                          major.inc=TRUE)
 #stop(here"); glb2Sav(); all.equal(savObsAll, glbObsAll); glbObsAll <- savObsAll
     require(tidyr)
-    for (txt_var in glbFeatsText) {
-        print(sprintf("Binding DTM for %s...", txt_var))
-        txt_var_pfx <- toupper(substr(txt_var, 1, 1))
+    for (txtFeat in glbFeatsText) {
+        print(sprintf("Binding DTM for %s...", txtFeat))
+        txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))
         
-        txt_full_X_df <- as.data.frame(as.matrix(glb_full_DTM_lst[[txt_var]]))
-        terms_full_df <- get_txt_terms(glb_full_DTM_lst[[txt_var]])     
+        txt_full_X_df <- as.data.frame(as.matrix(glb_full_DTM_lst[[txtFeat]]))
+        # terms_full_df <- get_txt_terms(glb_full_DTM_lst[[txtFeat]])     
+        terms_full_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]        
         # make.names adds a period to R keywords e.g. "in", "function"
-        colnames(txt_full_X_df) <- paste(txt_var_pfx, ".T.",
+        colnames(txt_full_X_df) <- paste(txtFeat_pfx, ".T.",
                                     make.names(colnames(txt_full_X_df)), sep="")
         rownames(txt_full_X_df) <- rownames(glbObsAll) # warning otherwise
         
@@ -2184,11 +2652,11 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 #         plt_full_df <- gather(plt_full_df, domain, weight, 
 #                               -c(term, freq, pos, cor.y, cor.y.abs))
 #         plt_full_df$label <- NA
-#         top_val_terms <- orderBy(~-weight, terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]]
+#         top_val_terms <- orderBy(~-weight, terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
 #         plt_full_df[plt_full_df$term %in% top_val_terms, "label"] <- 
 #             plt_full_df[plt_full_df$term %in% top_val_terms, "term"]
 #         top_cor_terms <- orderBy(~-cor.y.abs,
-#                                  terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]]
+#                                  terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
 #         plt_full_df[plt_full_df$term %in% top_cor_terms, "label"] <- 
 #             plt_full_df[plt_full_df$term %in% top_cor_terms, "term"]
 #         #plt_full_df$type <- "none"
@@ -2207,35 +2675,35 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 
 #stop(here"); glb2Sav()        
         if (glbFeatsTextFilter == "sparse") {
-            txt_X_df <- as.data.frame(as.matrix(glb_sprs_DTM_lst[[txt_var]]))
+            txt_X_df <- as.data.frame(as.matrix(glb_sprs_DTM_lst[[txtFeat]]))
             select_terms <- make.names(colnames(txt_X_df))
-#             colnames(txt_X_df) <- paste(txt_var_pfx, ".T.",
+#             colnames(txt_X_df) <- paste(txtFeat_pfx, ".T.",
 #                                         make.names(colnames(txt_X_df)), sep="")
 #             rownames(txt_X_df) <- rownames(glbObsAll) # warning otherwise
         } else if (glbFeatsTextFilter == "top.val") {
             select_terms <- orderBy(~-weight,
-                                    terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]]
+                                    terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
 #             txt_X_df <- txt_full_X_df[, subset(terms_full_df, term %in% select_terms)$pos,
 #                                       FALSE]
         } else if (glbFeatsTextFilter == "top.cor") {
             select_terms <- orderBy(~-cor.y.abs,
-                                    terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]]
+                                    terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
 #             txt_X_df <- txt_full_X_df[, subset(terms_full_df, term %in% select_terms)$pos,
 #                                       FALSE]
         } else if (glbFeatsTextFilter == "top.chisq") {
             select_terms <- orderBy(~-chisq.stat,
                                     subset(terms_full_df, chisq.pval < 0.05)
-                                    )$term[1:glbFeatsTextTermsMax[[txt_var]]]
+                                    )$term[1:glbFeatsTextTermsMax[[txtFeat]]]
         } else if (glbFeatsTextFilter == "union.top.val.cor") {
             select_terms <- union(
-                orderBy(~-weight   , terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]],
-                orderBy(~-cor.y.abs, terms_full_df)$term[1:glbFeatsTextTermsMax[[txt_var]]])
+                orderBy(~-weight   , terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]],
+                orderBy(~-cor.y.abs, terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]])
         } else stop(
         "glbFeatsTextFilter should be one of c('sparse', 'top.val', 'top.cor', 'union.top.val.cor', 'top.chisq') vs. '",
                     glbFeatsTextFilter, "'")    
         
-        assoc_terms_lst <- findAssocs(glb_full_DTM_lst[[txt_var]], select_terms, 
-                                      glbFeatsTextAssocCor[[txt_var]])
+        assoc_terms_lst <- findAssocs(glb_full_DTM_lst[[txtFeat]], select_terms, 
+                                      glbFeatsTextAssocCor[[txtFeat]])
         assoc_terms <- c(NULL)
         for (term in names(assoc_terms_lst))
             if (length(assoc_terms_lst[[term]]) > 0)
@@ -2251,9 +2719,9 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
     #identical(chk_entity_df, glbObsAll)
     #chk_entity_df <- glbObsAll
 
-    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
-                            paste0("extract.features_", "bind.DXM"), 
-                                         major.inc=TRUE)
+    extract.features_chunk_df <- 
+        myadd_chunk(extract.features_chunk_df, paste0("extract.features_", "bind.DXM"), 
+                    major.inc = TRUE)
 
 #stop(here"); savObsAll <- glbObsAll; glbObsAll <- savObsAll
     glb_punct_vctr <- c("!", "\"", "#", "\\$", "%", "&", "'", 
@@ -2265,44 +2733,58 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
                         "\\?", "@", "\\[", "\\\\", "\\]", "\\^", "_", "`", 
                         "\\{", "\\|", "\\}", "~")
     txt_X_df <- glbObsAll[, c(glb_id_var, ".rnorm"), FALSE]
-    txt_X_df <- foreach(txt_var=glbFeatsText, .combine=cbind) %dopar% {   
-    #for (txt_var in glbFeatsText) {
-        print(sprintf("Binding DXM for %s...", txt_var))
-        txt_var_pfx <- toupper(substr(txt_var, 1, 1))        
+    #txt_X_df <- foreach(txtFeat=glbFeatsText, .combine=cbind) %dopar% {   
+    txt_X_df <- foreach(txtFeat = glbFeatsText, .combine = cbind) %do% {           
+    # for (txtFeat in glbFeatsText) {
+        print(sprintf("Binding DXM for %s...", txtFeat))
+        txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))        
         
-        txt_full_DTM_mtrx <- as.matrix(glb_full_DTM_lst[[txt_var]])
+        tmEnter <- as.numeric(proc.time()["elapsed"])
+        print(sprintf("Binding DXM Loop: enter: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        txt_full_DTM_mtrx <- as.matrix(glb_full_DTM_lst[[txtFeat]])
         rownames(txt_full_DTM_mtrx) <- rownames(glbObsAll) # print undreadable otherwise
         #print(txt_full_DTM_mtrx[txt_full_DTM_mtrx[, "ebola"] != 0, "ebola"])
         
-        # Create <txt_var>.T.<term> for glb_important_terms
-        for (term in glb_important_terms[[txt_var]])
-            txt_X_df[, paste0(txt_var_pfx, ".T.", make.names(term))] <- 
+        # Create <txtFeat>.T.<term> for glb_important_terms
+        print(sprintf("Binding DXM Loop: glb_important_terms: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        for (term in glb_important_terms[[txtFeat]])
+            txt_X_df[, paste0(txtFeat_pfx, ".T.", make.names(term))] <- 
                 txt_full_DTM_mtrx[, term]
                 
-        # Create <txt_var>.wrds.n.log & .wrds.unq.n.log
-        txt_X_df[, paste0(txt_var_pfx, ".wrds.n.log")] <- 
-            log(1 + mycount_pattern_occ("\\w+", glb_txt_chr_lst[[txt_var]]))
-        txt_X_df[, paste0(txt_var_pfx, ".wrds.unq.n.log")] <- 
+        # Create <txtFeat>.wrds.n.log & .wrds.unq.n.log
+        print(sprintf("Binding DXM Loop: .wrds.n.log: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")] <- 
+            log(1 + mycount_pattern_occ("\\w+", glb_txt_chr_lst[[txtFeat]]))
+        txt_X_df[, paste0(txtFeat_pfx, ".wrds.unq.n.log")] <- 
             log(1 + rowSums(txt_full_DTM_mtrx != 0))
-        txt_X_df[, paste0(txt_var_pfx, ".weight.sum")] <- 
+        txt_X_df[, paste0(txtFeat_pfx, ".weight.sum")] <- 
             rowSums(txt_full_DTM_mtrx) 
-        txt_X_df[, paste0(txt_var_pfx, ".ratio.weight.sum.wrds.n")] <- 
-            txt_X_df[, paste0(txt_var_pfx, ".weight.sum")] / 
-            (exp(txt_X_df[, paste0(txt_var_pfx, ".wrds.n.log")]) - 1)
-        txt_X_df[is.nan(txt_X_df[, paste0(txt_var_pfx, ".ratio.weight.sum.wrds.n")]),
-                 paste0(txt_var_pfx, ".ratio.weight.sum.wrds.n")] <- 0
+        txt_X_df[, paste0(txtFeat_pfx, ".ratio.weight.sum.wrds.n")] <- 
+            txt_X_df[, paste0(txtFeat_pfx, ".weight.sum")] / 
+            (exp(txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")]) - 1)
+        txt_X_df[is.nan(txt_X_df[, paste0(txtFeat_pfx, ".ratio.weight.sum.wrds.n")]),
+                 paste0(txtFeat_pfx, ".ratio.weight.sum.wrds.n")] <- 0
 
-        # Create <txt_var>.chrs.n.log
-        txt_X_df[, paste0(txt_var_pfx, ".chrs.n.log")] <- 
-            log(1 + mycount_pattern_occ(".", glbObsAll[, txt_var]))
-        txt_X_df[, paste0(txt_var_pfx, ".chrs.uppr.n.log")] <- 
-            log(1 + mycount_pattern_occ("[[:upper:]]", glbObsAll[, txt_var]))
-        txt_X_df[, paste0(txt_var_pfx, ".dgts.n.log")] <- 
-            log(1 + mycount_pattern_occ("[[:digit:]]", glbObsAll[, txt_var]))
+        # Create <txtFeat>.chrs.n.log
+        txt_X_df[, paste0(txtFeat_pfx, ".chrs.n.log")] <- 
+            log(1 + mycount_pattern_occ(".", glbObsAll[, txtFeat]))
+        txt_X_df[, paste0(txtFeat_pfx, ".chrs.uppr.n.log")] <- 
+            log(1 + mycount_pattern_occ("[[:upper:]]", glbObsAll[, txtFeat]))
+        txt_X_df[, paste0(txtFeat_pfx, ".dgts.n.log")] <- 
+            log(1 + mycount_pattern_occ("[[:digit:]]", glbObsAll[, txtFeat]))
 
-        # Create <txt_var>.npnct?.log
+        # Create <txtFeat>.npnct?.log
         # would this be faster if it's iterated over each row instead of 
         #   each created column ???
+        print(sprintf("Binding DXM Loop: glb_punct_vctr: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
         for (punct_ix in 1:length(glb_punct_vctr)) { 
 #             smp0 <- " "
 #             smp1 <- "! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~"
@@ -2311,45 +2793,81 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 #             results <- mycount_pattern_occ(glb_punct_vctr[punct_ix], c(smp0, smp1, smp2))
 #             names(results) <- NULL; print(results)
             txt_X_df[, 
-                paste0(txt_var_pfx, ".chrs.pnct", sprintf("%02d", punct_ix), ".n.log")] <-
+                paste0(txtFeat_pfx, ".chrs.pnct", sprintf("%02d", punct_ix), ".n.log")] <-
                 log(1 + mycount_pattern_occ(glb_punct_vctr[punct_ix], 
-                                            glbObsAll[, txt_var]))
+                                            glbObsAll[, txtFeat]))
         }
 #         print(head(glbObsAll[glbObsAll[, "A.npnct23.log"] > 0, 
 #                                     c("UniqueID", "Popular", "Abstract", "A.npnct23.log")]))    
         
-        # Create <txt_var>.niso8859.log
-        txt_X_df[, paste0(txt_var_pfx, ".chrs.iso8859.n.log")] <- 
-            log1p(mycount_pattern_occ("&#[[:digit:]]{3};", glbObsAll[, txt_var]))
+        # Create <txtFeat>.niso8859.log
+        txt_X_df[, paste0(txtFeat_pfx, ".chrs.iso8859.n.log")] <- 
+            log1p(mycount_pattern_occ("&#[[:digit:]]{3};", glbObsAll[, txtFeat]))
                 
-        # Create <txt_var>.wrds.stop.n.log & <txt_var>ratio.wrds.stop.n.wrds.n
-        if (!is.null(glb_txt_stop_words[[txt_var]])) {
-            stop_words_rex_str <- paste0("\\b(", 
-                                         paste0(glb_txt_stop_words[[txt_var]], collapse="|"),
-                                         ")\\b")
-            txt_X_df[, paste0(txt_var_pfx, ".wrds.stop.n", ".log")] <-
-                log(1 + mycount_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txt_var]]))
-            txt_X_df[, paste0(txt_var_pfx, ".ratio.wrds.stop.n.wrds.n")] <-
-                exp(txt_X_df[, paste0(txt_var_pfx, ".wrds.stop.n", ".log")] - 
-                    txt_X_df[, paste0(txt_var_pfx, ".wrds.n", ".log")])
+        # Create <txtFeat>.wrds.stop.n.log & <txtFeat>ratio.wrds.stop.n.wrds.n
+        if (!is.null(glb_txt_stop_words[[txtFeat]])) {
+            print(sprintf("Binding DXM Loop: .wrds.stop.n.log: elapsed: %0.2f secs",
+                          as.numeric(proc.time()["elapsed"]) - tmEnter))
+            
+#           stop_words_rex_str <- paste0("\\b(", paste0(glb_txt_stop_words[[txtFeat]][1501:2000], collapse = "|"),")\\b")
+#             stopLen <- sapply(glb_txt_stop_words[[txtFeat]], function(x) length(unlist(strsplit(x, " "))));print(stopLen[stopLen > 1])
+#           
+            # if length(glb_txt_stop_words[[txtFeat]]) > 500 it crashes
+            txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] <- 0            
+            stepVal <- 500
+            for (rng in seq(1, length(glb_txt_stop_words[[txtFeat]]), stepVal)) {
+                bgn <- rng
+                end <- bgn + stepVal - 1
+                if (end > length(glb_txt_stop_words[[txtFeat]]))
+                    end <- length(glb_txt_stop_words[[txtFeat]])
+                print(sprintf("bgn:%d; end:%d", bgn, end))
+                stop_words_rex_str <- paste0("\\b(", 
+                                paste0(glb_txt_stop_words[[txtFeat]][bgn:end], collapse = "|"),
+                                             ")\\b")
+                txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] <-
+                    txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] + 
+                    mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]])
+                    #log1p(mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]][1]))   
+            }
+            txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] <-
+                    log1p(txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")])
+         
+            txt_X_df[, paste0(txtFeat_pfx, ".ratio.wrds.stop.n.wrds.n")] <-
+                exp(txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] - 
+                    txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")])
         }
 
-        # Create <txt_var>.P.http
-        txt_X_df[, paste(txt_var_pfx, ".P.http", sep="")] <- 
-            log1p(mycount_pattern_occ("http", glbObsAll[, txt_var]))
-            
-        # Create <txt_var>.P.<user-spec-pattern>
-        for (pattern in names(glbFeatsTextPatterns[[txt_var]]))
-            txt_X_df[, paste(txt_var_pfx, ".P.", pattern, sep="")] <- 
-                log1p(mycount_pattern_occ(glbFeatsTextPatterns[[txt_var]][pattern], 
-                                            glbObsAll[, txt_var]))
+        # Create <txtFeat>.P.http
+        print(sprintf("Binding DXM Loop: .P.<pattern>.log1p: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        txt_X_df[, paste(txtFeat_pfx, ".P.http.log1p", sep = "")] <- 
+            log1p(mycount_pattern_occ("http", glbObsAll[, txtFeat]))
     
-        txt_X_df <- subset(txt_X_df, select=-.rnorm)
-        txt_X_df <- txt_X_df[, -grep(glb_id_var, names(txt_X_df), fixed=TRUE), FALSE]
+        # Create <txtFeat>.P.<user-spec-pattern>
+        for (pattern in names(glbFeatsTextPatterns[[txtFeat]]))
+            txt_X_df[, paste(txtFeat_pfx, ".P.", pattern, sep = "")] <- 
+                log1p(mycount_pattern_occ(glbFeatsTextPatterns[[txtFeat]][pattern], 
+                                            glbObsAll[, txtFeat]))
+    
+        print(sprintf("Binding DXM Loop: exit: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        txt_X_df <- subset(txt_X_df, select = -.rnorm)
+        txt_X_df <- txt_X_df[, -grep(glb_id_var, names(txt_X_df), fixed = TRUE), FALSE]
         #glbObsAll <- cbind(glbObsAll, txt_X_df)
     }
     glbObsAll <- cbind(glbObsAll, txt_X_df)
     #myplot_box(glbObsAll, "A.sum.TfIdf", glb_rsp_var)
+    colCmp <- grep("\\.P\\.", names(glbObsAll), value = TRUE)
+    if (sum(is.na(txt_X_df [, colCmp])) > 0)
+        stop("colCmp is/are NA")
+    if (sum(is.na(glbObsAll[, colCmp])) > 0)
+        stop("colCmp is/are NA")        
+    if (!(identical(txt_X_df[, colCmp], glbObsAll[, colCmp])))
+        stop("colCmp is/are NA")        
+    #all.equal(txt_X_df[, colCmp], glbObsAll[, colCmp])
+    #head(glbObsAll[, union(colCmp, glb_dsp_cols)])
 
     # Generate summaries
 #     print(summary(glbObsAll))
@@ -2359,9 +2877,8 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 #     print(summary(glbObsNew))
 #     print(sapply(names(glbObsNew), function(col) sum(is.na(glbObsNew[, col]))))
 
-    glbFeatsExclude <- union(glbFeatsExclude, 
-                                          glbFeatsText)
-    rm(log_X_df, txt_X_df)
+    glbFeatsExclude <- union(glbFeatsExclude, glbFeatsText)
+    #rm(log_X_df, txt_X_df)
 }
 
 # print(sapply(names(glbObsTrn), function(col) sum(is.na(glbObsTrn[, col]))))
@@ -2371,6 +2888,10 @@ mycombineSynonyms <- content_transformer(function(x, syn=NULL) {
 
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
 if (!is.null(glbFeatsPrice)) {
+    extract.features_chunk_df <- 
+        myadd_chunk(extract.features_chunk_df, paste0("extract.features_", "xtract.Price.vars"), 
+                    major.inc = TRUE)
+
     for (var in glbFeatsPrice) {
         for (digit in 1:(log10(max(glbObsAll[, var], na.rm=TRUE)) + 1)) {
             glbObsAll[, paste0(var, ".dgt", digit, ".is9")] <- 
@@ -2394,7 +2915,7 @@ if (!is.null(glbFeatsPrice)) {
 }
 
 extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, "extract.features_end", 
-                                     major.inc=TRUE)
+                                     major.inc = TRUE)
 myplt_chunk(extract.features_chunk_df)
 
 # if (glb_save_envir)
@@ -2845,11 +3366,14 @@ if (!is.null(glbFeatsCategory)) {
                                            glbFeatsCategory)
     names(newobs_ctgry_df) <- 
         gsub(".n", ".n.Tst", names(newobs_ctgry_df), fixed = TRUE)
-
     OOBobs_ctgry_df <- mycreate_sqlxtab_df(subset(glbObsAll, .lcn == "OOB"), 
                                            glbFeatsCategory)
     names(OOBobs_ctgry_df) <- 
         gsub(".n", ".n.OOB", names(OOBobs_ctgry_df), fixed = TRUE)
+    fitobs_ctgry_df <- mycreate_sqlxtab_df(subset(glbObsAll, .lcn == "Fit"), 
+                                           glbFeatsCategory)
+    names(fitobs_ctgry_df) <- 
+        gsub(".n", ".n.Fit", names(fitobs_ctgry_df), fixed = TRUE)
     
     if (nrow(subset(glbObsAll, .lcn == "Fit")) == 0) {
         # Fit same as OOB
@@ -2897,13 +3421,15 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "select.features", major.inc = TRUE)
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r select.features, cache=FALSE, echo=FALSE}
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
-print(glb_feats_df <- myselect_features(entity_df=glbObsTrn, 
-                       exclude_vars_as_features=glbFeatsExclude, 
-                       rsp_var=glb_rsp_var))
+glb_feats_df <- myselect_features(entity_df = glbObsTrn, 
+                                  exclude_vars_as_features = glbFeatsExclude, 
+                                  rsp_var = glb_rsp_var)
 
-print(glb_feats_df <- orderBy(~-cor.y, 
+glb_feats_df <- orderBy(~-cor.y, 
           myfind_cor_features(feats_df=glb_feats_df, obs_df=glbObsTrn, rsp_var=glb_rsp_var,
-                              nzv.freqCut=glbFeatsNzvFreqMax, nzv.uniqueCut=glbFeatsNzvUniqMin)))
+                              nzv.freqCut = glbFeatsNzvFreqMax, nzv.uniqueCut = glbFeatsNzvUniqMin)))
+print(subset(glb_feats_df, select = -id))
+                              
 plt_feats_df <- glb_feats_df
 print(myplot_scatter(plt_feats_df, "percentUnique", "freqRatio", 
                      colorcol_name="nzv", jitter=TRUE) + 
@@ -3349,16 +3875,22 @@ if ((length(glbFeatsDateTime) > 0) &&
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
 
-# Interactions.High.cor.Y
-if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA), 
-                                subset(glb_feats_df, nzv)$id)) > 0) {
+if (length(glbFeatsText) > 0) {
     fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
-                    paste0("fit.models_0_", "Interact.High.cor.Y"), major.inc = FALSE,
+                    paste0("fit.models_0_", "Txt.*"), major.inc = FALSE,
                                     label.minor = "glmnet")
 
+    indepVars <- c(max_cor_y_x_vars)
+    for (txtFeat in glbFeatsText)
+        indepVars <- union(indepVars, 
+            grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.(?!([T|P]\\.))", sep = ""),
+                        names(glbObsAll), perl = TRUE, value = TRUE))
+    indepVars <- myadjust_interaction_feats(indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-        id.prefix = "Interact.High.cor.Y", 
-        type = glb_model_type, trainControl.method = "repeatedcv",
+        id.prefix = "Max.cor.Y.Text.nonTP", 
+        type = glb_model_type, 
+        tune.df = glbMdlTuneParams,        
+        trainControl.method = "repeatedcv",
         trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
         trainControl.classProbs = glb_is_classification,
         trainControl.summaryFunction = glbMdlMetricSummaryFn,
@@ -3366,22 +3898,39 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = c(max_cor_y_x_vars, 
-                       paste(max_cor_y_x_vars[1], 
-                             setdiff(int_feats, max_cor_y_x_vars[1]), sep = ":")),        
+        indep_vars = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
-}    
 
-# Low.cor.X
-fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
-                        paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
-                                     label.minor = "glmnet")
-indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
-                              (exclude.as.feat != 1))[, "id"]  
-indep_vars <- myadjust_interaction_feats(indep_vars)
-ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-        id.prefix = "Low.cor.X", 
+    indepVars <- c(max_cor_y_x_vars)
+    for (txtFeat in glbFeatsText)
+        indepVars <- union(indepVars, 
+            grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.T\\.", sep = ""),
+                        names(glbObsAll), perl = TRUE, value = TRUE))
+    indepVars <- myadjust_interaction_feats(indepVars)
+    ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+        id.prefix = "Max.cor.Y.Text.onlyT", 
+        type = glb_model_type, 
+        tune.df = glbMdlTuneParams,        
+        trainControl.method = "repeatedcv",
+        trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
+        trainControl.classProbs = glb_is_classification,
+        trainControl.summaryFunction = glbMdlMetricSummaryFn,
+        train.metric = glbMdlMetricSummary, 
+        train.maximize = glbMdlMetricMaximize,    
+        train.method = "glmnet")),
+        indep_vars = indepVars,
+        rsp_var = glb_rsp_var, 
+        fit_df = glbObsFit, OOB_df = glbObsOOB)
+
+    indepVars <- c(max_cor_y_x_vars)
+    for (txtFeat in glbFeatsText)
+        indepVars <- union(indepVars, 
+            grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.P\\.", sep = ""),
+                        names(glbObsAll), perl = TRUE, value = TRUE))
+    indepVars <- myadjust_interaction_feats(indepVars)
+    ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+        id.prefix = "Max.cor.Y.Text.onlyP", 
         type = glb_model_type, 
         tune.df = glbMdlTuneParams,        
         trainControl.method = "repeatedcv",
@@ -3392,8 +3941,52 @@ ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+        indep_vars = indepVars,
+        rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
+}
+
+# Interactions.High.cor.Y
+if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA), 
+                                subset(glb_feats_df, nzv)$id)) > 0) {
+    fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
+                    paste0("fit.models_0_", "Interact.High.cor.Y"), major.inc = FALSE,
+                                    label.minor = "glmnet")
+
+    ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
+        id.prefix="Interact.High.cor.Y", 
+        type=glb_model_type, trainControl.method="repeatedcv",
+        trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
+            trainControl.classProbs = glb_is_classification,
+            trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            train.metric = glbMdlMetricSummary, 
+            train.maximize = glbMdlMetricMaximize,    
+        train.method="glmnet")),
+        indep_vars=c(max_cor_y_x_vars, paste(max_cor_y_x_vars[1], int_feats, sep=":")),
+        rsp_var=glb_rsp_var, 
+        fit_df=glbObsFit, OOB_df=glbObsOOB)
+}    
+
+# Low.cor.X
+fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
+                        paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
+                                     label.minor = "glmnet")
+indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
+                              (exclude.as.feat != 1))[, "id"]  
+indep_vars <- myadjust_interaction_feats(indep_vars)
+ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
+        id.prefix="Low.cor.X", 
+        type=glb_model_type, 
+        tune.df = glbMdlTuneParams,        
+        trainControl.method="repeatedcv",
+        trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
+            trainControl.classProbs = glb_is_classification,
+            trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            train.metric = glbMdlMetricSummary, 
+            train.maximize = glbMdlMetricMaximize,    
+        train.method="glmnet")),
+        indep_vars=indep_vars, rsp_var=glb_rsp_var, 
+        fit_df=glbObsFit, OOB_df=glbObsOOB)
 
 fit.models_0_chunk_df <- 
     myadd_chunk(fit.models_0_chunk_df, "fit.models_0_end", major.inc = FALSE,
@@ -3735,7 +4328,7 @@ for (var in grep("^min.", names(plt_models_df), value=TRUE)) {
     plt_models_df <- plt_models_df[ , -grep(var, names(plt_models_df))]
 }
 print(plt_models_df)
-print(myplot_radar(radar_inp_df=plt_models_df))
+# print(myplot_radar(radar_inp_df=plt_models_df))
 # print(myplot_radar(radar_inp_df=subset(plt_models_df, 
 #         !(mdl_id %in% grep("random|MFO", plt_models_df$id, value=TRUE)))))
 
@@ -3848,7 +4441,7 @@ dsp_models_cols <- c("id",
 # if (glb_is_classification && glb_is_binomial) 
 #     dsp_models_cols <- c(dsp_models_cols, "opt.prob.threshold.OOB")
 print(dsp_models_df <- orderBy(get_model_sel_frmla(), glb_models_df)[, dsp_models_cols])
-print(myplot_radar(radar_inp_df = dsp_models_df))
+# print(myplot_radar(radar_inp_df = dsp_models_df))
 print("Metrics used for model selection:"); print(get_model_sel_frmla())
 print(sprintf("Best model id: %s", dsp_models_df[1, "id"]))
 
@@ -4482,12 +5075,16 @@ if (glb_save_envir)
          glb_models_df, dsp_models_df, glb_models_lst, glb_model_type,
          glb_sel_mdl, glb_sel_mdl_id,
          glb_fin_mdl, glb_fin_mdl_id,
-        file=paste0(glb_out_pfx, "dsk.RData"))
+        file = paste0(glb_out_pfx, "dsk.RData"))
 
-replay.petrisim(pn=glb_analytics_pn, 
-    replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
-        "data.training.all.prediction","model.final")), flip_coord=TRUE)
-glb_chunks_df <- myadd_chunk(glb_chunks_df, "predict.data.new", major.inc=TRUE)
+#glb2Sav(); all.equal(savObsAll, glbObsAll); all.equal(sav_models_lst, glb_models_lst)
+#load(file = paste0(glb_out_pfx, "dsk_knitr.RData"))
+#cmpCols <- names(glbObsAll)[!grepl("\\.Final\\.", names(glbObsAll))]; all.equal(savObsAll[, cmpCols], glbObsAll[, cmpCols]); all.equal(savObsAll[, "H.P.http"], glbObsAll[, "H.P.http"]); 
+
+replay.petrisim(pn = glb_analytics_pn, 
+    replay.trans = (glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
+        "data.training.all.prediction","model.final")), flip_coord = TRUE)
+glb_chunks_df <- myadd_chunk(glb_chunks_df, "predict.data.new", major.inc = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -4732,30 +5329,27 @@ write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 
 #             "max.auc.OOB", "max.Accuracy.OOB")]))
-for (txt_var in glbFeatsText) {
+for (txtFeat in glbFeatsText) {
     # Print post-stem-words but need post-stop-words for debugging ?
-    print(sprintf("    All post-stem-words term weights for %s:", txt_var))
-    myprint_df(glb_post_stem_words_terms_df_lst[[txt_var]])
-    terms_mtrx <- glb_post_stem_words_terms_mtrx_lst[[txt_var]]
+    print(sprintf("    All post-stem-words term weights for %s:", txtFeat))
+    myprint_df(glb_post_stem_words_terms_df_lst[[txtFeat]])
+    terms_mtrx <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
     print(glbObsAll[
-        which(terms_mtrx[, tail(glb_post_stem_words_terms_df_lst[[txt_var]], 1)$pos] > 0), 
+        which(terms_mtrx[, tail(glb_post_stem_words_terms_df_lst[[txtFeat]], 1)$pos] > 0), 
                         c(glb_id_var, glbFeatsText)])
-    print(nrow(subset(glb_post_stem_words_terms_df_lst[[txt_var]], freq == 1)))
-    #print(glbObsAll[which(terms_mtrx[, 207] > 0), c(glb_id_var, glbFeatsText)])
-    #unlist(strsplit(glbObsAll[2157, "description"], ""))
-    #glbObsAll[2442, c(glb_id_var, glbFeatsText)]
-    #terms_mtrx[2442, terms_mtrx[2442, ] > 0]  
+    print(nrow(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], freq == 1)))
 
-    print(sprintf("    All post-stem-words term freq distribution for %s:", txt_var))
-    print(table(glb_post_stem_words_terms_df_lst[[txt_var]]$freq))
-    print(sprintf("    All post-stem-words term length distribution for %s:", txt_var))
-    print(table(nchar(glb_post_stem_words_terms_df_lst[[txt_var]]$term)))
-    print(subset(glb_post_stem_words_terms_df_lst[[txt_var]], nchar(term) >= 10))
+    print(sprintf("    All post-stem-words term freq distribution for %s:", txtFeat))
+    print(table(glb_post_stem_words_terms_df_lst[[txtFeat]]$freq))
 
-    print(sprintf("    Analyzed term weights for %s:", txt_var))
-    tmp_df <- glb_post_stem_words_terms_df_lst[[txt_var]]
+    print(sprintf("    All post-stem-words term length distribution for %s:", txtFeat))
+    print(table(nchar(glb_post_stem_words_terms_df_lst[[txtFeat]]$term)))
+    myprint_df(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], nchar(term) >= 10))
+
+    print(sprintf("    Analyzed term weights for %s:", txtFeat))
+    tmp_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]
     anl_terms_vctr <- union(select_terms, assoc_terms)
-    print(subset(tmp_df, term %in% anl_terms_vctr))
+    print(subset(tmp_df, term %in% anl_terms_vctr, select = -term))
 #     tmp_freq1_df <- subset(tmp_df, freq == 1)
 #     tmp_freq1_df$top_n <- grepl(paste0(top_n_vctr, collapse="|"), tmp_freq1_df$term)
 #     print(subset(tmp_freq1_df, top_n == TRUE))
@@ -4770,19 +5364,67 @@ print(subset(get_dsp_models_df(), select = -id))
 
 if (glb_is_regression) {
     print(sprintf("%s OOB RMSE: %0.4f", glb_sel_mdl_id,
-            glb_models_df[glb_models_df$id == glb_sel_mdl_id, "min.RMSE.OOB"]))
-} else {
+            glb_models_df[glb_models_df$model_id == glb_sel_mdl_id, "min.RMSE.OOB"]))
+
+    if (!is.null(glbFeatsCategory)) {
+        tmp_OOBobs_df <- glbObsOOB[, c(glbFeatsCategory, glb_rsp_var,
+                                           predct_error_var_name)]
+        names(tmp_OOBobs_df)[length(names(tmp_OOBobs_df))] <- "error.abs.OOB"
+        sOOB_ctgry_df <- dplyr::group_by_(tmp_OOBobs_df, glbFeatsCategory)
+        sOOB_ctgry_df <- dplyr::count(sOOB_ctgry_df, 
+                                      startprice.log10.abs.OOB.sum = sum(abs(startprice.log10)),
+                                        err.abs.OOB.sum = sum(error.abs.OOB),
+                                        err.abs.OOB.mean = mean(error.abs.OOB))
+        names(sOOB_ctgry_df)[4] <- ".n.OOB"
+        sOOB_ctgry_df <- dplyr::ungroup(sOOB_ctgry_df)
+        #intersect(names(glbLvlCategory), names(sOOB_ctgry_df))
+        glbLvlCategory <- merge(glbLvlCategory, sOOB_ctgry_df, all=TRUE)
+        print(orderBy(~-err.abs.OOB.mean, glbLvlCategory))
+    }
+    
+    if ((glb_rsp_var %in% names(glbObsNew)) &&
+        !(any(is.na(glbObsNew[, glb_rsp_var])))) {
+            pred_stats_df <- 
+                mypredict_mdl(mdl = glb_models_lst[[glb_fin_mdl_id]], 
+                              df = glbObsNew, 
+                              rsp_var = glb_rsp_var, 
+                              label = "new",
+					model_summaryFunction = glb_sel_mdl$control$summaryFunction,
+						      model_metric = glb_sel_mdl$metric,
+						      model_metric_maximize = glb_sel_mdl$maximize,
+						      ret_type = "stats")        
+            print(sprintf("%s prediction stats for glbObsNew:", glb_fin_mdl_id))
+            print(pred_stats_df)
+    }    
+}    
+
+if (glb_is_classification) {
     print(sprintf("%s OOB confusion matrix & accuracy: ", glb_sel_mdl_id))
     print(t(confusionMatrix(glbObsOOB[, mygetPredictIds(glb_rsp_var, glb_sel_mdl_id)$value],
                             glbObsOOB[, glb_rsp_var])$table))
-}            
 
-if (!is.null(glbFeatsCategory)) {
-    glbLvlCategory <- merge(glbLvlCategory, 
-        myget_category_stats(obs_df = glbObsTrn, mdl_id = glb_fin_mdl_id, 
-                             label = "trn"),
-                          by = glbFeatsCategory, all = TRUE)
-    row.names(glbLvlCategory) <- glbLvlCategory[, glbFeatsCategory]
+    if (!is.null(glbFeatsCategory)) {
+        glbLvlCategory <- merge(glbLvlCategory, 
+            myget_category_stats(obs_df = glbObsTrn, mdl_id = glb_fin_mdl_id, 
+                                 label = "trn"),
+                              by = glbFeatsCategory, all = TRUE)
+        row.names(glbLvlCategory) <- glbLvlCategory[, glbFeatsCategory]
+        
+        glbLvlCategory <- merge(glbLvlCategory, 
+            myget_category_stats(obs_df = glbObsNew, mdl_id = glb_fin_mdl_id,
+                                 label = "new"),
+                              by = glbFeatsCategory, all = TRUE)
+        row.names(glbLvlCategory) <- glbLvlCategory[, glbFeatsCategory]
+        
+        clmnOrder <- sort(setdiff(names(glbLvlCategory), glbFeatsCategory))
+        names(clmnOrder) <- gsub("^err\\.abs\\.(.{3})\\.(.+)", "err\\.abs\\.\\2\\.\\1", clmnOrder)
+        clmnOrder <- clmnOrder[sort(names(clmnOrder))]
+        glbLvlCategory <- glbLvlCategory[, c(glbFeatsCategory, clmnOrder)]
+        if (any(grepl("OOB", glbMdlMetricsEval)))
+            print(orderBy(~-err.abs.OOB.mean, glbLvlCategory[, -1])) else
+            print(orderBy(~-err.abs.fit.mean, glbLvlCategory[, -1]))
+        print(colSums(glbLvlCategory[, -grep(glbFeatsCategory,
+                                           names(glbLvlCategory))]))
     
     glbLvlCategory <- merge(glbLvlCategory, 
     myget_category_stats(obs_df = glbObsNew, mdl_id = glb_fin_mdl_id,

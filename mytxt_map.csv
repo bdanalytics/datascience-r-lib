@@ -1,218 +1,301 @@
 "rex_str", "rpl_str"
 #
 #   "\\b" in R shd appear as "\b" here
+#   order of modifications is critical -> empirically derived
 #
 #--- Synced Applications---
 # MIT/Analytics_Edge_15_071x/Assignments/Kaggle_eBay_iPads2
 #   Need to clean NYTimesBlogs local stuff from here to .Rmd
 #
-#--- Misc. Outliers ---> shd be in .Rmd
+#--- ISO-8859-* Dictionary ---
+#   http://www.trans4mind.com/personal_development/HTMLGuide/specialCharacters.htm
+#   http://www.htmlhelp.com/reference/charset/iso032-063.html
+#   http://www.w3.org/TR/html4/sgml/entities.html
+#   http://www.w3.org/TR/html4/charset.html
 #
-"\bHong Hong\b",            "HongKong"
-"\b(Angeles|York)based\b",  "\1 based"
-#
-#--- ISO-8859-* Dictionary --- http://www.htmlhelp.com/reference/charset/iso032-063.html
 #   "&#[[:digit:]]{3};" should be handled in config section
 #
-"\&#034;",  """"
-"&#(0*)37;", "%"
-"\&#039;",  "'"
-"\&#8230;",  " ellps " # my shorthand for ellipse
-"\&amp;",   "&"
-"&amp;",   "&"
-"&lt;",   "<"
-"&gt;",   ">"
-"<br>", " " # line break - add a count for it ??? 
+"\&#034;",      """"
+"&#(0*)37;",    "%"
+"\&#039;",      "'"
+"\&#8230;",     "..." # my shorthand for ellipse
+"\&amp;",       "&"
+"&amp;",        "&"
+"&gt;",         ">"
+"&hellip;",     "..."
+"&lt;",         "<"
+"&(m|n)dash;",  "-" # en dash (wide as 'n') or em dash (wide as 'M'); typically used to offset author's name
+"&quot;",       """"
+"&[l|r]squo;",  "'"     # curvy apostrophe similar to a superscript comma
+"<br>",         " " # line break - add a count for it ???
 #
 #
 #--- Latin-1 Supplement --- http://www.charbase.com/block/latin-supplement
 #
-"\x89",   " " # CHARACTER TABULATION WITH JUSTIFICATION -> \x89 does not work; Use Sys.setlocale() instead
-#
-#--- Category ??? ---
+#"\x89",   " " # CHARACTER TABULATION WITH JUSTIFICATION -> \x89 does not work; Use Sys.setlocale() instead
 #"\n|\211|\235|\317|\333", " " # This does not work; \2 is considered to a back reference
 #
-#
-#--- removePunctuation --- tm does not substitute whitespace -> condition(8.25/10) becomes condition82510
-#
-"(\w)\(",   "\1 \("
-#
-#---Combine some words (names of places/organizations/concepts) that have .n > 1
-#
-"\bCentral African Republic\b", "CentralAfricanRepublic"
-"\bNew York Times",             "NewYorkTimes"
-"\bThe Times",                  "NewYorkTimes"
-"\bPapua New Guinea",           "PapuaNewGuinea"
-"\bSouth China Sea\b",          "SouthChinaSea"
-"\bYves Saint Laurent",         "YvesSaintLaurent"
+# accents; Add punctuation knt ???
+"&(.{1})acute;",  "\1"
+"&(.{1})cedil;",  "\1"
+"&(.{1})circ;",   "\1"
+"&(.{1})grave;",  "\1"
+"&(.{1})tilde;",  "\1"
+"&(.{1})uml;",    "\1"
 #
 #---Acronyms
 #
-"\.\.", "\. "
-"\.(com|COM)\b", "dot\1"
-"\bA\.C\.A\.", "ACA"
-"\bA\.D\.P\.", "ADP"
-"\bA\.G\.", "AG"
-"\bA\.I\.G\.", "AIG"
-"\bAlejandro G\. I&ntilde;&aacute;rritu", "AlejandroGI&ntilde;&aacute;rritu"
-"\bA\.L\.S\.", "ALS"
-"\bA\.M\.D\.", "AMD"
-"\bAndrew M\. Rosenthal", "AndrewMRosenthal"
-"\bAnna D\. Shapiro", "AnnaDShapiro"
-"\bAnn E\. Carlson", "AnnECarlson"
-"\bA\. O\. Scott", "AOScott"
-"\bA\.P\.", "AP"
-"\bA\.T\.M\.", "ATM"
-"\bAT&T\b", "ATT"
-"\bB\.B\. King", "BBKing"
-"\bC\.A\.A\.", "CAA"
-"\bC\.D\.C\.", "CDC"
-"\bC\. Difficile", "CDifficile"
-"\bC\.E\.O\.", "CEO"
-"\bC\.F\.O\.", "CFO"
-"\bCharles M\. Blow", "CharlesMBlow"
-"\bC\.I\.A\.", "CIA"
-"\bC\.I\.C\.C\.", "CICC"
-"\bC\.J\. Chivers", "CJChivers"
-"\bC\.O\.P\.D\.", "COPD"
-"\bCV\.", "CV"
-"\bDavid T\. Little", "DavidTLittle"
-"\bDennis M\. Gormley", "DennisMGormley"
-"\bD\.H\.S\.", "DHS"
-"\bE\. B\. White", "EBWhite"
-"\bE\.C\.B\.", "ECB"
-"\bEdward J\. Ramotowski", "EdwardJRamotowski"
-"\bE\.J\. Manuel", "EJManuel"
-"\bE\.On", "EOn"
-"\bE\.L\.L\.", "ELL"
-"\bE\.P\.A\.", "EPA"
-"\bE\.T\.", "ET"
-"\bETF\.", "ETF"
-"\bE\.U\.", "EU"
-"\bF\.A\.A\.", "FAA"
-"\bF\.B\.I\.", "FBI"
-"\bF\.C\.C\.", "FCC"
-"\bF\.T\.C\.", "FTC"
-"\bG\.E\.", "GE"
-"\bGeorge R\. R\. Martin", "GeorgeRRMartin"
-"\bG\.I\. Joe", "GIJoe"
-"\bG\.I\.", "GI"
-"\bG\.M\.O\.", "GMO"
-"\bG\.O\.P\.", "GOP"
-"\bH\.I\.V\.", "HIV"
-"\bH\.S\.", "HS"
-"\bI\.C\.U\.", "ICU"
-"\bI\.M\.F\.", "IMF"
-"\bI\.P\.O\.", "IPO"
-"\bI\.R\.S\.", "IRS"
-"\bISIS\.", "ISIS"
-"\bI\.S\.S\.", "ISS"
-"\bI\.T\.", "IT"
-"\bJames E\. Garvey", "JamesEGarvey"
-"\bJ\.C\. Flowers", "JCFlowers"
-"\bJ\. Cole", "JCole"
-"\bJ\.Crew", "JCrew"
-"\bJ\.F\.K\.", "JFK"
-"\bJohn F\. Kennedy", "JFK"
-"\bJ\. K\. Rowling", "JKRowling"
-"\bJ\.K\. Simmons", "JKSimmons"
-"\bJ\. Mendel",         "JMendel"
-"\bJohn E\. du Pont",   "JohnEduPont"
-"\bJ\.W\. Anderson",    "JWAnderson"
-"\bK\.K\.R\.", "KKR"
-"\bL\.A\.", "LA"
-"\bL\.S\.U\.", "LSU"
-"\bM\.&A\.", "MandA"
-"\bMary J\. Blige", "MaryJBlige"
-"\bM\.B\.A\.", "MBA"
-"\bM\. Henri Pol", "MHenriPol"
-"\bMichael C\. Hall", "MichaelCHall"
-"\bMichael R\. Roskam", "MichaelRRoskam"
-"\bN\.B\.A\.", "NBA"
-"\bN\.M\.", "NewMexico"
-"\bN\.F\.L\.", "NFL"
-"\bN\.J\.", "NJ"
-"\bN\.R\.A\.", "NRA"
-"\bN\.S\.A\.", "NSA"
-"\bN\.Y\.P\.D\.", "NYPD"
-"\bN\.Y\.S\.E\.", "NYSE"
-"\bN\.Y\.U\.", "NYU"
-"\bO\.C\.D\.", "OCD"
-"\bNow O\.K\.", "Now Okay"
-"\bOscar S\. Schafer", "OscarSSchafer"
-"\bP\. D\. James", "PDJames"
-"\bP\.J\. Harvey", "PJHarvey"
-"\bP\.R\.", "PR"
-"\bQ\. and A\.", "QandA"
-"\bRaymond W\. Baker", "RaymondWBaker"
-"\bR\.B\.S\.", "RBS"
-"\bR\.I\.P\.", "RIP"
-"\bR\.N\.C\.", "RNC"
-"\bRobert W\. Bingham", "RobertWBingham"
-"\bS\.&P\.", "SandP"
-"\bS\.B\.A\.", "SBA"
-"\bS\.E\.C\.", "SEC"
-"\bS\.E\.O\.", "SEO"
-"\bS\.N\.L\.", "SNL"
-"\bS\. Dakota", "SouthDakota"
-"\bSteven A\. Cohen", "StevenACohen"
-"\bT\.I\.", "TI"
-"\bT\.S\.A\.", "TSA"
-"\bTV\.", "TV"
-"\bU\.A\.R\.", "UAR"
-"\bU\.K\.", "UK"
-"\bU\.N\.", "UN"
-"\bU\.S\.(A\.)*", "USA"
-"\bUSAF\.", "USAF"
-"\bU\.S\.O\.", "USO"
-"\bV\.A\.", "VA"
-"\b[Vv]s\.", "versus"
-"\bWashington D\.C\.", "WashingtonDC"
-"\bD\.C\.", "WashingtonDC"
-"\bW\. Eugene Smith", "WEugeneSmith"
-"\bWilliam C\. Rhoden", "WilliamCRhoden"
-"\bWilliam R\. Salomon", "WilliamRSalomon"
-"\bW\.M\.D\.", "WMD"
-"\bW\.NBA", "WNBA"
+"\.\.",                                                                     "\. \."
+"\.(com|COM|org)\b",                                                        "dot\1"
+#
+"\bA\.C\.A\.",      "ACA"
+"\bA\.D\.P\.",      "ADP"
+"\bA\.G\.",         "AG"
+"\bA\.I\.G\.",      "AIG"
+"\bA\.L\.S\.",      "ALS"
+"\bA\.M\.D\.",      "AMD"
+"\bA\.P\.",         "AP"
+"\bA\.T\.M\.",      "ATM"
+"\bAT&T\b",         "ATT"   # American Telephone & Telegraph
+"\bBB&T\b",         "BBT"   # Branch Banking & Trust
+"\bC\.A\.A\.",      "CAA"
+"\bC\.D\.C\.",      "CDC"
+"\bC\.E\.O\.",      "CEO"
+"\bC\.F\.O\.",      "CFO"
+"\bC\.I\.A\.",      "CIA"
+"\bC\.I\.C\.C\.",   "CICC"
+"\bC\.O\.P\.D\.",   "COPD"
+#"\bC\.T\.",        "Connecticut" # or "ComputedTomography" ???
+"\bD\.C\.",         "WashingtonDC"
+"\bD\.H\.S\.",      "DHS"
+"\bE\.C\.B\.",                      "ECB"   # European Central Bank
+"\bEurope[an|'s] Central Bank\b",   "ECB"   # European Central Bank
+"\bE\.On",          "EOn"
+"\bE\.L\.L\.",      "ELL"
+"\bE\.P\.A\.",      "EPA"
+"\bE\.T\.",         "ET"
+"\bETF\.",          "ETF"
+"\bE\.U\.",         "EU"
+"\bF\.A\.A\.",      "FAA"
+"\bF\.B\.I\.",      "FBI"
+"\bF\.C\.C\.",      "FCC"
+"\bF\.T\.C\.",      "FTC"
+"\bG\.E\.",         "GE"
+"\bG\.I\.",         "GI"
+"\bG\.M\.O\.",      "GMO"
+"\bG\.O\.P\.",      "GOP"
+"\bH&M",            "HandM"
+"\bH\.I\.V\.",      "HIV"
+"\bH\.S\.",         "HS"
+"\bI\.C\.U\.",      "ICU"
+"\bI\.M\.F\.",      "IMF"
+"\bI\.P\.O\.",      "IPO"
+"\bI\.R\.S\.",      "IRS"
+"\bISIS\.",         "ISIS"
+"\bI\.S\.S\.",      "ISS"
+"\bI\.T\.",         "InformationTechnology"
+"\bJ\.Crew",        "JCrew"
+"\bJ\.F\.K\.",      "JFK"
+"\bK\.K\.R\.",      "KKR"
+#"\bL\.A\.",        "Louisiana" # or "LosAngeles" ???
+"\bL\.S\.U\.",      "LSU"
+"\bM\.&A\.",        "MandA"
+"\bM\.B\.A\.",      "MBA"
+"\bN\.B\.A\.",      "NBA"
+"\bN\.M\.",         "NewMexico"
+"\bN\.F\.L\.",      "NFL"
+"\bN\.J\.",         "NewJersey"
+"\bN\.R\.A\.",      "NRA"
+"\bN\.S\.A\.",      "NSA"
+"\bN\.Y\.P\.D\.",   "NYPD"
+"\bN\.Y\.S\.E\.",   "NYSE"
+"\bN\.Y\.U\.",      "NYU"
+"\bO\.C\.D\.",      "OCD"
+#"\bNow O\.K\.",     "Now Okay" # or "Now Oklahoma" ???
+#"\bP\.R\.",         "PuertoRico" # or "PublicRelations"
+"\bQ&A",            "QandA"
+"\bQ\. and A\.",    "QandA"
+"\bR&B\b",          "RandB"
+"\bR\.B\.S\.",      "RBS"
+"\bR\.I\.P\.",      "RIP"
+"\bR\.N\.C\.",      "RNC"
+"\bS\.&P\.",        "SandP"
+"\bS\.B\.A\.",      "SBA"
+"\bS\.E\.C\.",      "SEC"
+"\bS\.E\.O\.",      "SEO"
+"\bS\.N\.L\.",      "SNL"
+#"\bS\. Dakota",     "SouthDakota" # or somebody's name ???
+"\bT\.I\.",         "TI"
+"\bT\.S\.A\.",      "TSA"
+"\bTV\.",           "TV"
+"\bU\.A\.R\.",      "UAR"
+"\bU\.K\.",         "UK"
+"\bU\.N\.",         "UN"
+"\bU\.S\.(A\.)*",   "USA"
+"\bUSAF\.",         "USAF"
+"\bU\.S\.O\.",      "USO"
+#"\bV\.A\.",         "Virginia" # or "VeteransAdministration" ???
+"\bW\.M\.D\.",      "WMD"
+"\bW\.NBA",         "WNBA"
+#
+#---Months cleansing---
+#
+"\bJanuary\b",          "Jan"
+"\bFebruary\b",         "Feb"
+#"\bMarch\b",               "Mar"   # march is also a valid word
+#"\bApril\b",               "Apr"   # april is a valid name (aargh !!!)
+#"\bMay\b",                 "May"   # may is also a valid word
+"\bJune\b",             "Jun"
+"\bJuly\b",             "Jul"
+#"\bAugust\b",              "Aug"   # august is also a valid word
+"\b(September|Sept)\b", "Sep"
+"\bOctober\b",          "Oct"
+"\bNovember\b",         "Nov"
+"\bDecember\b",         "Dec"
 #
 #---Places / Names cleansing---
 #
-"\b(B|b)(EST|est) (B|b)(UY|uy)\b", "\1\2\3\4"
-"\b(G|g)(EEK|eek) (S|s)(QUAD|quad)\b", "\1\2\3\4"
-"\bUnited States",  "USA"
-"\bWall Street",    "WallStreet"
-"\bWall St\.",      "WallStreet"
-"\bWall St",        "WallStreet"
+"\bAbu Dhabi",                          "AbuDhabi"
+"\bApple Pay",                          "ApplePay"                  # Product
+"\bArt Basel",                          "ArtBasel"                  # Company
+"\bBank of America",                    "BankofAmerica"             # Company
+"\bBaker Hughes",                       "BakerHughes"               # Company
+"\bBalfour Beatty",                     "BalfourBeatty"             # Company
+"\bBank of England",                    "BankofEngland"             # Company
+"\bBank of New York Mellon",            "BankofNewYorkMellon"       # Company
+"\bBarnes & Noble",                     "BarnesAndNoble"            # Company
+"\bBCA Marketplace",                    "BCAMarketplace"            # Company
+"\bBerkshire Hathaway",                 "BerkshireHathaway"         # Company
+"\b(B|b)(EST|est) (B|b)(UY|uy)\b",      "\1\2\3\4"
+"\bBezos Venture",                      "BezosVenture"              # Company
+"\bBGC Partners",                       "BGCPartners"               # Company
+"\bBHP Billiton",                       "BHPBilliton"               # Company
+"\bBNP Paribas",                        "BNPParibas"                # Company
+"\bBooker Prize",                       "BookerPrize"               # Product
+"\bBottega Veneta",                     "BottegaVeneta"             # Company (Fashion)
+"\bCalvin Klein",                       "CalvinKlein"               # Company
+"\bCentral African Republic\b",         "CentralAfricanRepublic"
+"\bCF Industries",                      "CFIndustries"              # Company
+"\bC(.+) (D|d)ifficile\b",              "Clostridium\2ifficile"     # Bacteria
+"\bClub Med",                           "ClubMed"                   # Company
+"\bCME Group",                          "CMEGroup"                  # Company
+"\bCoca-Cola",                          "CocaCola"                  # Company
+"\bCredit Agricole",                    "CreditAgricole"            # Company
+"\bCredit Suisse",                      "CreditSuisse"              # Company
+"\bDalian Wanda Commercial",            "DalianWandaCommercial"     # Company
+"\bDave & Buster",                      "DaveAndBuster"             # Company
+"\bDeja Vu",                            "DejaVu"
+"\bDerek Lam",                          "DerekLam"                  # Company
+"\bDolce & Gabbana",                    "DolceAndGabbana"           # Company (Fashion)
+"\bDon Julio",                          "DonJulio"                  # Brand
+"\bDresser-Rand",                       "DresserRand"               # Company
+"\bDries Van Noten",                    "DriesVanNoten"             # Company
+"\bEmporio Armani",                     "EmporioArmani"             # Brand
+"\bEspirito Santo",                     "EspiritoSanto"             # Company
+"\bEvans Bank",                         "EvansBank"                 # Company
+"\bGaleries Lafayette",                 "GaleriesLafayette"         # Company
+"\b(G|g)(EEK|eek) (S|s)(QUAD|quad)\b",  "\1\2\3\4"
+"\bGeneral Mills",                      "GeneralMills"              # Company
+"\bGFI Group",                          "GFIGroup"                  # Company
+"\bGoldman Sachs",                      "GoldmanSachs"              # Company
+"\bGreen Day",                          "GreenDay"                  # Music Band
+"\bGreene King",                        "GreeneKing"                # Company
+"\bGreen Mountain",                     "GreenMountain"             # Company
+"\bHaider Ackermann",                   "HaiderAckermann"           # Company
+"\bHampton Creek",                      "HamptonCreek"              # Company
+"\bHewlett-Packard",                    "HewlettPackard"            # Company
+"\b(J&J|Johnson & Johnson)",            "JandJ"                     # Company
+"\bJay Z",                              "JayZ"                      # Music Band
+"\bJimmy Choo",                         "JimmyChoo"                 # Company (Fashion)
+"\bJose Cuervo",                        "JoseCuervo"                # Company
+"\bJPMorgan Chase",                     "JPMorganChase"             # Company
+"\bLincoln Center",                     "LincolnCenter"             # Company
+"\bMadison Square Garden",              "MadisonSquareGarden"       # Company
+"\bMaison Martin Margiela",             "MaisonMartinMargiela"      # Company (Fashion)
+"\bMichael Kors",                       "MichaelKors"               # Company (Fashion)
+"\bMonte dei Paschi di Siena",          "MontedeiPaschidiSiena"
+"\bMonte dei Paschi",                   "MontedeiPaschidiSiena"     # Company
+"\bMorgan Stanley",                     "MorganStanley"             # Company
+"\bNew York Times",                     "NewYorkTimes"
+"\bNine Inch Nails",                    "NineInchNails"             # Music Band
+"\bPapua New Guinea",                   "PapuaNewGuinea"
+"\bPerella Weinberg",                   "PerellaWeinberg"           # Company
+"\bPhoebe English",                     "PhoebeEnglish"             # Company (Fashion)
+"\bProcter & Gamble",                   "ProcterAndGamble"          # Company
+"\bProenza Schouler",                   "ProenzaSchouler"           # Company (Fashion)
+"\bRussell Investments",                "RussellInvestments"        # Company
+"\bSouth China Sea\b",                  "SouthChinaSea"
+"\bSt. Ann's Warehouse\b",              "SaintAnnsWarehouse"        # Theater company
+"\bSt. Baldrick's\b",                   "SaintBaldricksFoundation"  # Charity
+"\bThe Times",                          "NewYorkTimes"
+"\bTom Ford",                           "TomFord"                   # Company
+"\bReckitt Benckiser",                  "ReckittBenckiser"          # Company
+"\bRhode Island",                       "RhodeIsland"
+"\bRio Tinto",                          "RioTinto"                  # Company
+"\bRite Aid",                           "RiteAid"                   # Company
+"\bSociete Generale",                   "SocieteGenerale"           # Company
+"\bSimon & Schuster",                   "SimonandSchuster"          # Company
+"\bSky Deutschland",                    "SkyDeutschland"            # Company
+"\bStella McCartney",                   "StellaMcCartney"           # Company
+"\bT-Mobile",                           "TMobile"                   # Company
+"\bTel Aviv",                           "TelAviv"
+"\bTianhe Chemicals",                   "TianheChemicals"           # Company
+"\bTime Warner Cable",                  "TimeWarnerCable"           # Company
+"\bToys 'R' Us",                        "ToysRUs"
+"\bUnited States",                      "USA"
+"\bVictoria's Secret",                  "VictoriasSecret"           # Company
+"\bWall Street",                        "WallStreet"
+"\bWall St\.",                          "WallStreet"
+"\bWall St",                            "WallStreet"
+"\bWalt Disney Co.",                    "WaltDisneyCompany"         # Company
+"\bWashington D\.C\.",                  "WashingtonDC"
+"\bWashington Post",                    "WashingtonPost"            # Company
+"\bWells Fargo",                        "WellsFargo"                # Company
+"\bW Hotel",                            "WHotel"                    # Company
+"\bWarner Music",                       "WarnerMusic"               # Company
+"\bWilson Sonsini",                     "WilsonSonsini"             # Company (law firm)
+"\bOliver Wyman",                       "OliverWyman"               # Company
+"\bYves Saint Laurent",                 "YvesSaintLaurent"
+"\bZF Friedrichshafen\b",               "ZFFriedrichshafen"         # Company
+"\bZZ Top",                             "ZZTop"                     # Music Band
 ###
+"\bBeverly Hills",                              "BeverlyHills"
+"\bCosta Rica",                                 "CostaRica"
 "\bFort( |-)((Fisher|Lauderdale|Worth)\b)+",    "Fort\2"
 "\bFt\.( |-)((DummyA|DummyB)\b)+",              "Fort\2"
 "\bHong( |-)((Kong|Kongs|Kongers)\b)+",         "Hong\2"
+"\bLa( |-)((Belle|Dummy)\b)+",                  "La\2"  # LaBelle, Quebec
 "\bLas( |-)((Vegas|Dummy)\b)+",                 "Las\2"
 "\bLos( |-)((Angeles|Angeless)\b)+",            "Los\2"
-"\bNew( |-)((American|Amsterdam|Delhi|Dirt|England|Hampshire|Haven|Jersey|Jerseys|Jerseyans|Mexico|Music|Orleans|Republic|Testament|World|Year|Years|York|Yorker|Yorkers|Yorks|Zealand)\b)+", "New\2"
-"\bPuerto( |-)((Rican|Rico|Ricos)\b)+",       "Puerto\2"
-"\bSaint( |-)((Laurent|Lucia)\b)+",           "Saint\2" # Saint-Laurent
+"\bMt. Nebo",                                   "MountNebo" # WV, UT
+"\bNew( |-)((American|Amsterdam|Delhi|Dirt|England|Hampshire|Haven|Jersey|Jerseys|Jerseyans|Mexico|Orleans|Republic|Testament|World|Year|Years|York|Yorker|Yorkers|Yorks|Zealand)\b)+", "New\2"
+"\bPuerto( |-)((Rican|Rico|Ricos)\b)+",         "Puerto\2"
+"\bSaint( |-)((Gobain|Laurent|Lucia)\b)+",             "Saint\2" # Saint-Laurent
 "\bSan( |-)((Francisco|Franciscos|Gennaro|Giovanni|Juan|Marino)\b)+", "San\2"
+"\bSanta( |-)((Claus|Fe)\b)+", "Santa\2"
 "\bSt\.( |-)((Albans|Barts|Francis|Joe|John|Louis|Lucia|Martin|Martins|Marys|Matthew|Patricks|Paul|Regis|Vincent)\b)+", "Saint\2"   # St. Mary's City, MD; St. Lucia|Martin, Virgin Islands; Add s for plurality (e.g. New Yorks)
+"\bStaten Island",                              "StatenIsland"
 ###
-"\b([[:upper:]])([[:lower:]]*)-(based|bred|imposed|raised)\b",  "\1\2 \3" # matches "Internet-based" also
-"\b(China|Chinese|Dallas|Iraq|Minneapolis|USA|Yangzhou)-(\w)",  "\1 \2"
-"\b(Russia|Dummy)-(\w)",                                        "\1 \2"
-"\b(Alaska|Dummy)-(\w)",                                        "\1 \2"
-"(\w)-(Shanghai|USA)\b",                                        "\1 \2"
 #
 #---compass terms---
 #
-"\bCentral( |\\.)(Dummy|Park)\b",                                                        "Central\2"
-"\bNorth( |\\.)(America|American|Carolina|Dakota|Korea|Korean|Miami)\b",                 "North\2"
-"\bSouth( |\\.)(America|American|Africa|African|Carolina|Dakota|Korea|Korean|Sudan)\b",  "South\2"
-"\bWest( |\\.)(Point|Virginia)\b",                                                       "West\2"
+"\bCentral( |\\.)(Dummy|Park)",                                                         "Central\2"
+"\bNorth( |\\.)(America|American|Carolina|Dakota|Korea|Korean|Miami)",                  "North\2"
+"\bSouth( |\\.)(America|American|Africa|African|Carolina|Dakota|Korea|Korean|Sudan)",   "South\2"
+"\bS\\. (Dakota|Dummy)",                                                                "South\2"
+"\bWest( |\\.)(Point|Virginia)",                                                        "West\2"
+#
+#--- people's names ---
+#
+"\b([[:upper:][[:alpha:]]+) ([[:upper:]])\. ([[:upper:]][[:alpha:]]+)\b",   "\1\2\3"
+"\b([[:upper:]])\. ([[:upper:]])\. ([[:upper:]][[:alpha:]]+)\b",            "\1\2\3\4"
+"\b([[:upper:]])\. ([[:upper:]])\. ([[:upper:]][[:alpha:]]+)'s\b",          "\1\2\3\4's"
 #
 #---numbers---
 #
-"([[:digit:]])\\.([[:digit:]])\\.([[:digit:]])", "\\1point\\2\\point\\3"
-"([[:digit:]])\\.([[:digit:]])", "\\1point\\2"
-"([[:digit:]]),([[:digit:]])", "\\1\\2"             # thousands separator
+"([[:digit:]])\.([[:digit:]])\.([[:digit:]])", "\1point\2\point\3"
+"([[:digit:]])\.([[:digit:]])", "\1point\2"
+"([[:digit:]]),([[:digit:]])", "\1\2"             # thousands separator
 "([[:digit:]]+)-by-([[:digit:]]+)", "\1by\2"
 "([[:digit:]]+)-([[:digit:]]+)", "\1to\2"
 "([[:digit:]]+)-", "\1 "
@@ -224,9 +307,9 @@
 "\b4th\b", "fourth"
 "(.+)-(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)", "\1 \2"
 "(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)-(.+)", "\1 \2"
-"(one|two|three|four|five|six|seven|eight|nine)-", "\1 "
+"([O|o]ne|[T|t]wo|[T|t]hree|[F|f]our|[F|f]ive|[S|s]ix|[S|s]seven|[E|e]ight|[N|n]ine)-", "\1 "
 "(once|twice)-", "\1 "
-"\byear-old", "year old" # conflicts:end|round
+"(Y|y)ear-(O|o)ld", "\1ear \2ld"
 "(\w)-a-year", "\1-per-year" # billion-a-year gets transformed into billion-ayear after removePunctuation w/ OR w/o preserve_intra...
 "(\w)-birthday", "\1 birthday"
 "\bto-([[:digit:]]+)", "to \1"
@@ -237,15 +320,67 @@
 "\b[Ff]ifty-[Ee]ight\b", "58"
 "\b[Ss]eventy-[Oo]ne\b", "71"
 #
+#--- +ve contractions ---
+#
+"\b(He|he|She|she|They|they)'ll",   "\1 will"
+"\bI'm",                            "I am"
+"\b(T|t)hey've\b",          "\1hey have"
+"\b(W|w)e'd\b",             "\1e would"
+"\b(W|w)e've\b",                "\1e have"
+"\b(Here|here|Who|who)'s\b",    "\1 is"
+"\b(Y|y)ou're\b",               "\1ou are"
+"\b(Y|y)ou've\b",           "\1ou have"
+#
+#--- -ve contractions ---
+#
+"\b(A|a)re(N|n)'t\b",       "\1re\2t"
+"\b(A|a)re (N|n)ot\b",      "\1re\2t"
+
+"\b(C|c)an't\b",            "\1an\t"
+"\b(C|c)an (N|n)ot\b",      "\1an\t"
+
+"\b(C|W|c|w)ould(N|n)'t\b",     "\1ould\2t"
+"\b(C|W|c|w)ould (N|n)ot\b",    "\1ould\2t"
+
+"\b(D|d)id(N|n)'t\b",       "\1id\2t"
+"\b(D|d)id (N|n)ot\b",      "\1id\2t"
+
+"\b(D|d)o(N|n)'t\b",        "\1o\2t"
+"\b(D|d)o (N|n)ot\b",       "\1o\2t"
+
+"\b(D|d)oes(N|n)'t\b",      "\1oes\2t"
+"\b(D|d)oes (N|n)ot\b",     "\1oes\2t"
+
+"\b(Have|have|Is|is)(N|n)'t\b",        "\1\2t"
+"\b(Have|have|Is|is) (N|n)ot\b",       "\1\2t"
+
+"\b(S|s)hould(N|n)'t\b",    "\1hould\2t"
+"\b(S|s)hould (N|n)ot\b",   "\1hould\2t"
+
+"\b(W|w)as(N|n)'t\b",       "\1as\2t"
+"\b(W|w)as (N|n)ot\b",      "\1as\2t"
+
+"\b(W|w)ere(N|n)'t\b",      "\1ere\2t"
+"\b(W|w)ere (N|n)ot\b",     "\1ere\2t"
+#
 #---misc consolidations---
 #
-"\bEUC\b", "excellent used condition"
-"\bI (CLOUD|cloud)\\b", "I\1"
-"\bI pad\\b", "Ipad"
-"\b(I|i)(P|p)(A|a)(D|d) (A|a)(I|i)(R|r)\b", "\1\2\3\4\5\6\7"
-"\b(I|i)(P|p)(A|a)(D|d) (M|m)ini\b", "\1\2\3\4\5ini"
-"\b(IPAD|Ipad|iPad|ipad) ([[:digit:]])\b", "\1\2"
-"\b(Ipadair|iPadAir|ipadair) ([[:digit:]])\b", "\1\2"
-"\b(iPadMini|iPadmini) ([[:digit:]])\b", "\1\2"
-"\bI Phone\b", "IPhone"
-"\btelevision\b", "tv" # Consolidate with "tv" in raw data
+"\bCalif\.",                                    "California"
+"\bCo\.",                                       "Company"
+"\bCol\.",                                      "Colonel"
+"\bCorp\.",                                     "Corporation"
+"\bDept.",                                      "Department"
+"\bEUC\b",                                      "excellent used condition"
+"\bI (CLOUD|cloud)\\b",                         "I\1"
+"\bI pad\\b",                                   "Ipad"
+"\bInc\.",                                      "Incorporated"
+"\b(I|i)(P|p)(A|a)(D|d) (A|a)(I|i)(R|r)\b",     "\1\2\3\4\5\6\7"
+"\b(I|i)(P|p)(A|a)(D|d) (M|m)ini\b",            "\1\2\3\4\5ini"
+"\b(IPAD|Ipad|iPad|ipad) ([[:digit:]])\b",      "\1\2"
+"\b(Ipadair|iPadAir|ipadair) ([[:digit:]])\b",  "\1\2"
+"\b(iPadMini|iPadmini) ([[:digit:]])\b",        "\1\2"
+"\bI Phone\b",                                  "IPhone"
+#"\bNational Book Award(s*)",                    "NationalBookAward"
+"\btelevision\b",                               "tv" # Consolidate with "tv" in raw data
+"\bVitamin ([[:upper:]])\b",                    "Vitamin\1"
+"\b[Vv]s\.",                                    "versus"
