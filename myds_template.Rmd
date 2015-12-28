@@ -141,8 +141,7 @@ glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
-    glb_split_entity_newobs_datasets <- TRUE   # FALSE not supported - use "copy" for glb_split_newdata_method # select from c(FALSE, TRUE)
-    glb_split_newdata_method <- "copy" # select from c(NULL, "condition", "sample", "copy")
+    glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
     glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
     glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
     glb_split_sample.seed <- 123               # or any integer
@@ -341,8 +340,17 @@ glbFeatsDateTime <- list()
 
 glbFeatsPrice <- NULL # or c("<price_var>")
 
-glbFeatsText <- NULL # c("<txt_var>")   # NULL # 
+glbFeatsText <- list()
 Sys.setlocale("LC_ALL", "C") # For english
+
+#glbFeatsText[["<TextFeature>"]] <- list(NULL,
+#   ,names = myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL, 
+#       <comma-separated-screened-names>
+#   ))))
+#   ,rareWords = myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL, 
+#       <comma-separated-nonSCOWL-words>
+#   ))))
+#)
 
 # Text Processing Step: custom modifications not present in txt_munge -> use glbFeatsDerive
 # Text Processing Step: universal modifications
@@ -415,7 +423,7 @@ if (!is.null(glbFeatsText)) {
 
 # To identify terms with high nzv.freqRatio
 #summary(glb_post_stem_words_terms_df_lst[[txtFeat]]$nzv.freqRatio)
-#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (nzv.freqRatio >= glb_nzv_freqCut) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
+#paste0(sort(setdiff(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], (nzv.freqRatio >= glbFeatsNzvFreqMax) & (freq < 10) & (chisq.pval >= 0.05))$term, c( "128gb","3g","4g","gold","ipad1","ipad3","ipad4","ipadair2","ipadmini2","manufactur","spacegray","sprint","tmobil","verizon","wifion"))), collapse=",")
 
 # To identify obs with a txt term
 #tail(orderBy(~-freq+term, glb_post_stop_words_terms_df_lst[[txtFeat]]), 20)
@@ -424,9 +432,22 @@ if (!is.null(glbFeatsText)) {
 #which(terms_stop_mtrx[, grep("ipad", dimnames(terms_stop_mtrx)$Terms)] > 0)
 #glbObsAll[which(terms_stop_mtrx[, grep("16", dimnames(terms_stop_mtrx)$Terms)[1]] > 0), c(glbFeatsCategory, "storage", txtFeat)]
 
-glbFeatsTextVldWords <- myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
-        # custom names/terms for names screening
-                                    ))))
+# Text Processing Step: screen for names # Move to glbFeatsText specs section in order of text processing steps
+# glbFeatsText[["<txtFeat>"]]$names <- myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
+#         # Person names for names screening
+#         ,<comma-separated-list>
+#         
+#         # Company names
+#         ,<comma-separated-list>
+#                     
+#         # Product names
+#         ,<comma-separated-list>
+#     ))))
+
+# glbFeatsText[["<txtFeat>"]]$rareWords <- myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
+#         # Words not in SCOWL db
+#         ,<comma-separated-list>
+#     ))))
 
 # To identify char vectors post glbFeatsTextMap
 #grep("six(.*)hour", glb_txt_chr_lst[[txtFeat]], ignore.case = TRUE, value = TRUE)
@@ -468,7 +489,7 @@ chk_comb_cor <- function(syn_lst) {
 #chk_comb_cor(syn_lst=list(word="use",  syns=c("use", "usag")))
 
 glbFeatsTextSynonyms <- list()
-# list parsed to collect vldWords
+# list parsed to collect glbFeatsText[[<txtFeat>]]$vldTerms
 glbFeatsTextSynonyms[["Hdln.my"]] <- list(NULL
     # people in places
     , list(word = "australia", syns = c("australia", "australian"))
@@ -534,11 +555,11 @@ glb_txt_cor_var <- glb_rsp_var # : default # or c(<feat>)
 # select one from c("union.top.val.cor", "top.cor", "top.val", default: "top.chisq", "sparse")
 glbFeatsTextFilter <- "top.chisq" 
 glbFeatsTextTermsMax <- rep(10, length(glbFeatsText)) # :default
-names(glbFeatsTextTermsMax) <- glbFeatsText
+names(glbFeatsTextTermsMax) <- names(glbFeatsText)
 
 # Text Processing Step: extractAssoc
 glbFeatsTextAssocCor <- rep(1, length(glbFeatsText)) # :default 
-names(glbFeatsTextAssocCor) <- glbFeatsText
+names(glbFeatsTextAssocCor) <- names(glbFeatsText)
 
 # Remember to use stemmed terms
 glb_important_terms <- list()
@@ -696,9 +717,9 @@ glmnetTuneParams <- rbind(data.frame()
                         ,data.frame(parameter = "alpha",  vals = "0.100 0.325 0.550 0.775 1.000")
                         ,data.frame(parameter = "lambda", vals = "9.342e-02")    
                         )
-glbMdlTuneParams <- myrbind_df(glbMdlTuneParams,
-                               cbind(data.frame(mdlId = "<mdlId>"),
-                                     glmnetTuneParams))
+# glbMdlTuneParams <- myrbind_df(glbMdlTuneParams,
+#                                cbind(data.frame(mdlId = "<mdlId>"),
+#                                      glmnetTuneParams))
 
     #avNNet    
     #   size=[1] 3 5 7 9; decay=[0] 1e-04 0.001  0.01   0.1; bag=[FALSE]; RMSE=1.3300906 
@@ -954,14 +975,17 @@ if (glb_is_separate_newobs_dataset) {
         stop("!glb_split_entity_newobs_datasets: not implemented yet") 
         glbObsNew <- glbObsTrn[sample(1:nrow(glbObsTrn),
                                           max(2, nrow(glbObsTrn) / 1000)),]                    
-    } else      if (glb_split_newdata_method == "condition") {
+    } else      if (is.null(glbObsNewFile$splitSpecs) || 
+                    is.null(glbObsNewFile$splitSpecs$method)) {
+            stop("glbObsNewFile$splitSpecs$method required when glb_is_separate_newobs_dataset is FALSE")
+        } else  if (glbObsNewFile$splitSpecs$method == "condition") {
             glbObsNew <- do.call("subset", 
                 list(glbObsTrn, parse(text=glb_split_newdata_condition)))
             glbObsTrn <- do.call("subset", 
                 list(glbObsTrn, parse(text=paste0("!(", 
                                                       glb_split_newdata_condition,
                                                       ")"))))
-        } else if (glb_split_newdata_method == "sample") {
+        } else if (glbObsNewFile$splitSpecs$method == "sample") {
                 require(caTools)
                 
                 set.seed(glb_split_sample.seed)
@@ -969,12 +993,12 @@ if (glb_is_separate_newobs_dataset) {
                                       SplitRatio=(1-glb_split_newdata_size_ratio))
                 glbObsNew <- glbObsTrn[!split, ] 
                 glbObsTrn <- glbObsTrn[split ,]
-        } else if (glb_split_newdata_method == "copy") {  
+        } else if (glbObsNewFile$splitSpecs$method == "copy") {  
             glbObsTrn <- glbObsAll
             comment(glbObsTrn) <- "glbObsTrn"
             glbObsNew <- glbObsAll
             comment(glbObsNew) <- "glbObsNew"
-        } else stop("glb_split_newdata_method should be %in% c('condition', 'sample', 'copy')")   
+        } else stop("glbObsNewFile$splitSpecs$method should be %in% c('condition', 'sample', 'copy')")   
 
     comment(glbObsNew) <- "glbObsNew"
     myprint_df(glbObsNew)
@@ -1016,7 +1040,7 @@ if (length(glb_id_var) == 0) {
     glbObsNew$.rownames <- as.numeric(rownames(subset(glbObsAll, .src == "Test")))
     glb_id_var <- ".rownames"
 }
-if ((glb_split_newdata_method != "copy") && 
+if ((glbObsNewFile$splitSpecs$method != "copy") && 
     (sum(duplicated(glbObsAll[, glb_id_var, FALSE])) > 0))
     stop(glb_id_var, " duplicated in glbObsAll")
 glbFeatsExclude <- union(glbFeatsExclude, glb_id_var)
@@ -1077,7 +1101,7 @@ require(dplyr)
 require(lazyeval)
 require(gdata)
 
-if (glb_split_newdata_method != "copy") {
+if (glb_is_separate_newobs_dataset || (glbObsNewFile$splitSpecs$method != "copy")) {
     dupObsAll <- glbObsAll[duplicated2(
         # subset(glbObsAll, select = -c(UniqueID, Popular, .src))
         glbObsAll[, setdiff(names(glbObsAll), c(glb_id_var, glb_rsp_var_raw, ".src"))]
@@ -1093,7 +1117,7 @@ if (glb_split_newdata_method != "copy") {
     print(sprintf("Found %d duplicates by all features:", nrow(dupObsAll)))
     myprint_df(dupObsAll)
 } else {
-    print("Skipping duplicates check since glb_split_newdata_method == 'copy'")
+    print("Skipping duplicates check since glbObsNewFile$splitSpecs$method == 'copy'")
     dupObsAll <- data.frame()
 }    
 
@@ -1529,7 +1553,7 @@ extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df,
 #stop(here"); savObsAll <- glbObsAll; #glbObsAll <- savObsAll
 print(str_vars <- myfind_chr_cols_df(glbObsAll))
 if (length(str_vars <- setdiff(str_vars, 
-                               c(glbFeatsExclude, glbFeatsDateTime, glbFeatsText))) > 0) {
+                               c(glbFeatsExclude, glbFeatsDateTime, names(glbFeatsText)))) > 0) {
     for (var in str_vars) {
         warning("Creating factors of string variable: ", var, 
                 ": # of unique values: ", length(unique(glbObsAll[, var])))
@@ -1666,7 +1690,7 @@ if (!is.null(glbFeatsText)) {
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
                                 paste0("extract.features_", "xtract.Text.vars"), major.inc = TRUE)
     
-    print(sprintf("Extracting features from Text(s): %s", glbFeatsText))
+    print(sprintf("Extracting features from Text(s): %s", names(glbFeatsText)))
     
     chk_pattern_freq <- function(rex_str, ignore.case = TRUE) {
         match_mtrx <- str_extract_all(txt_vctr, regex(rex_str, ignore_case = ignore.case), 
@@ -1742,7 +1766,7 @@ if (!is.null(glbFeatsText)) {
 
     glb_txt_chr_lst <- list(); 
     print(sprintf("Building glb_txt_chr_lst..."))
-    glb_txt_chr_lst <- foreach(txtFeat = glbFeatsText) %dopar% {   
+    glb_txt_chr_lst <- foreach(txtFeat = names(glbFeatsText)) %dopar% {   
 #     for (txtFeat in glbFeatsText) {
         txt_vctr <- glbObsAll[, txtFeat]
         names(txt_vctr) <- glbObsAll[, glb_id_var]
@@ -1760,10 +1784,10 @@ if (!is.null(glbFeatsText)) {
     
         txt_vctr <- myapply_txtmap(txt_vctr, ignore.case = FALSE)    
     }
-    names(glb_txt_chr_lst) <- glbFeatsText
+    names(glb_txt_chr_lst) <- names(glbFeatsText)
 
 #stop(here")    
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Remaining & in %s:", txtFeat))
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]
         
@@ -1775,7 +1799,7 @@ if (!is.null(glbFeatsText)) {
 #             dsp_matches(rex_str, ix=as.numeric(row))
     }    
     
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Remaining OK in %s:", txtFeat))
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]
         
@@ -1793,7 +1817,7 @@ if (!is.null(glbFeatsText)) {
     # substr(glbObsAll[301, "review"], 550, 650)
 
 #stop(here"); sav_txt_lst <- glb_txt_chr_lst    
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Remaining Acronyms in %s:", txtFeat))
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]
         
@@ -1810,7 +1834,7 @@ if (!is.null(glbFeatsText)) {
         #print(str_sub(txt_vctr[74], 1, -1))        
     }
 
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         re_str <- "\\b(Fort|Ft\\.|Hong|Las|Los|New|Puerto|Saint|San|Santa|St\\.)( |-)(\\w)+"
         print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]        
@@ -1822,7 +1846,7 @@ if (!is.null(glbFeatsText)) {
     }        
         
 #stop(here"); sav_txt_lst <- glb_txt_chr_lst    
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         re_str <- "\\b(N|S|E|W|C)( |\\.)(\\w)+"
         print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))        
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]                
@@ -1831,7 +1855,7 @@ if (!is.null(glbFeatsText)) {
         #grep("N Weaver", txt_vctr, value=TRUE, ignore.case=FALSE)        
     }    
 
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         re_str <- "\\b(North|South|East|West|Central)( |\\.)(\\w)+"
         print(sprintf("Remaining #%s# terms in %s: ", re_str, txtFeat))        
         txt_vctr <- glb_txt_chr_lst[[txtFeat]]                        
@@ -1931,21 +1955,21 @@ if (!is.null(glbFeatsText)) {
         # compute nzv before chisq.test since terms with nzv.freqRatio beyond a max threshold are not chisq.significant ???
         if (compute.nzv) {
             nzv_df <- 
-#                 caret::nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glb_nzv_freqCut,
-#                             uniqueCut = glb_nzv_uniqueCut, saveMetrics = TRUE)
+#                 caret::nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glbFeatsNzvFreqMax,
+#                             uniqueCut = glbFeatsNzvUniqMin, saveMetrics = TRUE)
                 # caret::nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",], 
                 mycaret.nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",],
-                                   freqCut = glb_nzv_freqCut, uniqueCut = glb_nzv_uniqueCut,
+                                   freqCut = glbFeatsNzvFreqMax, uniqueCut = glbFeatsNzvUniqMin,
                                    saveMetrics = TRUE, foreach = TRUE)
             terms_df$nzv.freqRatio <- nzv_df$freqRatio
     #         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
     #                                                breaks = sort(c(min(terms_df$nzv.freqRatio), 
-    #                                                                 glb_nzv_freqCut,
+    #                                                                 glbFeatsNzvFreqMax,
     #                                                            max(terms_df$nzv.freqRatio))))
             terms_df$nzv.percentUnique <- nzv_df$percentUnique
     #         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
     #               breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
-    #                                                             glb_nzv_uniqueCut,
+    #                                                             glbFeatsNzvUniqMin,
     #                                                       max(terms_df$nzv.percentUnique))))
     #         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:",
     #          terms_df$nzv.freqRatio.cut.fctr,
@@ -2017,7 +2041,7 @@ if (!is.null(glbFeatsText)) {
 #stop(here"); glb2Sav()    
     glbFeatsTextCorpus <- list()
     print(sprintf("Building glbFeatsTextCorpus..."))
-    glbFeatsTextCorpus <- foreach(txtFeat = glbFeatsText, .verbose = FALSE) %dopar% {
+    glbFeatsTextCorpus <- foreach(txtFeat = names(glbFeatsText), .verbose = FALSE) %dopar% {
     #glbFeatsTextCorpus <- foreach(txtFeat = glbFeatsText, .verbose = TRUE) %do% {        
     #for (txtFeat in glbFeatsText) {
         txt_corpus <- Corpus(VectorSource(glb_txt_chr_lst[[txtFeat]]))
@@ -2036,7 +2060,7 @@ if (!is.null(glbFeatsText)) {
         txt_corpus <- txt_corpus
         # glbFeatsTextCorpus[[txtFeat]] <- txt_corpus
     }
-    names(glbFeatsTextCorpus) <- glbFeatsText
+    names(glbFeatsTextCorpus) <- names(glbFeatsText)
     
 mycombineSynonyms <- content_transformer(function(x, syn=NULL) { 
     Reduce(function(a,b) {
@@ -2052,43 +2076,16 @@ mytokenize3grams <- content_transformer(function(x) {
 
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "load.validwords"), major.inc = TRUE)
-    vldWordsFilename <- paste0("scowl-2015.08.24-english-american-35.txt")
-    if (!file.exists(vldWordsFilename))
-        stop(vldWordsFilename, " not found!")
-    vldWords <- read.csv(vldWordsFilename, header = FALSE, comment.char = "#", strip.white = TRUE,
-                         encoding = "UTF-8")
-    vldWords <- iconv(vldWords[, 1], "latin1", "UTF-8")
-    vldWords <- myreplacePunctuation(vldWords)
-    vldWords <- vldWords[!duplicated(vldWords)]
-    
-                    # Add "rpl_str" from glb_txt_map (that don't contain \\#)    
-    txtMapRplStr <- glbFeatsTextMap$rpl_str[!grepl("\\\\", glbFeatsTextMap$rpl_str)]
-    txtMapRplStr <- txtMapRplStr[!grepl("[[:punct:]]|[[:digit:]]", txtMapRplStr)]
-    txtMapRplStr <- str_trim(txtMapRplStr)
-    txtMapRplStr <- txtMapRplStr[txtMapRplStr != ""]
-    txtMapRplStr <- str_to_lower(txtMapRplStr[!grepl(" ", txtMapRplStr)])
-    vldWords <- union(vldWords, txtMapRplStr)
-    
-                    # Add "rpl_str" from glbFeatsDerive[[txtFeat]] (that don't contain \\#)
-    for (feat in intersect(glbFeatsText, names(glbFeatsDerive))) {
-        userDefWords <- deparse(glbFeatsDerive[[feat]]$mapfn, width.cutoff = 100)
-        userDefWords <- userDefWords[grepl("gsub", userDefWords)]
-        userDefWords <- gsub("modRaw <- gsub\\(\"(.+)\", \"(.+)\", (.+)\\)", "\\2", userDefWords)
-        #            regexpr("modRaw <- gsub\\(\"(.+)\", \"(.+)\", ",         userDefWords[111])
-        userDefWords <- str_trim(gsub("modRaw (.+)", "\\1", userDefWords))
-        userDefWords <- userDefWords[!grepl("\\\\", userDefWords)]
-        userDefWords <- unique(str_to_lower(unlist(str_split(userDefWords, " "))))
-        vldWords <- union(vldWords, userDefWords)
-    }    
+    glbSCOWLWordsFilename <- paste0("scowl-2015.08.24-english-american-35.txt")
+    if (!file.exists(glbSCOWLWordsFilename))
+        stop(glbSCOWLWordsFilename, " not found!")
+    glbSCOWLWords <- read.csv(glbSCOWLWordsFilename, header = FALSE, comment.char = "#", 
+                           strip.white = TRUE, encoding = "UTF-8")
+    glbSCOWLWords <- iconv(glbSCOWLWords[, 1], "latin1", "UTF-8")
+    glbSCOWLWords <- myreplacePunctuation(glbSCOWLWords)
+    glbSCOWLWords <- glbSCOWLWords[!duplicated(glbSCOWLWords)]
                         
-                    # Add synonyms from glbFeatsTextSynonyms[[txtFeat]]
-    for (feat in intersect(glbFeatsText, names(glbFeatsTextSynonyms))) {
-        userDefWords <- unlist(sapply(1:length(glbFeatsTextSynonyms[[feat]]), function(elemIx)
-                                                    glbFeatsTextSynonyms[[feat]][[elemIx]]$syns))
-        vldWords <- union(vldWords, userDefWords)
-    }    
-                        
-    vldWords <- union(vldWords, myreplacePunctuation(str_to_lower(c(NULL
+    vldTerms <- union(glbSCOWLWords, myreplacePunctuation(str_to_lower(c(NULL
         # Month names
         ,"jan","feb","mar","April","may","jun","jul","aug","sep","oct","nov","dec"
         # Day names
@@ -2117,7 +2114,7 @@ mytokenize3grams <- content_transformer(function(x) {
         ,"Egypt","England","english","euro","europe","european","Europeans","Europes"
         ,"ferguson","finland","Finnish","Finns","florida","France","frankfurt","Frankfurter"
         ,"georgia","Georgian","german","Germans","germany","glencore","greece","greek"
-        ,"Haiti","Haitian","havana","Hawaii","Hawaiian","Helsinki","Hertz","Hispanic"
+        ,"Haiti","Haitian","havana","Hawaii","Hawaiian","Helsinki","Hispanic"
             ,"hollywood","hongkong","HongKongs","Houston","Hungarian"
         ,"Ibiza","Iceland","illinois","india","indias","indian","indians","iowa"
             ,"Iran","Iranian","iraq","iraqi","Ireland","irish"
@@ -2155,196 +2152,49 @@ mytokenize3grams <- content_transformer(function(x) {
         ,"vermont","Vienna","Vietnam","Vietnamese","Vietnams","virginia","virginia's"
         ,"Wales","wallstreet's","washington","WashingtonDC","wisconsin"
         ,"Xinjiang"
+        ,"Ypres"
         ,"Zhejiang"
+    ))))    
         
-        # Company names
-        ,"AbbVie","AbbVie's","Actavis","adidas","Aldermore","Airbnb"
-            ,"Alibaba","Alibabas","allergan","Altice","Altuzarra"
-            ,"Amazon","Amgen"
-            ,"Apax","APEC","Arista","Atos","Auxilium","Aviva"
-        ,"Bain","Balenciaga","Balenciaga","barclays","Bayer","BBC","Bellevue","BGC"
-            ,"BlackRock","Blackstone","Blumarine"
-            ,"Braun"
-            ,"BSkyB","bt","Burberry"
-        ,"Caesars","Calpers","Cargill","Cartier","CGG"
-            ,"Chanel","Chanel's","Chiquita","Chiquita's","Chloe"
-                ,"Christian","Christians","Christianity"
-            ,"cisco"
-            ,"citigroup"
-            ,"coinbase","Comcast"
-            ,"csx"
-            ,"cubist"
-        ,"darden","dealogic","Diageo","Dow","DreamWorks","Dresser-Rand"
-        ,"EBay","EE","Electra","Elliott","Ello","EMC","Endo"
-        ,"facebook","Feit","fendi","Filings","Fyffes"
-        ,"Galleon","Givenchy","goldman","goldmans","google","googled","googles"
-            ,"GreeneKing","Groupon"
-            ,"Guggenheim"
-        ,"Hasbro","herbalife","Hermes","HSBC","HSBCs"
-        ,"IBM","ING","intel","Islam"        
-        ,"Jacquemus","Jana","Janus","Jefferies","JetBlue","Judaism"
-        ,"Kenzo","Kering","knick","Knicks"
-        ,"LabCorp","Lazard","Lehman","Lloyds","loeb","Louisiana","luxottica"
-        ,"Margiela","Marni","Marriott","merck","Methane","metlife","Microsoft"
-        ,"Netflix","NewRepublic","newyorktimes","Nike","Nutreco"
-        ,"Oaktree","Ocwen","Oi","okcupid","OnDeck"
-        ,"PayPal","PetSmart","Philips","pimco","Prada","PTA","Puma"
-        ,"qualcomm"
-        ,"RadioShack","Reddit","Repsol","Rodarte"
-        ,"Sacai","Salix","Samsung","Santander","Sherborne","SHV","Siemens"
-            ,"SoftBank","sony","Soviet","Sovietization","soviets"
-            ,"Spotify","Starbucks","Symantec"
-        ,"technip","TianheChemicals","Tibco","Travelport","TUI"
-        ,"uber","UBM","ubs"
-        ,"Valeant","Valeant's","Valentino","Valentino's","Vatican","verizon"
-        ,"Walmart","Walmart's","WHotels","WNYC","WNYCs"
-        ,"Xerox","Xiaomi","xiaomis"
-        ,"yahoo","yahoos","yale","Yara"
+    # Add "rpl_str" from glb_txt_map (that don't contain \\#)    
+    txtMapRplStr <- glbFeatsTextMap$rpl_str[!grepl("\\\\", glbFeatsTextMap$rpl_str)]
+    txtMapRplStr <- txtMapRplStr[!grepl("[[:punct:]]|[[:digit:]]", txtMapRplStr)]
+    txtMapRplStr <- str_trim(txtMapRplStr)
+    txtMapRplStr <- txtMapRplStr[txtMapRplStr != ""]
+    txtMapRplStr <- str_to_lower(txtMapRplStr[!grepl(" ", txtMapRplStr)])
+    vldTerms <- union(vldTerms, txtMapRplStr)
                     
-        # Product names
-        ,"Android","AnonyWatch","ApplePay","botox"
-        ,"Celiac","CFDA","Citizenfour","ClassDojo","cosmo"
-        ,"Duracell"
-        ,"euros","eurozone"
-        ,"Hanukkah","hbo","heineken","Hoverboard","Hoverboards"
-        ,"instagram","ios","iPhone","iPhones","ipads","ipod","itunes","iWatch"
-        ,"Jewish","Jews"
-        ,"LACMA","Longpoint"
-        ,"medicare","minecraft","MOCA","Muslim","Muslims"
-        ,"nazi","nazis","Netrebko","Neverland","nytlnreads"
-        ,"obamacare","oculus"
-        ,"Pabst","pinterest","Postit"
-        ,"Redskins","Reich","REIT","Ruble"
-        ,"SABMiller","Showtime","Simpsons","Smartwatch","Snapchat","Soundcheck","Spanx","Synod"
-        ,"Technicolor","ts"
-        ,"vitamind"
-        ,"WhatsApp"
-        ,"yankees","youtube"
-                    
-        # Words not in this SCOWL db
-        ,"ABC","ABCs","acrostic","Activism","Adoptees","aeroplanes","ageist","Airbags","Airways"
-            ,"alternateside"
-            ,"Analytics","Anthropocene","anti","Antidepressants","Antitrust"
-            ,"Apologists","app","apps"
-            ,"Arent","Artfully","Artsy","artworks"
-            ,"Authoritarianism","Autism","Autocorrect"
-        ,"Backpedals","Backstory","bailout","Banco","Bartending"
-            ,"Beeps","Belle","Benchmark","Benchmarks"
-            ,"Bidders","Billionaire","Billionaires","Biotech","Bipartisanship"
-                ,"bitcoin","bitcoins"
-            ,"bleeping","blower"
-            ,"Bohemian","Bohemians","Bona","Bonanza","Borrowers","Bot","Boxy"
-            ,"Breaker","breakup","Brewer","Broadband","Broadcaster","brutalism","brutalist"
-            ,"Buybacks","Buyout","Buyouts","buzziest"
-        ,"cafe","cafes","camerawearing","Cannabis","Canonizes","Carb","Carbs","Catcher"
-            ,"Cautionary"
-            ,"Cellphone","cellphones","centric","ceos","certifier"
-            ,"chairwoman","changer","Chargers","Chaser","Chemotherapy","Childs","Children"
-                ,"chokehold","christmas"
-            ,"Circusry"
-            ,"classsrooms","Closings"
-            ,"Co" # Co-<something>; not "Company"
-                ,"Colorfully","comity"
-                ,"confusingly","congressional","Conservationists","constructively"
-                    ,"contractionary","controvert"
-                ,"copycat"
-                ,"counteroffer","Couture"
-            ,"Crackdown","craftsmanship","CrossFit","Crowdfunding"
-            ,"cupcakes","Curated","Curates","Curatorial","customizable","cuteness"
-            ,"Cyberattack","cyberattacks","Cyberbullies","Cyberbullying","Cybercriminals"
-                ,"Cyberdefenses","cybersecurity"
-        ,"Dateless","Deflationary","deploy","deployed","deployment","Deporter","derp","derpy"
-                ,"Detox","Detoxing"
-            ,"Diagramless","Didnt","Disinflation","divorcee"
-            ,"dna"
-            ,"Dodger","doesnt","dont","Downside","Downsizing"
-            ,"Dreamboat"
-        ,"ebola","ebolas","EBook","Ebooks","ecigarettes","ECommerce"
-            ,"enhancer","Ensnared","Enterovirus","Entrepreneur","entrepreneurial","entrepreneurs"
-            ,"Epically","Epidurals","Epiphany","Equalizer","Erasable","ESports","Everyones"
-            ,"ex","Exclusivity","Expats","Extravaganza","Extremism"
-        ,"F","Fandom","fashionistas","Faux" # synonym with false ???
-            ,"Fest","Fides","filmmaker","Flyers","followup","Fondation","Footie","Foreclosures"
-            ,"Fracking","Fraudsters","fritz"
-        ,"G","Gallerist","Gamers","Geek" ,"Geeks","Gentrification","ghosthunting","Ghoulish"
-            ,"Giver"
-            ,"glitch","globalization"
-            ,"governance","Gown"
-            ,"Grandma","grandmasters","Gravedigger","groundbreaking"
-        ,"H","halloween","handstands","hashtag","Hashtags","hauntings","Haute","havent","Hawkish"
-            ,"Heartbreaking","Helpline","hermitage"
-            ,"HipHop"
-            ,"Holdings","Holdout","Holdouts"
-                ,"homecoming","Homelessness","Homeowners","homestretch","honorees","hospices"
-        ,"i","Iconic","Illusionists","Immolation"
-            ,"indie","Infighting","influencers","infographics","Innovate","Innovators","insomniac"
-                ,"Interfaith","Internet","Introverted"
-                ,"Invisibles"
-            ,"IPOs"
-            ,"Islamic","islamists","isnt"
-        ,"Journaling","journalistic","Joyless"
-        ,"Kicker","knaves"
-        ,"latin","latinas","latinos","Leftover","Leftovers","Legalization","lender","lenders"
-            ,"libor","Lifespans","Lineup","liquidity"
-            ,"longtime","luddite","Luxe"
-        ,"Macroeconomic","Makeover","marathoner","marathoners","Mayoral"
-            ,"meatless","meatloaf","Medalists","Mega","meltdowns","messaging"
-            ,"Midwest","midterm","midterms","millennial","millennials","Millennium","Millenniums"
-                ,"mini","Minivan","mistreatment"
-            ,"modernist","Mommy","Moviegoers"
-            ,"Multimedia","muslims"
-        ,"narcissist","Nemesis","Nerd","Newsroom","newyear","nightcrawler"
-            ,"nocturnalist","Nonclassical","Novelistic"
-            ,"Nudie","Numberplay"
-        ,"offline","olds","Oligarchs","online","onstage","Oops","Orbiter"
-        ,"outback","Outreach","Outsells","Outsourcing"
-        ,"PAC","PACs","pairings","Payouts","Peacekeeping","Perfumer"
-            ,"philharmonic","philharmonics"
-            ,"piercings","pizzeria"
-            ,"playlist","playlists"
-            ,"podcast","Ponytails","Popcast","Populism","Porn","postmodern"
-            ,"Pre", "Prenuptial","preps"
-                    ,"Preschool","Preschooler","Preschoolers","Preservationist"
-                ,"prioritization","prioritizing"
-                ,"ProDemocracy","protester","protesters"
-        ,"Questioners","quinoa"
-        ,"rapper","radicalized","razings"
-            ,"Reappointed","Rebooting","reboots","Regroup","regulator","Regulators"
-                ,"reimagined","Reinsurance","Reinvent","Reinvents","Reinventing"
-                ,"Relievers"
-                ,"reshape","Residency","Resurgent","retesting","Retro","Retweet"
-            ,"riverbed"
-            ,"roadshow","Robo","Robotic","robotics","rodenticide","rollout","Rooftop","roundup"
-            ,"runoff"
-        ,"salvo","scams","schoolers","screenings","Scrum","Sculptural"
-            ,"SelfControl","selfie","Selfies","senatorial"
-            ,"shags","shhh","shoemaker","Shootings","shortlists","ShortSeller","shouldnt"
-            ,"sightings","Simulcast","Skincare"
-            ,"Sliders","slouchy","Slowdown"
-            ,"smartphone","smartphones","smoothies","smushing"
-            ,"songstress","Soundtracked"
-            ,"SpellCheck","Spinoff","spinoffs","sportier","Sporty"
-            ,"Standalone","startup","startups","steamer","steelmaker","stepmother","storefront"
-                ,"stylist"
-            ,"Subpoena","Subpoenas","subprime","Summery","superfan","superfans","supermodels"
-            ,"swaths","sweatshirt","Sweeties","Switchers"
-        ,"takeovers","Tastings","Taxidermy"
-            ,"tech","Technologist","Telecom","tequila","texting"
-            ,"thanksgiving","Theatrics","Themed","Therapeutics"
-            ,"Timeline","timepiece","timepieces","Titan","Titans"
-            ,"torturers","tourism"
-            ,"tracker","transportive","treaters","trousseau","trove"
-            ,"tshirts","turnabout"
-        ,"UniCredit"
-        ,"valuation","Vegan","Vegans","Volatility"
-        ,"wasnt","Wearable","Wearables","webcasts","Website","Websites","Wellness","werent"
-            ,"Whisperer","whitecollar"
-            ,"winemaking","Winery","Wireless"
-            ,"wmd","wmds"
-            ,"Womens","Wonkish","Workday","workups","Wouldnt"
-        ))))
-#unlist(str_split("second meatless day"," ")) %in% vldWords    
-    vldWords <- union(vldWords, glbFeatsTextVldWords)
+    # Set up vldTerms for each txtFeat
+    for (feat in names(glbFeatsText)) {
+        glbFeatsText[[feat]]$vldTerms <- vldTerms
+    }    
+    
+    # Add "rpl_str" from glbFeatsDerive[[txtFeat]] (that don't contain \\#)
+    for (feat in intersect(names(glbFeatsText), names(glbFeatsDerive))) {
+        userDefTerms <- deparse(glbFeatsDerive[[feat]]$mapfn, width.cutoff = 100)
+        userDefTerms <- userDefTerms[grepl("gsub", userDefTerms)]
+        userDefTerms <- gsub("modRaw <- gsub\\(\"(.+)\", \"(.+)\", (.+)\\)", "\\2", userDefTerms)
+        #            regexpr("modRaw <- gsub\\(\"(.+)\", \"(.+)\", ",         userDefTerms[111])
+        userDefTerms <- str_trim(gsub("modRaw (.+)", "\\1", userDefTerms))
+        userDefTerms <- userDefTerms[!grepl("\\\\", userDefTerms)]
+        userDefTerms <- unique(str_to_lower(unlist(str_split(userDefTerms, " "))))
+        glbFeatsText[[feat]]$vldTerms <- union(glbFeatsText[[feat]]$vldTerms, userDefTerms)
+    }    
+    
+    # Add names & rareWords from glbFeatsText[[txtFeat]]
+    for (feat in names(glbFeatsText)) {
+        glbFeatsText[[feat]]$vldTerms <- union(glbFeatsText[[feat]]$vldTerms,
+                                               glbFeatsText[[feat]]$names)
+        glbFeatsText[[feat]]$vldTerms <- union(glbFeatsText[[feat]]$vldTerms,
+                                               glbFeatsText[[feat]]$rareWords)        
+    }    
+                        
+    # Add synonyms from glbFeatsTextSynonyms[[txtFeat]]
+    for (feat in intersect(names(glbFeatsText), names(glbFeatsTextSynonyms))) {
+        userDefTerms <- unlist(sapply(1:length(glbFeatsTextSynonyms[[feat]]), function(elemIx)
+                                                    glbFeatsTextSynonyms[[feat]][[elemIx]]$syns))
+        glbFeatsText[[feat]]$vldTerms <- union(glbFeatsText[[feat]]$vldTerms, userDefTerms)
+    }    
 
 #stop(here"); glb2Sav(); all.equal(savFeatsTextCorpus, glbFeatsTextCorpus); glbFeatsTextCorpus[[txtFeat]] <- savFeatsTextCorpus[[txtFeat]]
     glb_post_stop_words_terms_df_lst <- list(); 
@@ -2352,14 +2202,14 @@ mytokenize3grams <- content_transformer(function(x) {
     glb_post_stem_words_terms_df_lst <- list(); 
     glb_post_stem_words_terms_mtrx_lst <- list();     
     glb_full_DTM_lst <- list();     
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
                 paste0("extract.features_", "post.stop.weights.df.", txtFeat), major.inc = TRUE)
 
         print(sprintf("    Top_n post-stop term weights for %s:", txtFeat))
         # This impacts stemming probably due to lazy parameter
         print(myprint_df(full_terms_df <-
-                get_corpus_terms(txt_corpus=glbFeatsTextCorpus[[txtFeat]], 
+                get_corpus_terms(txt_corpus = glbFeatsTextCorpus[[txtFeat]], 
                                  compute.chisq = FALSE, compute.nzv = FALSE), 
                         glbFeatsTextTermsMax[[txtFeat]]))
         glb_post_stop_words_terms_df_lst[[txtFeat]] <- full_terms_df
@@ -2386,14 +2236,18 @@ mytokenize3grams <- content_transformer(function(x) {
         TdmNgrams <- TermDocumentMatrix(txt_corpus, control = list(tokenize = mytokenize3grams))
         txtTdmNgrams <- get_txt_terms(TdmNgrams,
                                       compute.nzv = FALSE, compute.chisq = FALSE)
-        txtTdmNgrams$vldWords <- sapply(1:nrow(txtTdmNgrams), function(rowIx) {
+        txtTdmNgrams$vldTerms <- sapply(1:nrow(txtTdmNgrams), function(rowIx) {
             tokens <- unlist(str_split(txtTdmNgrams[rowIx, "term"], " ")); 
-            return(all(tokens %in% vldWords)) })
-        invldWords <- subset(txtTdmNgrams, !vldWords)
-        print(sprintf("Remaining invalid words: %d", nrow(invldWords)))
-        myprint_df(subset(invldWords, select = -term))
+            return(all(tokens %in% glbFeatsText[[txtFeat]]$vldTerms)) })
+        potentialNames <- subset(txtTdmNgrams, !vldTerms)
+        print(sprintf("Remaining potential names: %d", nrow(potentialNames)))
+        myprint_df(subset(potentialNames, select = -term))
+        # to id invalid terms
+        #unlist(strsplit("zzz z sleep", " ")) %in% glbFeatsText[[txtFeat]]$vldTerms
+        #grep("\\bzzz", glb_txt_chr_lst[[txtFeat]], ignore.case = TRUE, value = TRUE)
+        #grep("\\bzzzz", glbObsAll[, txtFeat], ignore.case = TRUE, value = TRUE)
         # to id docs that have a specific ngram using txtTdmNgrams[, pos]
-        #glbObsAll[TdmNgrams$j[which(TdmNgrams$i == 19349)], glb_dsp_cols]
+        #glbObsAll[TdmNgrams$j[which(TdmNgrams$i == 40052)], glb_dsp_cols]
         #glbObsAll[unique(TdmNgrams$j[TdmNgrams$i %in% invldWords$pos]), "Hdln.my"]
     
         extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
@@ -2486,7 +2340,7 @@ mytokenize3grams <- content_transformer(function(x) {
             paste0("extract.features_", "report.corpus.wordcloud"), major.inc = TRUE)
     
     require(wordcloud)
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("    Wordcloud post-stem term weights for %s:", txtFeat))
         m <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
         # calculate the frequency of words
@@ -2509,7 +2363,7 @@ mytokenize3grams <- content_transformer(function(x) {
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "report.corpus.termggplot"), major.inc = TRUE)
     
-    for (txtFeat in glbFeatsText) {    
+    for (txtFeat in names(glbFeatsText)) {    
         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
                     as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
                                 use = "pairwise.complete.obs"))
@@ -2541,7 +2395,7 @@ mytokenize3grams <- content_transformer(function(x) {
             paste0("extract.features_", "extract.DTM"), major.inc = TRUE)
 
     glb_sprs_DTM_lst <- list();
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Extracting term weights for %s...", txtFeat))        
 #         txt_corpus <- glbFeatsTextCorpus[[txtFeat]]
 #         
@@ -2559,7 +2413,7 @@ mytokenize3grams <- content_transformer(function(x) {
             paste0("extract.features_", "report.DTM"), major.inc=TRUE)
     
     require(reshape2)
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Reporting term weights for %s...", txtFeat))        
         full_DTM <- glb_full_DTM_lst[[txtFeat]]
         sprs_DTM <- glb_sprs_DTM_lst[[txtFeat]]        
@@ -2621,17 +2475,17 @@ mytokenize3grams <- content_transformer(function(x) {
     rm(full_terms_mtrx)
 
     # Create txt features
-    if ((length(glbFeatsText) > 1) &&
-        (length(unique(pfxs <- sapply(glbFeatsText, 
-                    function(txt) toupper(substr(txt, 1, 1))))) < length(glbFeatsText)))
+    if ((length(names(glbFeatsText)) > 1) &&
+        (length(unique(pfxs <- sapply(names(glbFeatsText), 
+                    function(txt) toupper(substr(txt, 1, 1))))) < length(names(glbFeatsText))))
             stop("Prefixes for corpus freq terms not unique: ", pfxs)
     
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
                             paste0("extract.features_", "bind.DTM"), 
-                                         major.inc=TRUE)
+                                         major.inc = TRUE)
 #stop(here"); glb2Sav(); all.equal(savObsAll, glbObsAll); glbObsAll <- savObsAll
     require(tidyr)
-    for (txtFeat in glbFeatsText) {
+    for (txtFeat in names(glbFeatsText)) {
         print(sprintf("Binding DTM for %s...", txtFeat))
         txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))
         
@@ -2723,7 +2577,7 @@ mytokenize3grams <- content_transformer(function(x) {
         myadd_chunk(extract.features_chunk_df, paste0("extract.features_", "bind.DXM"), 
                     major.inc = TRUE)
 
-#stop(here"); savObsAll <- glbObsAll; glbObsAll <- savObsAll
+#stop(here"); glb2Sav(); all.equal(savObsAll, glbObsAll); savObsAll <- glbObsAll; glbObsAll <- savObsAll
     glb_punct_vctr <- c("!", "\"", "#", "\\$", "%", "&", "'", 
                         "\\(|\\)",# "\\(", "\\)", 
                         "\\*", "\\+", ",", "-", "\\.", "/", ":", ";", 
@@ -2734,7 +2588,7 @@ mytokenize3grams <- content_transformer(function(x) {
                         "\\{", "\\|", "\\}", "~")
     txt_X_df <- glbObsAll[, c(glb_id_var, ".rnorm"), FALSE]
     #txt_X_df <- foreach(txtFeat=glbFeatsText, .combine=cbind) %dopar% {   
-    txt_X_df <- foreach(txtFeat = glbFeatsText, .combine = cbind) %do% {           
+    txt_X_df <- foreach(txtFeat = names(glbFeatsText), .combine = cbind) %do% {           
     # for (txtFeat in glbFeatsText) {
         print(sprintf("Binding DXM for %s...", txtFeat))
         txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))        
@@ -2837,6 +2691,39 @@ mytokenize3grams <- content_transformer(function(x) {
                     txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")])
         }
 
+        # Create <txtFeat>.wrds.SCOWL.n.log & <txtFeat>ratio.wrds.SCOWL.n.wrds.n
+        if (TRUE) {
+            print(sprintf("Binding DXM Loop: .wrds.SCOWL.n.log: elapsed: %0.2f secs",
+                          as.numeric(proc.time()["elapsed"]) - tmEnter))
+            
+#             txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <- 0            
+#             stepVal <- 500
+#             for (rng in seq(1, length(glbSCOWLWords), stepVal)) {
+#                 bgn <- rng
+#                 end <- bgn + stepVal - 1
+#                 if (end > length(glbSCOWLWords))
+#                     end <- length(glbSCOWLWords)
+#                 print(sprintf("bgn:%d; end:%d", bgn, end))
+#                 glbSCOWLWords_rex_str <- paste0("\\b(", 
+#                                 paste0(glbSCOWLWords[bgn:end], collapse = "|"),
+#                                              ")\\b")
+#                 txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
+#                     txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] + 
+#                     mykntpar_pattern_occ(glbSCOWLWords_rex_str, glb_txt_chr_lst[[txtFeat]])
+#                     #log1p(mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]][1]))   
+#             }
+#             txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
+#                     log1p(txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")])
+         
+            mask <- dimnames(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])$Terms %in% glbSCOWLWords
+            txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
+                log1p(rowSums(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, mask] > 0))
+                
+            txt_X_df[, paste0(txtFeat_pfx, ".ratio.wrds.SCOWL.n.wrds.n")] <-
+                exp(txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] - 
+                    txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")])
+        }
+
         # Create <txtFeat>.P.http
         print(sprintf("Binding DXM Loop: .P.<pattern>.log1p: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - tmEnter))
@@ -2877,7 +2764,7 @@ mytokenize3grams <- content_transformer(function(x) {
 #     print(summary(glbObsNew))
 #     print(sapply(names(glbObsNew), function(col) sum(is.na(glbObsNew[, col]))))
 
-    glbFeatsExclude <- union(glbFeatsExclude, glbFeatsText)
+    glbFeatsExclude <- union(glbFeatsExclude, names(glbFeatsText))
     #rm(log_X_df, txt_X_df)
 }
 
@@ -3427,7 +3314,8 @@ glb_feats_df <- myselect_features(entity_df = glbObsTrn,
 
 glb_feats_df <- orderBy(~-cor.y, 
           myfind_cor_features(feats_df=glb_feats_df, obs_df=glbObsTrn, rsp_var=glb_rsp_var,
-                              nzv.freqCut = glbFeatsNzvFreqMax, nzv.uniqueCut = glbFeatsNzvUniqMin)))
+                              nzv.freqCut = glbFeatsNzvFreqMax, 
+                              nzv.uniqueCut = glbFeatsNzvUniqMin))
 print(subset(glb_feats_df, select = -id))
                               
 plt_feats_df <- glb_feats_df
@@ -3438,7 +3326,7 @@ print(myplot_scatter(plt_feats_df, "percentUnique", "freqRatio",
           xlim(-5, 25) + 
           geom_hline(yintercept=glbFeatsNzvFreqMax) +
           geom_vline(xintercept=glbFeatsNzvUniqMin))
-print(subset(glb_feats_df, nzv))
+print(subset(glb_feats_df, nzv, select = -id))
 
 tmp_allobs_df <- 
     glbObsAll[, union(setdiff(names(glbObsAll), subset(glb_feats_df, nzv)$id),
@@ -3881,7 +3769,7 @@ if (length(glbFeatsText) > 0) {
                                     label.minor = "glmnet")
 
     indepVars <- c(max_cor_y_x_vars)
-    for (txtFeat in glbFeatsText)
+    for (txtFeat in names(glbFeatsText))
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.(?!([T|P]\\.))", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
@@ -3903,7 +3791,7 @@ if (length(glbFeatsText) > 0) {
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
     indepVars <- c(max_cor_y_x_vars)
-    for (txtFeat in glbFeatsText)
+    for (txtFeat in names(glbFeatsText))
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.T\\.", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
@@ -3924,7 +3812,7 @@ if (length(glbFeatsText) > 0) {
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
     indepVars <- c(max_cor_y_x_vars)
-    for (txtFeat in glbFeatsText)
+    for (txtFeat in names(glbFeatsText))
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.P\\.", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
@@ -3986,7 +3874,7 @@ ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
             train.maximize = glbMdlMetricMaximize,    
         train.method="glmnet")),
         indep_vars=indep_vars, rsp_var=glb_rsp_var, 
-        fit_df=glbObsFit, OOB_df=glbObsOOB)
+        fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 fit.models_0_chunk_df <- 
     myadd_chunk(fit.models_0_chunk_df, "fit.models_0_end", major.inc = FALSE,
@@ -5329,14 +5217,14 @@ write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 
 #             "max.auc.OOB", "max.Accuracy.OOB")]))
-for (txtFeat in glbFeatsText) {
+for (txtFeat in names(glbFeatsText)) {
     # Print post-stem-words but need post-stop-words for debugging ?
     print(sprintf("    All post-stem-words term weights for %s:", txtFeat))
     myprint_df(glb_post_stem_words_terms_df_lst[[txtFeat]])
     terms_mtrx <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
     print(glbObsAll[
         which(terms_mtrx[, tail(glb_post_stem_words_terms_df_lst[[txtFeat]], 1)$pos] > 0), 
-                        c(glb_id_var, glbFeatsText)])
+                        c(glb_id_var, names(glbFeatsText))])
     print(nrow(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], freq == 1)))
 
     print(sprintf("    All post-stem-words term freq distribution for %s:", txtFeat))
@@ -5402,6 +5290,7 @@ if (glb_is_classification) {
     print(sprintf("%s OOB confusion matrix & accuracy: ", glb_sel_mdl_id))
     print(t(confusionMatrix(glbObsOOB[, mygetPredictIds(glb_rsp_var, glb_sel_mdl_id)$value],
                             glbObsOOB[, glb_rsp_var])$table))
+}            
 
     if (!is.null(glbFeatsCategory)) {
         glbLvlCategory <- merge(glbLvlCategory, 

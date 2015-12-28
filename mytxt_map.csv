@@ -5,7 +5,6 @@
 #
 #--- Synced Applications---
 # MIT/Analytics_Edge_15_071x/Assignments/Kaggle_eBay_iPads2
-#   Need to clean NYTimesBlogs local stuff from here to .Rmd
 #
 #--- ISO-8859-* Dictionary ---
 #   http://www.trans4mind.com/personal_development/HTMLGuide/specialCharacters.htm
@@ -153,9 +152,12 @@
 "\bNovember\b",         "Nov"
 "\bDecember\b",         "Dec"
 #
-#---Places / Names cleansing---
+#---Idioms consolidation---
 #
-"\bAbu Dhabi",                          "AbuDhabi"
+"\bDeja Vu",                            "DejaVu"
+#
+#---Company/Product Names consolidation---
+#
 "\bApple Pay",                          "ApplePay"                  # Product
 "\bArt Basel",                          "ArtBasel"                  # Company
 "\bBank of America",                    "BankofAmerica"             # Company
@@ -164,7 +166,7 @@
 "\bBank of England",                    "BankofEngland"             # Company
 "\bBank of New York Mellon",            "BankofNewYorkMellon"       # Company
 "\bBarnes & Noble",                     "BarnesAndNoble"            # Company
-"\bBCA Marketplace",                    "BCAMarketplace"            # Company
+"\bBCA Marketplace",                                # Company
 "\bBerkshire Hathaway",                 "BerkshireHathaway"         # Company
 "\b(B|b)(EST|est) (B|b)(UY|uy)\b",      "\1\2\3\4"
 "\bBezos Venture",                      "BezosVenture"              # Company
@@ -174,7 +176,6 @@
 "\bBooker Prize",                       "BookerPrize"               # Product
 "\bBottega Veneta",                     "BottegaVeneta"             # Company (Fashion)
 "\bCalvin Klein",                       "CalvinKlein"               # Company
-"\bCentral African Republic\b",         "CentralAfricanRepublic"
 "\bCF Industries",                      "CFIndustries"              # Company
 "\bC(.+) (D|d)ifficile\b",              "Clostridium\2ifficile"     # Bacteria
 "\bClub Med",                           "ClubMed"                   # Company
@@ -184,7 +185,6 @@
 "\bCredit Suisse",                      "CreditSuisse"              # Company
 "\bDalian Wanda Commercial",            "DalianWandaCommercial"     # Company
 "\bDave & Buster",                      "DaveAndBuster"             # Company
-"\bDeja Vu",                            "DejaVu"
 "\bDerek Lam",                          "DerekLam"                  # Company
 "\bDolce & Gabbana",                    "DolceAndGabbana"           # Company (Fashion)
 "\bDon Julio",                          "DonJulio"                  # Brand
@@ -204,6 +204,14 @@
 "\bHaider Ackermann",                   "HaiderAckermann"           # Company
 "\bHampton Creek",                      "HamptonCreek"              # Company
 "\bHewlett-Packard",                    "HewlettPackard"            # Company
+"\bI (CLOUD|cloud)\\b",                         "I\1"
+"\bI pad\\b",                                   "Ipad"
+"\b(I|i)(P|p)(A|a)(D|d) (A|a)(I|i)(R|r)\b",     "\1\2\3\4\5\6\7"
+"\b(I|i)(P|p)(A|a)(D|d) (M|m)ini\b",            "\1\2\3\4\5ini"
+"\b(IPAD|Ipad|iPad|ipad) ([[:digit:]])\b",      "\1\2"
+"\b(Ipadair|iPadAir|ipadair) ([[:digit:]])\b",  "\1\2"
+"\b(iPadMini|iPadmini) ([[:digit:]])\b",        "\1\2"
+"\bI Phone\b",                                  "IPhone"
 "\b(J&J|Johnson & Johnson)",            "JandJ"                     # Company
 "\bJay Z",                              "JayZ"                      # Music Band
 "\bJimmy Choo",                         "JimmyChoo"                 # Company (Fashion)
@@ -218,35 +226,27 @@
 "\bMorgan Stanley",                     "MorganStanley"             # Company
 "\bNew York Times",                     "NewYorkTimes"
 "\bNine Inch Nails",                    "NineInchNails"             # Music Band
-"\bPapua New Guinea",                   "PapuaNewGuinea"
 "\bPerella Weinberg",                   "PerellaWeinberg"           # Company
 "\bPhoebe English",                     "PhoebeEnglish"             # Company (Fashion)
 "\bProcter & Gamble",                   "ProcterAndGamble"          # Company
 "\bProenza Schouler",                   "ProenzaSchouler"           # Company (Fashion)
+"\bReckitt Benckiser",                  "ReckittBenckiser"          # Company
+"\bRio Tinto",                          "RioTinto"                  # Company
+"\bRite Aid",                           "RiteAid"                   # Company
 "\bRussell Investments",                "RussellInvestments"        # Company
-"\bSouth China Sea\b",                  "SouthChinaSea"
 "\bSt. Ann's Warehouse\b",              "SaintAnnsWarehouse"        # Theater company
 "\bSt. Baldrick's\b",                   "SaintBaldricksFoundation"  # Charity
 "\bThe Times",                          "NewYorkTimes"
 "\bTom Ford",                           "TomFord"                   # Company
-"\bReckitt Benckiser",                  "ReckittBenckiser"          # Company
-"\bRhode Island",                       "RhodeIsland"
-"\bRio Tinto",                          "RioTinto"                  # Company
-"\bRite Aid",                           "RiteAid"                   # Company
 "\bSociete Generale",                   "SocieteGenerale"           # Company
 "\bSimon & Schuster",                   "SimonandSchuster"          # Company
 "\bSky Deutschland",                    "SkyDeutschland"            # Company
 "\bStella McCartney",                   "StellaMcCartney"           # Company
 "\bT-Mobile",                           "TMobile"                   # Company
-"\bTel Aviv",                           "TelAviv"
 "\bTianhe Chemicals",                   "TianheChemicals"           # Company
 "\bTime Warner Cable",                  "TimeWarnerCable"           # Company
 "\bToys 'R' Us",                        "ToysRUs"
-"\bUnited States",                      "USA"
 "\bVictoria's Secret",                  "VictoriasSecret"           # Company
-"\bWall Street",                        "WallStreet"
-"\bWall St\.",                          "WallStreet"
-"\bWall St",                            "WallStreet"
 "\bWalt Disney Co.",                    "WaltDisneyCompany"         # Company
 "\bWashington D\.C\.",                  "WashingtonDC"
 "\bWashington Post",                    "WashingtonPost"            # Company
@@ -258,8 +258,12 @@
 "\bYves Saint Laurent",                 "YvesSaintLaurent"
 "\bZF Friedrichshafen\b",               "ZFFriedrichshafen"         # Company
 "\bZZ Top",                             "ZZTop"                     # Music Band
-###
+#
+#---Place Names consolidation---
+#
+"\bAbu Dhabi",                          "AbuDhabi"
 "\bBeverly Hills",                              "BeverlyHills"
+"\bCalif\.",                                    "California"
 "\bCosta Rica",                                 "CostaRica"
 "\bFort( |-)((Fisher|Lauderdale|Worth)\b)+",    "Fort\2"
 "\bFt\.( |-)((DummyA|DummyB)\b)+",              "Fort\2"
@@ -269,18 +273,26 @@
 "\bLos( |-)((Angeles|Angeless)\b)+",            "Los\2"
 "\bMt. Nebo",                                   "MountNebo" # WV, UT
 "\bNew( |-)((American|Amsterdam|Delhi|Dirt|England|Hampshire|Haven|Jersey|Jerseys|Jerseyans|Mexico|Orleans|Republic|Testament|World|Year|Years|York|Yorker|Yorkers|Yorks|Zealand)\b)+", "New\2"
+"\bPapua New Guinea",                   "PapuaNewGuinea"
 "\bPuerto( |-)((Rican|Rico|Ricos)\b)+",         "Puerto\2"
+"\bRhode Island",                       "RhodeIsland"
 "\bSaint( |-)((Gobain|Laurent|Lucia)\b)+",             "Saint\2" # Saint-Laurent
 "\bSan( |-)((Francisco|Franciscos|Gennaro|Giovanni|Juan|Marino)\b)+", "San\2"
 "\bSanta( |-)((Claus|Fe)\b)+", "Santa\2"
 "\bSt\.( |-)((Albans|Barts|Francis|Joe|John|Louis|Lucia|Martin|Martins|Marys|Matthew|Patricks|Paul|Regis|Vincent)\b)+", "Saint\2"   # St. Mary's City, MD; St. Lucia|Martin, Virgin Islands; Add s for plurality (e.g. New Yorks)
 "\bStaten Island",                              "StatenIsland"
-###
+"\bTel Aviv",                           "TelAviv"
+"\bUnited States",                      "USA"
+"\bWall Street",                        "WallStreet"
+"\bWall St\.",                          "WallStreet"
+"\bWall St",                            "WallStreet"
 #
 #---compass terms---
 #
+"\bCentral African Republic\b",         "CentralAfricanRepublic"
 "\bCentral( |\\.)(Dummy|Park)",                                                         "Central\2"
 "\bNorth( |\\.)(America|American|Carolina|Dakota|Korea|Korean|Miami)",                  "North\2"
+"\bSouth China Sea\b",                  "SouthChinaSea"
 "\bSouth( |\\.)(America|American|Africa|African|Carolina|Dakota|Korea|Korean|Sudan)",   "South\2"
 "\bS\\. (Dakota|Dummy)",                                                                "South\2"
 "\bWest( |\\.)(Point|Virginia)",                                                        "West\2"
@@ -322,10 +334,10 @@
 #
 #--- +ve contractions ---
 #
-"\b(He|he|She|she|They|they)'ll",   "\1 will"
+"\b(He|he|She|she|They|they|You|you)'ll",   "\1 will"
 "\bI'm",                            "I am"
 "\b(T|t)hey've\b",          "\1hey have"
-"\b(W|w)e'd\b",             "\1e would"
+"\b(We|we|You|you)'d\b",             "\1 would"
 "\b(W|w)e've\b",                "\1e have"
 "\b(Here|here|Who|who)'s\b",    "\1 is"
 "\b(Y|y)ou're\b",               "\1ou are"
@@ -365,22 +377,12 @@
 #
 #---misc consolidations---
 #
-"\bCalif\.",                                    "California"
 "\bCo\.",                                       "Company"
 "\bCol\.",                                      "Colonel"
 "\bCorp\.",                                     "Corporation"
 "\bDept.",                                      "Department"
 "\bEUC\b",                                      "excellent used condition"
-"\bI (CLOUD|cloud)\\b",                         "I\1"
-"\bI pad\\b",                                   "Ipad"
 "\bInc\.",                                      "Incorporated"
-"\b(I|i)(P|p)(A|a)(D|d) (A|a)(I|i)(R|r)\b",     "\1\2\3\4\5\6\7"
-"\b(I|i)(P|p)(A|a)(D|d) (M|m)ini\b",            "\1\2\3\4\5ini"
-"\b(IPAD|Ipad|iPad|ipad) ([[:digit:]])\b",      "\1\2"
-"\b(Ipadair|iPadAir|ipadair) ([[:digit:]])\b",  "\1\2"
-"\b(iPadMini|iPadmini) ([[:digit:]])\b",        "\1\2"
-"\bI Phone\b",                                  "IPhone"
-#"\bNational Book Award(s*)",                    "NationalBookAward"
 "\btelevision\b",                               "tv" # Consolidate with "tv" in raw data
 "\bVitamin ([[:upper:]])\b",                    "Vitamin\1"
 "\b[Vv]s\.",                                    "versus"
