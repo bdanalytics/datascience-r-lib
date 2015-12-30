@@ -375,6 +375,9 @@ if (!is.null(glbFeatsText)) {
         # Remove misc
         #,"th" # Happy [[:digit::]]+th birthday 
 
+        # Remove terms present in Trn only or New only; search for "Partition post-stem"
+        #   ,<comma-separated-terms>        
+
         # cor.y.train == NA
 #         ,unlist(strsplit(paste(c(NULL
 #           ,"<comma-separated-terms>"
@@ -390,8 +393,8 @@ if (!is.null(glbFeatsText)) {
             # ,<comma-separated-terms>        
                                             )))))
 }
-#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^qua", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
-#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, 8640] > 0, glbFeatsText]
+#orderBy(~term, glb_post_stem_words_terms_df_lst[[txtFeat]][grep("^man", glb_post_stem_words_terms_df_lst[[txtFeat]]$term), ])
+#glbObsAll[glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, 4866] > 0, c(glb_rsp_var, txtFeat)]
 
 # To identify terms with a specific freq
 #paste0(sort(subset(glb_post_stop_words_terms_df_lst[[txtFeat]], freq == 1)$term), collapse = ",")
@@ -506,6 +509,10 @@ glbFeatsTextSynonyms[["Hdln.my"]] <- list(NULL
     #   - e.g. ensure BNP in this experiment/feat always refers to BNPParibas
         
     # general synonyms
+    , list(word = "Create", syns = c("Create","Creator")) 
+    , list(word = "cute", syns = c("cute","cutest"))     
+    , list(word = "Disappear", syns = c("Disappear","Fadeout"))     
+    , list(word = "teach", syns = c("teach", "taught"))     
     , list(word = "theater",  syns = c("theater", "theatre", "theatres")) 
     , list(word = "understand",  syns = c("understand", "understood"))    
     , list(word = "weak",  syns = c("weak", "weaken", "weaker", "weakest"))
@@ -1994,8 +2001,9 @@ if (!is.null(glbFeatsText)) {
             chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %dopar% 
             # chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %do% 
             # chisqDf <- foreach(ix = 1:30, .combine = rbind) %do% 
-                if ((length(unique(docms_mtrx[trnObsIx, ix])) > 1) && 
-                    (terms_df[ix, "nzv.freqRatio"] <= 3265)) # Empirical setting
+#                 if ((length(unique(docms_mtrx[trnObsIx, ix])) > 1) && 
+#                     (terms_df[ix, "nzv.freqRatio"] <= 3265)) # Empirical setting
+                if (length(unique(docms_mtrx[trnObsIx, ix])) > 1)
                 {
                     chisq <- chisq.test(docms_mtrx[trnObsIx, ix], 
                                         glbObsAll[trnObsIx, glb_rsp_var])
@@ -2101,7 +2109,8 @@ mytokenize3grams <- content_transformer(function(x) {
             ,"atlanta"
             ,"Australia","australian","Australias"
         ,"Baja","beijing","Belgian","Belgians","belgium","benghazi","Berlin","boston"
-            ,"Brazil","Brazilian","britain","british","Britons","broadway","bronx","brooklyn"
+            ,"Brazil","Brazilian","Brazos","britain","british","Britons"
+                ,"broadway","bronx","brooklyn"
             ,"Burma"
         ,"Canada","canadian","canadians","caribbean"
             ,"centralpark"
@@ -2110,7 +2119,7 @@ mytokenize3grams <- content_transformer(function(x) {
             ,"Colombia","Colombian","Colombians","colorado","Connecticut"
             ,"cuba","cuba's","cuban","cubans"
             ,"Cyprus"
-        ,"dallas","Danish","Denmark","detroit","Deutsche","Dutch"
+        ,"Dakota","dallas","Danish","Denmark","detroit","Deutsche","Dutch"
         ,"Egypt","England","english","euro","europe","european","Europeans","Europes"
         ,"ferguson","finland","Finnish","Finns","florida","France","frankfurt","Frankfurter"
         ,"georgia","Georgian","german","Germans","germany","glencore","greece","greek"
@@ -2142,6 +2151,7 @@ mytokenize3grams <- content_transformer(function(x) {
             ,"Shanghai","Singapore"
             ,"SouthAfrica","SouthAfrican","southcarolina","southdakota","southkorea","southsudan"
             ,"spain","Spains","spanish"
+            ,"stockton"
             ,"sweden","Swedish","swiss","Switzerland"
             ,"Sydney","Syria","Syrian","syrians"
         ,"Taiwan","Taiwanese","Tanzania","Taos","tennessee","texas","thai","Thailand"
@@ -2150,9 +2160,9 @@ mytokenize3grams <- content_transformer(function(x) {
             ,"turks","turkish"
         ,"Uighur","Uighurs","ukraine","Ukraines","Ukrainian","Utah"
         ,"vermont","Vienna","Vietnam","Vietnamese","Vietnams","virginia","virginia's"
-        ,"Wales","wallstreet's","washington","WashingtonDC","wisconsin"
+        ,"Wales","wallstreet","washington","WashingtonDC","wisconsin"
         ,"Xinjiang"
-        ,"Ypres"
+        ,"Yangtze","yemen","Ypres"
         ,"Zhejiang"
     ))))    
         
@@ -2262,6 +2272,7 @@ mytokenize3grams <- content_transformer(function(x) {
             glbFeatsTextCorpus[[txtFeat]] <- tm_map(glbFeatsTextCorpus[[txtFeat]],
                                                     mycombineSynonyms,
                                                     syn_lst, lazy = FALSE)
+            glbFeatsText[[txtFeat]]$postStemSynonymsCorpus <- glbFeatsTextCorpus[[txtFeat]]
             
 #             as.character(glbFeatsTextCorpus[[txtFeat]][c(5732, 5754)])
 #             tmpFeatsTextCorpus <- tm_map(glbFeatsTextCorpus[[txtFeat]],
@@ -2336,15 +2347,31 @@ mytokenize3grams <- content_transformer(function(x) {
                 paste(paste0(txtFeat_pfx, ".terms.post."), c("stop.n", "stem.n"), sep = ""))
     }
     
+    # Report terms that are present only in Trn or New (may be eliminated from analysis)    
+    extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+            paste0("extract.features_", "report.corpus.stem.partition"), major.inc = TRUE)
+    for (txtFeat in names(glbFeatsText)) {
+        m <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
+        mTrn <- m[glbObsAll$.src == "Train", ]
+        termsTrn <- data.frame(term = dimnames(mTrn)$Terms, weight.Trn = colSums(mTrn))
+        mNew <- m[glbObsAll$.src == "Test", ]
+        termsNew <- data.frame(term = dimnames(mNew)$Terms, weight.New = colSums(mNew))
+        termsAll <- merge(termsTrn, termsNew)
+        termsAll$pos <- seq(1:nrow(termsAll))
+        termsAll <- termsAll[(termsAll$weight.Trn == 0) | (termsAll$weight.New == 0), ]
+        print(sprintf("    Partition post-stem term weights for %s: %d", txtFeat, nrow(termsAll)))
+        myprint_df(termsAll)
+        glbFeatsText[[txtFeat]]$filterTerms <- termsAll$term
+    }
+    
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
             paste0("extract.features_", "report.corpus.wordcloud"), major.inc = TRUE)
     
-    require(wordcloud)
-    for (txtFeat in names(glbFeatsText)) {
-        print(sprintf("    Wordcloud post-stem term weights for %s:", txtFeat))
-        m <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
+    myplot_wordcloud <- function(DTMtrx) {
+        require(wordcloud)
+
         # calculate the frequency of words
-        v <- sort(colSums(m), decreasing = TRUE)
+        v <- sort(colSums(DTMtrx), decreasing = TRUE)
         myNames <- names(v)
         minFrq <- glb_txt_terms_control$bounds$global[1]
         d <- subset(data.frame(word = myNames, freq = v), freq >= minFrq)
@@ -2355,9 +2382,102 @@ mytokenize3grams <- content_transformer(function(x) {
         }
         minFrq <- min(d$freq)
         if (minFrq > glb_txt_terms_control$bounds$global[1])
-            print(sprintf("    Wordcloud filtered for freq: %d vs. control: %d", 
+            print(sprintf("        Wordcloud filtered for freq: %d vs. control: %d", 
                           floor(minFrq), glb_txt_terms_control$bounds$global[1]))
-        wordcloud(d$word, d$freq, min.freq = minFrq)
+        print(wordcloud(d$word, d$freq, min.freq = minFrq))
+    }
+        
+    for (txtFeat in names(glbFeatsText)) {
+        print(sprintf("    Wordcloud (All) post-stem term weights for %s:", txtFeat))
+        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])
+        print(sprintf("    Wordcloud (Trn only) post-stem term weights for %s:", txtFeat))
+        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Train", ])
+        print(sprintf("    Wordcloud (New only) post-stem term weights for %s:", txtFeat))
+        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Test", ])
+    }    
+
+    for (txtFeat in names(glbFeatsText)) {
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "filter.corpus.", txtFeat), major.inc = TRUE)
+    
+        if (!is.null(glbFeatsText[[txtFeat]]$filterTerms)) {
+#             glbFeatsTextCorpus[[txtFeat]] <- 
+#                 tm_map(glbFeatsTextCorpus[[txtFeat]], removeWords,
+#                         glbFeatsText[[txtFeat]]$filterTerms, lazy = FALSE) #nFltrTerms
+            
+            # if length(glbFeatsText[[txtFeat]]$filterTerms) > 3000 tm_map crashes
+            stepVal <- 1000
+            for (rng in seq(1, length(glbFeatsText[[txtFeat]]$filterTerms), stepVal)) {
+                bgn <- rng
+                end <- bgn + stepVal - 1
+                if (end > length(glbFeatsText[[txtFeat]]$filterTerms))
+                    end <- length(glbFeatsText[[txtFeat]]$filterTerms)
+                print(sprintf("bgn:%d; end:%d", bgn, end))
+                glbFeatsTextCorpus[[txtFeat]] <- 
+                    tm_map(glbFeatsTextCorpus[[txtFeat]], removeWords,
+                        glbFeatsText[[txtFeat]]$filterTerms[bgn:end], lazy = FALSE) #nFltrTerms
+            }
+        }            
+
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "filter.weights.", txtFeat), major.inc = TRUE)
+    
+        print(sprintf("    Top_n filter term weights for %s:", txtFeat))        
+        print(myprint_df(full_terms_df <- 
+                             get_corpus_terms(txt_corpus = glbFeatsTextCorpus[[txtFeat]]), 
+                   glbFeatsTextTermsMax[[txtFeat]]))
+        glbFeatsText[[txtFeat]]$postFilterTermsDf <- full_terms_df    
+        
+        set.seed(glbFeatsTextSeed)
+        glb_full_DTM_lst[[txtFeat]] <- 
+            DocumentTermMatrix(glbFeatsTextCorpus[[txtFeat]], control = glb_txt_terms_control)
+        termsFilterMtrx <- as.matrix(glb_full_DTM_lst[[txtFeat]])
+        rownames(termsFilterMtrx) <- rownames(glbObsAll) # print undreadable otherwise
+        glbFeatsText[[txtFeat]]$postFilterTermsMtrx <- termsFilterMtrx
+        
+        txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))
+        tmpObsAll <- glbObsAll[, c(glb_id_var, glb_rsp_var)] 
+        tmpObsAll$terms.post.stem.n <- 
+            glbObsAll[, paste0(txtFeat_pfx, ".terms.post.stem.n")]
+        tmpObsAll$weight.post.stem.sum <- 
+            glbObsAll[, paste0(txtFeat_pfx, ".weight.post.stem.sum")]
+        tmpObsAll$terms.post.filter.n <- rowSums(termsFilterMtrx > 0)
+        tmpObsAll$terms.post.filter.n.log <- log1p(tmpObsAll$terms.post.filter.n)
+        tmpObsAll$weight.post.filter.sum <- rowSums(termsFilterMtrx)
+        
+        tmpObsAll$terms.n.filter.stem.Ratio <- 
+            1.0 * tmpObsAll$terms.post.filter.n / tmpObsAll$terms.post.stem.n
+        tmpObsAll[(is.nan(tmpObsAll$terms.n.filter.stem.Ratio) | 
+                       is.infinite(tmpObsAll$terms.n.filter.stem.Ratio)), 
+                      "terms.n.filter.stem.Ratio"] <- 1.0                
+        if ((n.errors <- sum(tmpObsAll$terms.n.filter.stem.Ratio > 1)) > 0)
+            stop(n.errors, " obs in tmpObsAll have terms.n.filter.stem.Ratio > 1", 
+                 " happening due to terms ???")
+        #print(head(subset(tmpObsAll, terms.n.stem.stop.Ratio > 1)))
+        #glbObsAll[(row_ix <- which(glbObsAll$UniqueID == 4253)), glb_dsp_cols]
+        #terms_stop_mtrx[row_ix, terms_stop_mtrx[row_ix, ] > 0]
+        #terms_stem_mtrx[row_ix, terms_stem_mtrx[row_ix, ] > 0]
+        #setdiff(names(terms_stem_mtrx[row_ix, terms_stem_mtrx[row_ix, ] > 0]), names(terms_stop_mtrx[row_ix, terms_stop_mtrx[row_ix, ] > 0]))
+        #mydspObs(list(descr.my.contains="updat"))
+        
+        tmpObsAll$weight.sum.filter.stem.Ratio <- 
+            1.0 * tmpObsAll$weight.post.filter.sum / tmpObsAll$weight.post.stem.sum
+        tmpObsAll[is.nan(tmpObsAll$weight.sum.filter.stem.Ratio) | 
+                      is.infinite(tmpObsAll$weight.sum.filter.stem.Ratio), 
+                      "weight.sum.filter.stem.Ratio"] <- 1.0                
+        
+        extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
+                paste0("extract.features_", "filter.weights.cor.", txtFeat), major.inc = TRUE)
+    
+        tmpObsTrn <- tmpObsAll[!is.na(tmpObsAll[, glb_rsp_var]), ]
+        print(cor(as.matrix(tmpObsTrn[, -c(1, 2)]), 
+                  as.numeric(tmpObsTrn[, glb_rsp_var])))
+
+        tmpObsAll <- tmpObsAll[, -c(1, 2)]
+        names(tmpObsAll) <- paste(paste0(txtFeat_pfx, "."), names(tmpObsAll), sep = "")
+        glbObsAll <- cbind(glbObsAll, tmpObsAll[, setdiff(names(tmpObsAll), names(glbObsAll))])
+        glbFeatsExclude <- union(glbFeatsExclude, 
+            paste(paste0(txtFeat_pfx, ".terms.post."), c("stop.n","stem.n","filter.n"), sep = ""))
     }    
 
     extract.features_chunk_df <- myadd_chunk(extract.features_chunk_df, 
@@ -2367,7 +2487,8 @@ mytokenize3grams <- content_transformer(function(x) {
         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
                     as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
                                 use = "pairwise.complete.obs"))
-        plt_df <- subset(glb_post_stem_words_terms_df_lst[[txtFeat]], !is.na(cor.y))
+        # plt_df <- subset(glb_post_stem_words_terms_df_lst[[txtFeat]], !is.na(cor.y))
+        plt_df <- subset(glbFeatsText[[txtFeat]]$postFilterTermsDf, !is.na(cor.y))        
         plt_df$nzv.freqRatio.cut.fctr <- cut(plt_df$nzv.freqRatio, 
                                             breaks = sort(c(min(plt_df$nzv.freqRatio), 
                                                                 glbFeatsNzvFreqMax,
@@ -2490,60 +2611,22 @@ mytokenize3grams <- content_transformer(function(x) {
         txtFeat_pfx <- toupper(substr(txtFeat, 1, 1))
         
         txt_full_X_df <- as.data.frame(as.matrix(glb_full_DTM_lst[[txtFeat]]))
-        # terms_full_df <- get_txt_terms(glb_full_DTM_lst[[txtFeat]])     
-        terms_full_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]        
+        #terms_full_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]
+        terms_full_df <- glbFeatsText[[txtFeat]]$postFilterTermsDf        
         # make.names adds a period to R keywords e.g. "in", "function"
         colnames(txt_full_X_df) <- paste(txtFeat_pfx, ".T.",
-                                    make.names(colnames(txt_full_X_df)), sep="")
+                                    make.names(colnames(txt_full_X_df)), sep = "")
         rownames(txt_full_X_df) <- rownames(glbObsAll) # warning otherwise
         
-#         plt_full_df <- terms_full_df
-#         names(plt_full_df)[grepl("weight$", names(plt_full_df))] <- "weight.all"
-#     #     gather(plt_full_df[1:5, ], domain, TfIdf, -matches("!(TfIdf)"))
-#     #     gather(plt_full_df[1:5, grepl("TfIdf", names(plt_full_df))], domain, TfIdf) 
-#     #     gather(plt_full_df[1:5, ], domain, TfIdf, 
-#     #            -names(plt_full_df)[!grepl("TfIdf", names(plt_full_df))]) 
-#         plt_full_df <- gather(plt_full_df, domain, weight, 
-#                               -c(term, freq, pos, cor.y, cor.y.abs))
-#         plt_full_df$label <- NA
-#         top_val_terms <- orderBy(~-weight, terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
-#         plt_full_df[plt_full_df$term %in% top_val_terms, "label"] <- 
-#             plt_full_df[plt_full_df$term %in% top_val_terms, "term"]
-#         top_cor_terms <- orderBy(~-cor.y.abs,
-#                                  terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
-#         plt_full_df[plt_full_df$term %in% top_cor_terms, "label"] <- 
-#             plt_full_df[plt_full_df$term %in% top_cor_terms, "term"]
-#         #plt_full_df$type <- "none"
-#         plt_full_df[plt_full_df$term %in% top_val_terms, "type"] <- "top.weight" 
-#         plt_full_df[plt_full_df$term %in% top_cor_terms, "type"] <- "top.cor"
-#         plt_full_df[plt_full_df$term %in% intersect(top_val_terms, top_cor_terms), "type"] <-
-#             "top.both"
-#         cor.y.rnorm <- cor(glbObsAll$.rnorm, as.numeric(glbObsAll[, glb_rsp_var]),
-#                            use = "pairwise.complete.obs")
-#         print(ggplot(plt_full_df, aes(x=weight, y=cor.y)) + facet_wrap(~ domain) + 
-#                 geom_point(aes(size=freq), color="grey") + 
-#                 geom_jitter() + 
-#                 geom_text(aes(label=label, color=type), size=3.5) +
-#         #geom_hline(yintercept=cor.y.rnorm, color="red") + 
-#         geom_hline(yintercept=c(cor.y.rnorm, -cor.y.rnorm), color="red"))
-
-#stop(here"); glb2Sav()        
         if (glbFeatsTextFilter == "sparse") {
             txt_X_df <- as.data.frame(as.matrix(glb_sprs_DTM_lst[[txtFeat]]))
             select_terms <- make.names(colnames(txt_X_df))
-#             colnames(txt_X_df) <- paste(txtFeat_pfx, ".T.",
-#                                         make.names(colnames(txt_X_df)), sep="")
-#             rownames(txt_X_df) <- rownames(glbObsAll) # warning otherwise
         } else if (glbFeatsTextFilter == "top.val") {
             select_terms <- orderBy(~-weight,
                                     terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
-#             txt_X_df <- txt_full_X_df[, subset(terms_full_df, term %in% select_terms)$pos,
-#                                       FALSE]
         } else if (glbFeatsTextFilter == "top.cor") {
             select_terms <- orderBy(~-cor.y.abs,
                                     terms_full_df)$term[1:glbFeatsTextTermsMax[[txtFeat]]]
-#             txt_X_df <- txt_full_X_df[, subset(terms_full_df, term %in% select_terms)$pos,
-#                                       FALSE]
         } else if (glbFeatsTextFilter == "top.chisq") {
             select_terms <- orderBy(~-chisq.stat,
                                     subset(terms_full_df, chisq.pval < 0.05)
@@ -2614,7 +2697,7 @@ mytokenize3grams <- content_transformer(function(x) {
                       as.numeric(proc.time()["elapsed"]) - tmEnter))
         
         txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")] <- 
-            log(1 + mycount_pattern_occ("\\w+", glb_txt_chr_lst[[txtFeat]]))
+            log(1 + mykntpar_pattern_occ("\\w+", glbObsAll[, txtFeat]))
         txt_X_df[, paste0(txtFeat_pfx, ".wrds.unq.n.log")] <- 
             log(1 + rowSums(txt_full_DTM_mtrx != 0))
         txt_X_df[, paste0(txtFeat_pfx, ".weight.sum")] <- 
@@ -2627,11 +2710,11 @@ mytokenize3grams <- content_transformer(function(x) {
 
         # Create <txtFeat>.chrs.n.log
         txt_X_df[, paste0(txtFeat_pfx, ".chrs.n.log")] <- 
-            log(1 + mycount_pattern_occ(".", glbObsAll[, txtFeat]))
+            log(1 + mykntpar_pattern_occ(".", glbObsAll[, txtFeat]))
         txt_X_df[, paste0(txtFeat_pfx, ".chrs.uppr.n.log")] <- 
-            log(1 + mycount_pattern_occ("[[:upper:]]", glbObsAll[, txtFeat]))
+            log(1 + mykntpar_pattern_occ("[[:upper:]]", glbObsAll[, txtFeat]))
         txt_X_df[, paste0(txtFeat_pfx, ".dgts.n.log")] <- 
-            log(1 + mycount_pattern_occ("[[:digit:]]", glbObsAll[, txtFeat]))
+            log(1 + mykntpar_pattern_occ("[[:digit:]]", glbObsAll[, txtFeat]))
 
         # Create <txtFeat>.npnct?.log
         # would this be faster if it's iterated over each row instead of 
@@ -2648,7 +2731,7 @@ mytokenize3grams <- content_transformer(function(x) {
 #             names(results) <- NULL; print(results)
             txt_X_df[, 
                 paste0(txtFeat_pfx, ".chrs.pnct", sprintf("%02d", punct_ix), ".n.log")] <-
-                log(1 + mycount_pattern_occ(glb_punct_vctr[punct_ix], 
+                log(1 + mykntpar_pattern_occ(glb_punct_vctr[punct_ix], 
                                             glbObsAll[, txtFeat]))
         }
 #         print(head(glbObsAll[glbObsAll[, "A.npnct23.log"] > 0, 
@@ -2656,7 +2739,7 @@ mytokenize3grams <- content_transformer(function(x) {
         
         # Create <txtFeat>.niso8859.log
         txt_X_df[, paste0(txtFeat_pfx, ".chrs.iso8859.n.log")] <- 
-            log1p(mycount_pattern_occ("&#[[:digit:]]{3};", glbObsAll[, txtFeat]))
+            log1p(mykntpar_pattern_occ("&#[[:digit:]]{3};", glbObsAll[, txtFeat]))
                 
         # Create <txtFeat>.wrds.stop.n.log & <txtFeat>ratio.wrds.stop.n.wrds.n
         if (!is.null(glb_txt_stop_words[[txtFeat]])) {
@@ -2680,7 +2763,7 @@ mytokenize3grams <- content_transformer(function(x) {
                                              ")\\b")
                 txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] <-
                     txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] + 
-                    mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]])
+                    mykntpar_pattern_occ(stop_words_rex_str, glbObsAll[, txtFeat])
                     #log1p(mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]][1]))   
             }
             txt_X_df[, paste0(txtFeat_pfx, ".wrds.stop.n.log")] <-
@@ -2696,26 +2779,8 @@ mytokenize3grams <- content_transformer(function(x) {
             print(sprintf("Binding DXM Loop: .wrds.SCOWL.n.log: elapsed: %0.2f secs",
                           as.numeric(proc.time()["elapsed"]) - tmEnter))
             
-#             txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <- 0            
-#             stepVal <- 500
-#             for (rng in seq(1, length(glbSCOWLWords), stepVal)) {
-#                 bgn <- rng
-#                 end <- bgn + stepVal - 1
-#                 if (end > length(glbSCOWLWords))
-#                     end <- length(glbSCOWLWords)
-#                 print(sprintf("bgn:%d; end:%d", bgn, end))
-#                 glbSCOWLWords_rex_str <- paste0("\\b(", 
-#                                 paste0(glbSCOWLWords[bgn:end], collapse = "|"),
-#                                              ")\\b")
-#                 txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
-#                     txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] + 
-#                     mykntpar_pattern_occ(glbSCOWLWords_rex_str, glb_txt_chr_lst[[txtFeat]])
-#                     #log1p(mykntpar_pattern_occ(stop_words_rex_str, glb_txt_chr_lst[[txtFeat]][1]))   
-#             }
-#             txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
-#                     log1p(txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")])
-         
-            mask <- dimnames(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])$Terms %in% glbSCOWLWords
+            mask <- dimnames(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])$Terms %in%
+                            glbSCOWLWords
             txt_X_df[, paste0(txtFeat_pfx, ".wrds.SCOWL.n.log")] <-
                 log1p(rowSums(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, mask] > 0))
                 
@@ -2724,17 +2789,30 @@ mytokenize3grams <- content_transformer(function(x) {
                     txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")])
         }
 
+        # Create <txtFeat>.wrds.rareWords.n.log & <txtFeat>ratio.wrds.rareWords.n.wrds.n
+        print(sprintf("Binding DXM Loop: .wrds.rareWords.n.log: elapsed: %0.2f secs",
+                      as.numeric(proc.time()["elapsed"]) - tmEnter))
+        
+        mask <- dimnames(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])$Terms %in%
+                glbFeatsText[[txtFeat]]$rareWords
+        txt_X_df[, paste0(txtFeat_pfx, ".wrds.rareWords.n.log")] <-
+            log1p(rowSums(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][, mask] > 0))
+        
+        txt_X_df[, paste0(txtFeat_pfx, ".ratio.wrds.rareWords.n.wrds.n")] <-
+            exp(txt_X_df[, paste0(txtFeat_pfx, ".wrds.rareWords.n.log")] - 
+                    txt_X_df[, paste0(txtFeat_pfx, ".wrds.n.log")])
+        
         # Create <txtFeat>.P.http
         print(sprintf("Binding DXM Loop: .P.<pattern>.log1p: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - tmEnter))
         
         txt_X_df[, paste(txtFeat_pfx, ".P.http.log1p", sep = "")] <- 
-            log1p(mycount_pattern_occ("http", glbObsAll[, txtFeat]))
+            log1p(mykntpar_pattern_occ("http", glbObsAll[, txtFeat]))
     
         # Create <txtFeat>.P.<user-spec-pattern>
         for (pattern in names(glbFeatsTextPatterns[[txtFeat]]))
             txt_X_df[, paste(txtFeat_pfx, ".P.", pattern, sep = "")] <- 
-                log1p(mycount_pattern_occ(glbFeatsTextPatterns[[txtFeat]][pattern], 
+                log1p(mykntpar_pattern_occ(glbFeatsTextPatterns[[txtFeat]][pattern], 
                                             glbObsAll[, txtFeat]))
     
         print(sprintf("Binding DXM Loop: exit: elapsed: %0.2f secs",
@@ -5218,29 +5296,30 @@ write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 
 #             "max.auc.OOB", "max.Accuracy.OOB")]))
 for (txtFeat in names(glbFeatsText)) {
-    # Print post-stem-words but need post-stop-words for debugging ?
-    print(sprintf("    All post-stem-words term weights for %s:", txtFeat))
-    myprint_df(glb_post_stem_words_terms_df_lst[[txtFeat]])
-    terms_mtrx <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
-    print(glbObsAll[
-        which(terms_mtrx[, tail(glb_post_stem_words_terms_df_lst[[txtFeat]], 1)$pos] > 0), 
-                        c(glb_id_var, names(glbFeatsText))])
-    print(nrow(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], freq == 1)))
+    print(sprintf("    All post-filter-words term weights for %s:", txtFeat))
+#     myprint_df(glb_post_stem_words_terms_df_lst[[txtFeat]])
+    myprint_df(glbFeatsText[[txtFeat]]$postFilterTermsDf)
+#     terms_mtrx <- glb_post_stem_words_terms_mtrx_lst[[txtFeat]]
+#     print(glbObsAll[
+#         which(terms_mtrx[, tail(glb_post_stem_words_terms_df_lst[[txtFeat]], 1)$pos] > 0), 
+#                         c(glb_id_var, names(glbFeatsText))])
+#     print(nrow(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], freq == 1)))
 
-    print(sprintf("    All post-stem-words term freq distribution for %s:", txtFeat))
-    print(table(glb_post_stem_words_terms_df_lst[[txtFeat]]$freq))
+    print(sprintf("    All post-filter-words term freq distribution for %s:", txtFeat))
+    # print(table(glb_post_stem_words_terms_df_lst[[txtFeat]]$freq))
+    print(table(glbFeatsText[[txtFeat]]$postFilterTermsDf$freq))    
 
-    print(sprintf("    All post-stem-words term length distribution for %s:", txtFeat))
-    print(table(nchar(glb_post_stem_words_terms_df_lst[[txtFeat]]$term)))
-    myprint_df(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], nchar(term) >= 10))
+    print(sprintf("    All post-filter-words term length distribution for %s:", txtFeat))
+#     print(table(nchar(glb_post_stem_words_terms_df_lst[[txtFeat]]$term)))
+#     myprint_df(subset(glb_post_stem_words_terms_df_lst[[txtFeat]], nchar(term) >= 10))
+    print(table(nchar(glbFeatsText[[txtFeat]]$postFilterTermsDf$term)))
+    myprint_df(subset(glbFeatsText[[txtFeat]]$postFilterTermsDf, nchar(term) >= 10))
 
     print(sprintf("    Analyzed term weights for %s:", txtFeat))
-    tmp_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]
+    #tmp_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]
+    tmp_df <- glbFeatsText[[txtFeat]]$postFilterTermsDf
     anl_terms_vctr <- union(select_terms, assoc_terms)
     print(subset(tmp_df, term %in% anl_terms_vctr, select = -term))
-#     tmp_freq1_df <- subset(tmp_df, freq == 1)
-#     tmp_freq1_df$top_n <- grepl(paste0(top_n_vctr, collapse="|"), tmp_freq1_df$term)
-#     print(subset(tmp_freq1_df, top_n == TRUE))
 }
 
 if (glb_is_classification && glb_is_binomial)
