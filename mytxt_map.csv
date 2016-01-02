@@ -112,8 +112,6 @@
 "\bO\.C\.D\.",      "OCD"
 #"\bNow O\.K\.",     "Now Okay" # or "Now Oklahoma" ???
 #"\bP\.R\.",         "PuertoRico" # or "PublicRelations"
-"\bQ&A",            "QandA"
-"\bQ\. and A\.",    "QandA"
 "\bR&B\b",          "RandB"
 "\bR\.B\.S\.",      "RBS"
 "\bR\.I\.P\.",      "RIP"
@@ -317,6 +315,7 @@
 "\b2nd\b", "second"
 "\b3rd\b", "third"
 "\b4th\b", "fourth"
+"\b5th\b", "fifth"
 "(.+)-(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)", "\1 \2"
 "(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)-(.+)", "\1 \2"
 "([O|o]ne|[T|t]wo|[T|t]hree|[F|f]our|[F|f]ive|[S|s]ix|[S|s]seven|[E|e]ight|[N|n]ine)-", "\1 "
@@ -350,6 +349,7 @@
 
 "\b(C|c)an't\b",            "\1an\t"
 "\b(C|c)an (N|n)ot\b",      "\1an\t"
+"\b(C|c)an(N|n)ot\b",       "\1an\t"
 
 "\b(C|W|c|w)ould(N|n)'t\b",     "\1ould\2t"
 "\b(C|W|c|w)ould (N|n)ot\b",    "\1ould\2t"
