@@ -33,9 +33,9 @@ Time period:
 ```{r set_global_options_wd, echo=FALSE}
 # Rename 
 #   indep_vars_vctr -> indep_vars ; create a function ?
-setwd("~/Documents/Work/Courses/MIT/Analytics_Edge_15_071x/Assignments/Kaggle_NYTimes_blogs3")
-print(names(sys.frame(1)))
-print(getSrcFilename(function (x) { x }))
+setwd("~/Documents/Work/<ProjectPath>")
+# print(names(sys.frame(1)))
+# print(getSrcFilename(function (x) { x }))
 #print(sys.frame(1)$file)
 # stop(here")
 ```

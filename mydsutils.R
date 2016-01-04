@@ -575,6 +575,35 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
     return(ret_df)
 }
 
+mycompute_entropy_df <- function(obs_df, entropy_var, by_var = NULL) {
+    require(lazyeval)
+    require(dplyr)
+    require(tidyr)
+
+    if (is.null(by_var)) {
+        by_var <- ".default"
+        obs_df$.default <- as.factor(".default")
+    }
+
+    grps <- obs_df %>%
+        count_(c(by_var, entropy_var)) %>%
+        dplyr::filter(n > 0) %>%
+        dplyr::filter_(interp(~(!is.na(var)), var = as.name(entropy_var))) %>%
+#         unite_(paste0(by_var, ".clusterid"),
+#                c(interp(by_var), ".clusterid")) %>%
+        spread_(interp(entropy_var), "n", fill = 0)
+
+    #     head(grps)
+    #     sum(grps$n)
+    tmp.entropy <- sapply(1:nrow(grps),
+                          function(row) entropy(as.numeric(grps[row, -1]), method = "ML"))
+    tmp.knt <- sapply(1:nrow(grps),
+                      function(row) sum(as.numeric(grps[row, -1])))
+    grps$.entropy <- tmp.entropy; grps$.knt <- tmp.knt
+    #print(grps)
+    return(grps)
+}
+
 mycreate_tbl_df <- function(df, tbl_col_names) {
 
 	ret_df <- as.data.frame(sort(table(df[, tbl_col_names], useNA="ifany")))
@@ -2026,7 +2055,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     if (nrow(subset(modelLookup(), model == mdl_specs_lst[["train.method"]])) > 0)
         mdl_specs_lst[["tune.params.df"]] <-
             getModelInfo(mdl_specs_lst[["train.method"]])[[mdl_specs_lst[["train.method"]]]]$parameters
-    if (!is.null(lcl_tune_models_df <- mdl_specs_lst[["tune.df"]]) &&
+    if (!is.null(mdl_specs_lst[["tune.df"]]) &&
+        (nrow(lcl_tune_models_df <- mdl_specs_lst[["tune.df"]]) > 0) &&
         (nrow(lcl_tune_models_df <-
               subset(lcl_tune_models_df, mdlId == mdl_specs_lst[["id"]])) > 0)) {
         if (length(tune_params_vctr <- lcl_tune_models_df$parameter) > 0) {
