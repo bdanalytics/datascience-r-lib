@@ -1929,9 +1929,9 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
             }
         }
 
+
         if (!is.null(stats_df[, paste0("max.R.sq.", label)]) &&
-            (!grepl(paste0("max.Adj.R.sq.", label), names(stats_df), fixed=TRUE) ||
-             is.null(stats_df[, paste0("max.Adj.R.sq.", label)])))
+            (length(grep(paste0("max.Adj.R.sq.", label), names(stats_df), fixed = TRUE, value = TRUE)) == 0))
             stats_df[, paste0("max.Adj.R.sq.", label)] <- 1.0 -
                ((1.0 - stats_df[, paste0("max.R.sq.", label)]) *
                 (nrow(df) - 1) /
@@ -2405,6 +2405,12 @@ myget_feats_importance <- function(mdl, featsimp_df = NULL) {
     # For some models, if there is only one feature, varImp returns NaN due to bug in scaling
     #   length(attr(mdl$terms, "variables")) == 2 ???
 
+    if ((inherits(mdl$finalModel, "rpart")) &&
+        is.null(mdl$splits)) {
+        # varImp crashes for an empty tree
+        return(NULL)
+    }
+
     if (length(names(varImp(mdl))) > 1) {
         # multinomial classification model
         thisimp_df <- varImp(mdl)$importance
@@ -2419,11 +2425,6 @@ myget_feats_importance <- function(mdl, featsimp_df = NULL) {
             thisimp_df[, 1] * 100.0 / max(thisimp_df[, 1])
         thisimp_df <- thisimp_df[, paste0(".scld.", names(thisimp_df)[1]), FALSE]
         names(thisimp_df) <- "Overall"
-    } else
-    if ((inherits(mdl$finalModel, "rpart")) &&
-            is.null(mdl$splits)) {
-        # varImp crashes for an empty tree
-        return(NULL)
     } else thisimp_df <- varImp(mdl)$importance
 
     if (length(names(thisimp_df)) > 1) {

@@ -138,15 +138,18 @@ require(dplyr)
 glbObsTrnFile <- list(url = "<obsTrnFileName>") 
 
 glbObsNewFile <- list(url = "<obsNewFileName>") # default OR
-    #list(splitSpecs = list(method = NULL)) #select from c(NULL, "condition", "sample", "copy")
+    #list(splitSpecs = list(method = NULL #select from c(NULL, "condition", "sample", "copy")
+    #                      ,nRatio = 0.3 # > 0 && < 1 if method == "sample" 
+    #                      ,seed = 123 # any integer or glbObsTrnPartitionSeed if method == "sample" 
+    #                      )
+    #    )                   
+
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
     glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
     glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
-    glb_split_newdata_size_ratio <- 0.3               # > 0 & < 1
-    glb_split_sample.seed <- 123               # or any integer
 
 glbObsDropCondition <- NULL # : default
 #   enclose in single-quotes b/c condition might include double qoutes
@@ -159,6 +162,7 @@ glb_obs_repartition_train_condition <- NULL # : default
 #    "<condition>" 
 
 glb_max_fitobs <- NULL # or any integer
+glbObsTrnPartitionSeed <- 123 # or any integer
                          
 glb_is_regression <- TRUE; glb_is_classification <- !glb_is_regression; 
     glb_is_binomial <- NULL # or TRUE or FALSE
@@ -212,7 +216,7 @@ if ((glb_rsp_var != glb_rsp_var_raw) && is.null(glb_map_rsp_raw_to_var))
 
 # currently does not handle more than 1 column; consider concatenating multiple columns
 # If glbFeatsId == NULL, ".rownames <- as.numeric(row.names())" is the default
-glbFeatsId <- "id" # choose from c(NULL : default, "<id_feat>") 
+glbFeatsId <- NULL # choose from c(NULL : default, "<id_feat>") 
 glbFeatsCategory <- NULL # choose from c(NULL : default, "<category_feat>")
 
 # User-specified exclusions
@@ -317,7 +321,8 @@ glbFeatsDerive[[".pos"]] <- list(
 
 #     , args = c("<arg1>"))
     
-    # multiple args    
+    # multiple args
+#     mapfn = function(id, date) { return(paste(as.character(id), as.character(date), sep = "#")) }        
 #     mapfn = function(PTS, oppPTS) { return(PTS - oppPTS) }
 #     mapfn = function(startprice.log10.predict, startprice) {
 #                  return(spdiff <- (10 ^ startprice.log10.predict) - startprice) } 
@@ -998,9 +1003,9 @@ if (glb_is_separate_newobs_dataset) {
         } else if (glbObsNewFile$splitSpecs$method == "sample") {
                 require(caTools)
                 
-                set.seed(glb_split_sample.seed)
+                set.seed(glbObsNewFile$splitSpecs$seed)
                 split <- sample.split(glbObsTrn[, glb_rsp_var_raw], 
-                                      SplitRatio=(1-glb_split_newdata_size_ratio))
+                                      SplitRatio = (1 - glbObsNewFile$splitSpecs$nRatio))
                 glbObsNew <- glbObsTrn[!split, ] 
                 glbObsTrn <- glbObsTrn[split ,]
         } else if (glbObsNewFile$splitSpecs$method == "copy") {  
@@ -1042,6 +1047,17 @@ glbFeatsExclude <- union(glbFeatsExclude, ".src")
 glbObsAll <- myrbind_df(glbObsTrn, glbObsNew)
 comment(glbObsAll) <- "glbObsAll"
 
+### Derivations using mapping functions
+###     glbFeatsId might be in glbFeatsDerive
+set.seed(169); glbObsAll[, ".rnorm"] <- rnorm(n = nrow(glbObsAll))
+for (new_feat in glb_derive_vars) {
+    print(sprintf("Creating new feature: %s...", new_feat))
+    args_lst <- NULL 
+    for (arg in glbFeatsDerive[[new_feat]]$args) 
+        args_lst[[arg]] <- glbObsAll[, arg]
+    glbObsAll[, new_feat] <- do.call(glbFeatsDerive[[new_feat]]$mapfn, args_lst)
+}
+
 # Check for duplicates in glbFeatsId
 if (length(glbFeatsId) == 0) {
     warning("using .rownames as identifiers for observations")
@@ -1051,8 +1067,12 @@ if (length(glbFeatsId) == 0) {
     glbFeatsId <- ".rownames"
 }
 if ((glbObsNewFile$splitSpecs$method != "copy") && 
-    (sum(duplicated(glbObsAll[, glbFeatsId, FALSE])) > 0))
+    ((nDups <- sum(duplicated(glbObsAll[, glbFeatsId, FALSE]))) > 0)) {
+    print(sprintf("Found %d duplicates in glbObsAll", nDups))
+    myprint_df(orderBy(as.formula(paste0("~", glbFeatsId)), 
+                       glbObsAll[duplicated2(glbObsAll[, glbFeatsId, FALSE]),]))
     stop(glbFeatsId, " duplicated in glbObsAll")
+}
 glbFeatsExclude <- union(glbFeatsExclude, glbFeatsId)
 
 glbObsAll <- orderBy(reformulate(glbFeatsId), glbObsAll)
@@ -1281,40 +1301,28 @@ dsp_numeric_feats_dstrb <- function(feats_vctr) {
         pltIx <- pltIx + 1        
     }
 }
-# dsp_numeric_feats_dstrb(setdiff(names(glbObsAll), union(myfind_chr_cols_df(glbObsAll), c(glb_rsp_var_raw, glb_rsp_var)))[2:6])              # dsp_numeric_feats_dstrb(c("startprice", "sprice.root3", "sprice.predict.diff"))                                      
-add_new_diag_feats <- function(obs_df, ref_df=glbObsAll) {
-    
-    set.seed(169)
-    obs_df <- mutate(obs_df,
-        .rnorm = rnorm(n=nrow(obs_df))
-                        )
-
-    # If levels of a factor are different across obs_df & glbObsNew; predict.glm fails  
-    # Transformations not handled by mutate
-#     obs_df$<col_name>.fctr.num <- sapply(1:nrow(obs_df), 
-#         function(row_ix) grep(obs_df[row_ix, "<col_name>"],
-#                               levels(obs_df[row_ix, "<col_name>.fctr"])))
-    
-    #print(summary(obs_df))
-    #print(sapply(names(obs_df), function(col) sum(is.na(obs_df[, col]))))
-    return(obs_df)
-}
-glbObsAll <- add_new_diag_feats(glbObsAll)
 
 require(dplyr)
 
 # Display distribution of glbFeatsId
-if (!is.numeric(glbObsAll[, glbFeatsId]))
-    stop(" Add this plot") else {
-        pltObsAll <- glbObsAll
-        if (is.numeric(glbObsAll[, glb_rsp_var_raw]) && 
-            length(unique(glbObsAll[, glb_rsp_var_raw]) > 5)) {
-            facetVar <- paste0(glb_rsp_var_raw, ".cut.fctr")
-            pltObsAll[, facetVar] <- cut(pltObsAll[, glb_rsp_var_raw], 5)
-        } else facetVar <- glb_rsp_var_raw
+pltObsAll <- glbObsAll
+if (!is.numeric(glbObsAll[, glbFeatsId])) {
+    featsId <- paste0(glbFeatsId,".first.1", sep = "")
+    pltObsAll[, featsId] <- substr(glbObsAll[, glbFeatsId], 1, 1)
+} else featsId <- glbFeatsId
+    
+if (is.numeric(glbObsAll[, glb_rsp_var_raw]) && 
+    length(unique(glbObsAll[, glb_rsp_var_raw]) > 5)) {
+    facetVar <- paste0(glb_rsp_var_raw, ".cut.fctr")
+    pltObsAll[, facetVar] <- cut(pltObsAll[, glb_rsp_var_raw], 5)
+} else facetVar <- glb_rsp_var_raw
 
-        print(gp <- myplot_histogram(pltObsAll, glbFeatsId) + 
-                    facet_wrap(as.formula(paste0("~", facetVar))))
+if (is.numeric(glbObsAll[, glbFeatsId]))
+    print(gp <- myplot_histogram(pltObsAll, featsId, fill_col_name = ".src") + 
+                  facet_wrap(as.formula(paste0("~", facetVar)))) else {
+    pltObsFrq <- mycreate_sqlxtab_df(pltObsAll, c(featsId, facetVar, ".src"))                      
+    print(gp <- myplot_hbar(pltObsFrq, featsId, ".n", colorcol_name = ".src") + 
+                  facet_wrap(as.formula(paste0("~", facetVar))))
 }        
 
 # Check distributions of newly transformed / extracted vars
@@ -1511,16 +1519,6 @@ for (feat in glb_assign_vars) {
     }
 
     glbFeatsExclude <- union(glbFeatsExclude, glb_assign_vars)
-}
-
-### Derivations using mapping functions
-#stop(here"); savObsAll <- glbObsAll; glbObsAll <- savObsAll
-for (new_feat in glb_derive_vars) {
-    print(sprintf("Creating new feature: %s...", new_feat))
-    args_lst <- NULL 
-    for (arg in glbFeatsDerive[[new_feat]]$args) 
-        args_lst[[arg]] <- glbObsAll[, arg]
-    glbObsAll[, new_feat] <- do.call(glbFeatsDerive[[new_feat]]$mapfn, args_lst)
 }
 
 #stop(here")
@@ -3209,7 +3207,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r partition.data.training, cache=FALSE, echo=FALSE}
 if (all(is.na(glbObsNew[, glb_rsp_var]))) {
-    set.seed(glb_split_sample.seed)
+    set.seed(glbObsTrnPartitionSeed)
     OOB_size <- nrow(glbObsNew) * 1.1
     
     if (is.null(glbFeatsCategory)) {
