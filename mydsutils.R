@@ -130,7 +130,15 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
 		comment(df) <- comment
 
     if (print_diagn) {
-		myprint_df(df)
+        tmpDf <- df
+        if (length(chrCols <- myfind_chr_cols_df(tmpDf)) > 0) {
+            for (chrCol in chrCols)
+                if (max(nchar(tmpDf[, chrCol]), na.rm = TRUE) > 100) {
+                    print(sprintf("   Truncating %s to first 100 chars...", chrCol))
+                    tmpDf[, chrCol] <- substr(tmpDf[, chrCol], 1, 100)
+                }
+        }
+		myprint_df(tmpDf)
 		myprint_str_df(df)
     }
 
