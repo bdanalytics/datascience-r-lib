@@ -134,13 +134,15 @@ require(dplyr)
 
 # Analysis control global variables
 # Inputs
-#   url/name = "<pointer>"; sep = choose from c(NULL, "\t")
+#   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>
+#   sep = choose from c(NULL, "\t")
 glbObsTrnFile <- list(url = "<obsTrnFileName>") 
 
 glbObsNewFile <- list(url = "<obsNewFileName>") # default OR
     #list(splitSpecs = list(method = NULL #select from c(NULL, "condition", "sample", "copy")
     #                      ,nRatio = 0.3 # > 0 && < 1 if method == "sample" 
     #                      ,seed = 123 # any integer or glbObsTrnPartitionSeed if method == "sample" 
+    #                      ,condition = # or 'is.na(<var>)'; '<var> <condition_operator> <value>'    
     #                      )
     #    )                   
 
@@ -149,13 +151,13 @@ glbInpMerge <- NULL #: default
 
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
     glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
-    glb_split_newdata_condition <- NULL # or "is.na(<var>)"; "<var> <condition_operator> <value>"
 
 glbObsDropCondition <- NULL # : default
 #   enclose in single-quotes b/c condition might include double qoutes
 #       use | & ; NOT || &&    
 #   '<condition>' 
     # 'grepl("^First Draft Video:", glbObsAll$Headline)'
+    #'(is.na(glbObsAll[, glb_rsp_var_raw]) & grepl("Train", glbObsAll[, glbFeatsId]))'
 #nrow(do.call("subset",list(glbObsAll, parse(text=paste0("!(", glbObsDropCondition, ")")))))
     
 glb_obs_repartition_train_condition <- NULL # : default
@@ -232,7 +234,7 @@ if (glb_rsp_var_raw != glb_rsp_var)
 glbFeatsInteractionOnly <- list()
 #glbFeatsInteractionOnly[["<child_feat>"]] <- "<parent_feat>"
 
-glb_drop_vars <- c(NULL
+glbFeatsDrop <- c(NULL
                 # , "<feat1>", "<feat2>"
                 )
 
@@ -251,6 +253,8 @@ glbFeatsDerive <- list();
 # glbFeatsDerive[["<feat.my.sfx>"]] <- list(
 #     mapfn = function(<arg1>, <arg2>) { return(function(<arg1>, <arg2>)) } 
 #   , args = c("<arg1>", "<arg2>"))
+#myprint_df(data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos)))
+#data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
 
     # character
 #     mapfn = function(Week) { return(substr(Week, 1, 10)) }
@@ -328,6 +332,10 @@ glbFeatsDerive[[".pos"]] <- list(
 #                  return(spdiff <- (10 ^ startprice.log10.predict) - startprice) } 
 #     mapfn = function(productline, description) { as.factor(
 #         paste(gsub(" ", "", productline), as.numeric(nchar(description) > 0), sep = "*")) }
+#     mapfn = function(.src, .pos) { 
+#         return(paste(.src, sprintf("%04d", 
+#                                    ifelse(.src == "Train", .pos, .pos - 7049)
+#                                    ), sep = "#")) }       
 
 # # If glbObsAll is not sorted in the desired manner
 #     mapfn=function(Week) { return(coredata(lag(zoo(orderBy(~Week, glbObsAll)$ILI), -2, na.pad=TRUE))) }
@@ -1025,19 +1033,16 @@ if (glb_is_separate_newobs_dataset) {
     }
 }         
 
-if ((num_nas <- sum(is.na(glbObsTrn[, glb_rsp_var_raw]))) > 0)
-    stop("glbObsTrn$", glb_rsp_var_raw, " contains NAs for ", num_nas, " obs")
-
 if (nrow(glbObsTrn) == nrow(glbObsAll))
     warning("glbObsTrn same as glbObsAll")
 if (nrow(glbObsNew) == nrow(glbObsAll))
     warning("glbObsNew same as glbObsAll")
 
-if (length(glb_drop_vars) > 0) {
-    warning("dropping vars: ", paste0(glb_drop_vars, collapse=", "))
-    glbObsAll <- glbObsAll[, setdiff(names(glbObsAll), glb_drop_vars)]
-    glbObsTrn <- glbObsTrn[, setdiff(names(glbObsTrn), glb_drop_vars)]    
-    glbObsNew <- glbObsNew[, setdiff(names(glbObsNew), glb_drop_vars)]    
+if (length(glbFeatsDrop) > 0) {
+    warning("dropping vars: ", paste0(glbFeatsDrop, collapse=", "))
+    glbObsAll <- glbObsAll[, setdiff(names(glbObsAll), glbFeatsDrop), FALSE]
+    glbObsTrn <- glbObsTrn[, setdiff(names(glbObsTrn), glbFeatsDrop), FALSE]    
+    glbObsNew <- glbObsNew[, setdiff(names(glbObsNew), glbFeatsDrop), FALSE]    
 }
 
 #stop(here"); savObsAll <- glbObsAll # glbObsAll <- savObsAll
@@ -1138,6 +1143,12 @@ if (!is.null(glbObsDropCondition)) {
                 list(glbObsAll, parse(text=paste0("!(", glbObsDropCondition, ")"))))
     dsp_partition_stats(obs_df=glbObsAll, vars=myget_symbols(glbObsDropCondition))    
 }
+
+if ((num_nas <- sum(is.na(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var_raw]))) > 0) {
+    print(sprintf("glbObsTrn$%s contains NAs for %d obs:", glb_rsp_var_raw, num_nas))
+    myprint_df(glbObsTrn[is.na(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var_raw]), ])
+    stop("Terminating script...")
+}    
 
 # Check for duplicates by all features
 # Refactor to utilize glbSpecs
@@ -3243,9 +3254,11 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         strata_mtrx <- ceiling(
             matrix(obs_freq_df$.n.tst * 1.0 / sum(obs_freq_df$.n.tst)) %*%
                       matrix(OOB_rspvar_size, nrow = 1))
-        dimnames(strata_mtrx)[[1]] <- obs_freq_df[, glbFeatsCategory]
-        dimnames(strata_mtrx)[[2]] <- 
-            as.character(rspvar_freq_df[, glb_rsp_var_raw])
+#         dimnames(strata_mtrx)[[1]] <- obs_freq_df[, glbFeatsCategory]
+#         dimnames(strata_mtrx)[[2]] <- 
+#             as.character(rspvar_freq_df[, glb_rsp_var_raw])
+        dimnames(strata_mtrx) <- list(obs_freq_df[, glbFeatsCategory], 
+                                        as.character(rspvar_freq_df[, glb_rsp_var_raw]))
         for (val in rspvar_freq_df[, glb_rsp_var_raw]) {
             trn <- paste0(glb_rsp_var_raw, ".", as.character(val))
             strata <- paste0(".strata.", as.character(val))            

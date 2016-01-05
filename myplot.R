@@ -470,13 +470,15 @@ myplot_prediction_regression <- function(df, feat_x, feat_y, rsp_var, rsp_var_ou
     df <- orderBy(reformulate(c("-", predct_err_name)), df)
     df$.label <- " "
     df$.label[1:min(5, nrow(df))] <- sapply(1:min(5, nrow(df)), function(row_ix)
-        df[row_ix, ".label"] <- paste0(df[row_ix,  id_vars], collapse=":"))
+        df[row_ix, ".label"] <- paste0(df[row_ix,  id_vars], collapse = ":"))
     print(head(df, 5))
 
-    return(myplot_scatter(df, feat_x, feat_y) +
-        #geom_point(aes_string(size=predct_err_name), alpha=0.4, show_guide = TRUE) +
-            geom_point(aes_string(size=predct_err_name), alpha=0.4) +
-            geom_text(aes_string(label=".label"), color="NavyBlue", size=3.5))
+    gp <- myplot_scatter(df, feat_x, feat_y) +
+                         geom_text(aes_string(label = ".label"), color = "NavyBlue", size = 3.5)
+    if (!all(is.na(df[, predct_err_name])))
+        gp <- gp + geom_point(aes_string(size = predct_err_name), alpha = 0.4)
+
+    return(gp)
 }
 
 ##########################################
