@@ -2454,8 +2454,8 @@ myget_feats_importance <- function(mdl, featsimp_df = NULL) {
         featsimp_df <- subset(featsimp_df, select = -Row.names)
     }
 
-    if (!is.null(mdl$.myId))
-        featsimp_df[, paste0(mdl$.myId, ".imp")] <- featsimp_df$imp
+#     if (!is.null(mdl$.myId))
+#         featsimp_df[, paste0(mdl$.myId, ".imp")] <- featsimp_df$imp
     return(orderBy(~ -imp, featsimp_df))
 }
 
