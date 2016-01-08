@@ -2447,7 +2447,9 @@ myget_feats_importance <- function(mdl, featsimp_df = NULL) {
         names(thisimp_df)[1] <- paste0(gsub("#",".",mdl$.myId, fixed = TRUE), ".imp")
     }
 
-    if (is.null(featsimp_df)) featsimp_df <- thisimp_df else {
+    if (is.null(featsimp_df) ||
+        (length(setdiff(names(subset(featsimp_df, select = -imp)), names(thisimp_df))) == 0))
+        featsimp_df <- thisimp_df else {
         featsimp_df <- merge(subset(featsimp_df, select = -imp), thisimp_df,
                              by = "row.names", all = TRUE)
         row.names(featsimp_df) <- featsimp_df$Row.names
