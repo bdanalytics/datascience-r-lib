@@ -47,6 +47,30 @@ mydsp_chunk <- function(chunks_df) {
 }
 #mydsp_chunk(glb_chunks_df)
 
+myevlChunk <- function(chunkSpecsLst, envFilePfx) {
+    if (!is.null(chunkSpecsLst$first)) {
+        stop("myevlChunk: not implemented yet")
+    }
+    if (!is.null(chunkSpecsLst$last)) {
+        lstChunkIx <- match(chunkSpecsLst$last, chunkSpecsLst$labels, nomatch = -1)
+        thsChunkLabel <- knitr::opts_current$get(name = 'label')
+        thsChunkIx <- match(thsChunkLabel, chunkSpecsLst$labels, nomatch = -1)
+        if ((thsChunkIx == -1) || (lstChunkIx == -1))
+            stop("Unrecognized chunk label(s): ", thsChunkLabel, " or: ", chunkSpecsLst$last)
+        if (thsChunkIx <= lstChunkIx)
+            return(TRUE)
+        if (thsChunkIx == lstChunkIx + 1) {
+            savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
+            savFile <- paste0(envFilePfx, chunkSpecsLst$last, ".RData")
+            print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
+            save(list = savObjects, file = savFile)
+            return(FALSE)
+        }
+        if (thsChunkIx > lstChunkIx + 1)
+            return(FALSE)
+    }
+}
+
 myplt_chunk <- function(chunks_df) {
     print(orderBy(~ -duration,
                   (chunks_df <- head(mutate(chunks_df, duration=end-bgn), -1))))
@@ -74,4 +98,3 @@ myplt_chunk <- function(chunks_df) {
                   geom_bar(stat = "identity") + coord_flip())
     }
 }
-

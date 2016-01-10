@@ -747,10 +747,14 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
                                     FUN=c(median), na.rm=TRUE)
             p <- ggplot(df, aes_string(x=factor(0), y=ycol_names))
             p <- p + xlab(" ")
+            if (is.numeric(df[, ycol_names]))
+                p <- p + scale_y_continuous(labels = myformat_number)
         } else {
             medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ ", xcol_name)), df,
                                     FUN=c(median), na.rm=TRUE)
             p <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
+            if (all(is.numeric(df[, ycol_names])))
+                p <- p + scale_y_continuous(labels = myformat_number)
         }
     } else {
         mltd_df <- melt(df,, measure.vars=ycol_names)
@@ -762,6 +766,8 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             medians_df <- summaryBy(reformulate(c("variable", xcol_name), "value") , mltd_df, FUN=c(median), na.rm=TRUE)
             p <- ggplot(mltd_df, aes_string(x=xcol_name, y="value"))
         }
+        if (is.numeric(mltd_df[, "value"]))
+            p <- p + scale_y_continuous(labels = myformat_number)
     }
 
     if (!is.null(facet_spec)) {
@@ -772,8 +778,8 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     }
 
     p <- p + geom_violin(fill="grey80", color="blue") +
-             stat_summary(fun.y=mean, pch=22, geom='point', color='red') +
-             scale_y_continuous(labels=myformat_number)
+             stat_summary(fun.y=mean, pch=22, geom='point', color='red')
+
 
     if (length(ycol_names) == 1) {
         aes_str <- paste0("linetype=\"dashed\", yintercept=as.numeric(", ycol_names, ")")

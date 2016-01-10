@@ -1,7 +1,7 @@
 mycaret.nearZeroVar <- function(x, freqCut = 95/5, uniqueCut = 10, saveMetrics = FALSE,
           foreach = FALSE, allowParallel = TRUE)
 {
-    if (packageVersion("caret") != '6.0.62')
+    if (packageVersion("caret") != '6.0.64')
         stop("mycaret.nearZeroVar: Check if the bug is fixed, else create pull request")
     loadNamespace("caret")
 

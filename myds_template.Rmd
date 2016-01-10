@@ -38,6 +38,9 @@ setwd("~/Documents/Work/<ProjectPath>")
 # print(getSrcFilename(function (x) { x }))
 #print(sys.frame(1)$file)
 # stop(here")
+require(knitr)
+print("knitr::all_labels():")
+print(knitr::all_labels())
 ```
 
 # Synopsis:
@@ -157,7 +160,7 @@ glbObsDropCondition <- NULL # : default
 #       use | & ; NOT || &&    
 #   '<condition>' 
     # 'grepl("^First Draft Video:", glbObsAll$Headline)'
-    #'(is.na(glbObsAll[, glb_rsp_var_raw]) & grepl("Train", glbObsAll[, glbFeatsId]))'
+    # '(is.na(glbObsAll[, glb_rsp_var_raw]) & grepl("Train", glbObsAll[, glbFeatsId]))'
 #nrow(do.call("subset",list(glbObsAll, parse(text=paste0("!(", glbObsDropCondition, ")")))))
     
 glb_obs_repartition_train_condition <- NULL # : default
@@ -204,6 +207,7 @@ glb_map_rsp_var_to_raw <- NULL
 #     return(10 ^ var) 
 #     return(-log(var) * 2)
 #     as.numeric(var)
+#     levels(var)[as.numeric(var)]
 #     gsub("\\.", " ", levels(var)[as.numeric(var)])
 #     c("<=50K", " >50K")[as.numeric(var)]
 #     c(FALSE, TRUE)[as.numeric(var)]
@@ -356,7 +360,7 @@ glbFeatsDateTime <- list()
 
 glbFeatsPrice <- NULL # or c("<price_var>")
 
-glbFeatsImage <- list() #list(<imageFeat> = list())
+glbFeatsImage <- list() #list(<imageFeat> = list(patchSize = 10)) # if patchSize not specified, no patch computation
 
 glbFeatsText <- list()
 Sys.setlocale("LC_ALL", "C") # For english
@@ -875,8 +879,8 @@ glb_mdl_ensemble <- NULL
 glb_sel_mdl_id <- "All.X##rcv#glmnet" #select from c(NULL, "All.X##rcv#glmnet", "RFE.X##rcv#glmnet", <mdlId>)
 glb_fin_mdl_id <- NULL #select from c(NULL, glb_sel_mdl_id)
 
-glb_dsp_cols <- c(glbFeatsId, glbFeatsCategory, glb_rsp_var
-#               List critical cols excl. glbFeatsId, glbFeatsCategory & glb_rsp_var
+glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
+#               List critical cols excl. above
                   )
 
 # Output specs
@@ -891,9 +895,8 @@ glbObsOut <- list(NULL
 #                                     merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
 #                                     select(matches("(RowId|Location)"))
 #                     return(tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")]))
-                }
+#                   }
                   )
-glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
 
 if (glb_is_classification && glb_is_binomial) {
@@ -914,8 +917,33 @@ if (glb_is_classification && glb_is_binomial) {
 glbOutStackFnames <- NULL #: default
     # c("ebayipads_txt_assoc1_out_bid1_stack.csv") # manual stack
     # c("ebayipads_finmdl_bid1_out_nnet_1.csv") # universal stack
-glb_out_pfx <- "<scriptName>_"
-glb_save_envir <- FALSE # or TRUE
+
+glbOut <- list(pfx = "<scriptName>_")
+glbOutDataVizFname <- NULL # choose from c(NULL, "<projectId>_obsall.csv")
+
+
+glbChunks <- list(labels = c("set_global_options_wd","set_global_options"
+    ,"import.data","inspect.data","scrub.data","transform.data"
+    ,"extract.features"
+        ,"extract.features.datetime","extract.features.image","extract.features.price"
+        ,"extract.features.text","extract.features.string"  
+        ,"extract.features.end"
+    ,"manage.missing.data","cluster.data","partition.data.training","select.features"
+    ,"fit.models_0","fit.models_1","fit.models_2","fit.models_3"
+    ,"fit.data.training_0","fit.data.training_1"
+    ,"predict.data.new"         
+    ,"display.session.info"))
+# To ensure that all chunks in this script are in glbChunks
+if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() doesn't work in console runs
+    !identical(chkChunksLabels, glbChunks$labels)) {
+    print(sprintf("setdiff(chkChunksLabels, glbChunks$labels): %s", 
+                  setdiff(chkChunksLabels, glbChunks$labels)))    
+    print(sprintf("setdiff(glbChunks$labels, chkChunksLabels): %s", 
+                  setdiff(glbChunks$labels, chkChunksLabels)))    
+}
+
+glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
+glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
 
 # Depict process
 glb_analytics_pn <- petrinet(name = "glb_analytics_pn",
@@ -953,7 +981,7 @@ glb_chunks_df <- myadd_chunk(NULL, "import.data")
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 #### chunk option: eval=<r condition>
-```{r import.data, cache=FALSE, echo=FALSE} 
+```{r import.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)} 
 #glb_chunks_df <- myadd_chunk(NULL, "import.data")
 
 glb2Sav <- function() {
@@ -1089,8 +1117,9 @@ if (length(glbFeatsId) == 0) {
     glbObsNew$.rownames <- as.numeric(rownames(subset(glbObsAll, .src == "Test")))
     glbFeatsId <- ".rownames"
 }
-if ((glbObsNewFile$splitSpecs$method != "copy") && 
+if ((is.null(glbObsNewFile$splitSpecs$method) || (glbObsNewFile$splitSpecs$method != "copy")) && 
     ((nDups <- sum(duplicated(glbObsAll[, glbFeatsId, FALSE]))) > 0)) {
+    require(gdata)
     print(sprintf("Found %d duplicates in glbObsAll", nDups))
     myprint_df(orderBy(as.formula(paste0("~", glbFeatsId)), 
                        glbObsAll[duplicated2(glbObsAll[, glbFeatsId, FALSE]),]))
@@ -1270,7 +1299,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "inspect.data", major.inc=TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r inspect.data, cache=FALSE, echo=FALSE}
+```{r inspect.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 #print(str(glbObsAll))
 #View(glbObsAll)
 
@@ -1289,7 +1318,7 @@ glb_chk_data <- function(featsExclude = glbFeatsExclude,
     if (is.numeric(glbObsAll[, glb_rsp_var_raw]))
         print(myplot_histogram(glbObsAll, glb_rsp_var_raw) + facet_wrap(~ .src)) else
         print(ggplot(glbObsAll, aes_string(x = glb_rsp_var_raw)) + 
-                  geom_bar(stat = "count") + facet_wrap(~ .src))
+                  geom_bar(aes_string(fill = glbFeatsCategory), stat = "count") + facet_wrap(~ .src))
     
     if (glb_is_classification) 
         dsp_class_dstrb(var=ifelse(glb_rsp_var %in% names(glbObsAll), 
@@ -1356,9 +1385,8 @@ if (is.numeric(glbObsAll[, glbFeatsId]))
 
 # Check distributions of newly transformed / extracted vars
 #   Enhancement: remove vars that were displayed ealier
-dsp_numeric_feats_dstrb(feats_vctr=setdiff(names(glbObsAll), 
-        c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, 
-          glbFeatsExclude)))
+dsp_numeric_feats_dstrb(feats_vctr = setdiff(names(glbObsAll), 
+                            c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude)))
 
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
@@ -1421,7 +1449,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "scrub.data", major.inc = FALSE)
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r scrub.data, cache=FALSE, echo=FALSE}
+```{r scrub.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 mycheck_problem_data(glbObsAll, featsExclude = glbFeatsExclude, 
                      fctrMaxUniqVals = glbFctrMaxUniqVals)
 
@@ -1461,14 +1489,14 @@ dsp_catxtab <- function(str)
 #                           mycreate_sqlxtab_df(glbObsAll,
 #     c("myCategory", "NewsDesk", "SectionName", "SubsectionName", glb_rsp_var)))
 # myprint_df(ctgry_xtab_df)
-# write.table(ctgry_xtab_df, paste0(glb_out_pfx, "ctgry_xtab.csv"), 
+# write.table(ctgry_xtab_df, paste0(glbOut$pfx, "ctgry_xtab.csv"), 
 #             row.names=FALSE)
 
 # ctgry_cast_df <- orderBy(~ -Y -NA, dcast(ctgry_xtab_df, 
 #                        myCategory + NewsDesk + SectionName + SubsectionName ~ 
 #                            Pplr.fctr, sum, value.var=".n"))
 # myprint_df(ctgry_cast_df)
-# write.table(ctgry_cast_df, paste0(glb_out_pfx, "ctgry_cast.csv"), 
+# write.table(ctgry_cast_df, paste0(glbOut$pfx, "ctgry_cast.csv"), 
 #             row.names=FALSE)
 
 # print(ctgry_sum_tbl <- table(glbObsAll$myCategory, glbObsAll[, glb_rsp_var], 
@@ -1503,7 +1531,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "transform.data", major.inc = FALSE)
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r transform.data, cache=FALSE, echo=FALSE}
+```{r transform.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 
 ### Mapping dictionary
 #savObsAll <- glbObsAll; glbObsAll <- savObsAll
@@ -1565,12 +1593,12 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features", major.inc = TRUE
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features, cache=FALSE, echo=FALSE}
+```{r extract.features, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.datetime", major.inc = FALSE)
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.datetime, cache=FALSE, echo=FALSE}
+```{r extract.features.datetime, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.datetime.chunk.df <- myadd_chunk(NULL, "extract.features.datetime.bgn")
 
 #   Extract date & time features
@@ -1694,7 +1722,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.image", major.inc 
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5}
+```{r extract.features.image, cache=FALSE, echo=FALSE, fig.height=5, fig.width=5, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.image.chunk.df <- myadd_chunk(NULL, "extract.features.image.bgn")
 
 if (length(names(glbFeatsImage)) > 0) {
@@ -1709,6 +1737,24 @@ if (length(names(glbFeatsImage)) > 0) {
                 as.integer(unlist(strsplit(glbObsAll[obsIx, feat], " ")))
             }
 
+        mygetImage <- function(obsIx, featImage, plot = FALSE, featHighlight = NULL, ovrlHighlight = NULL) {
+            img <- matrix(data = rev(glbFeatsImage[[featImage]]$imgMtrx[obsIx, ]), nrow = 96, ncol = 96)
+            if (plot) {
+                image(1:96, 1:96, img, col = gray((0:255)/255))
+                if (!is.null(featHighlight)) {
+                    points(96 - glbObsAll[obsIx, featHighlight[1]],  
+                           96 - glbObsAll[obsIx, featHighlight[2]],  
+                           col = "blue")
+                }    
+                if (!is.null(ovrlHighlight)) {
+                    points(96 - ovrlHighlight[1],  
+                           96 - ovrlHighlight[2],  
+                           col = "red")
+                }    
+            }    
+            return(img)
+        }        
+        
         extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
                                                     paste0("extract.features.image", ".", feat, ".display"), 
                                                         major.inc = TRUE)
@@ -1722,14 +1768,162 @@ if (length(names(glbFeatsImage)) > 0) {
             for (obsIx in smpl) {
                 print(sprintf("        obsIx:%d:", obsIx))
                 print(glbObsAll[obsIx, glb_dsp_cols])
-                image(1:96, 1:96, 
-                            matrix(data = rev(glbFeatsImage[[feat]]$imgMtrx[obsIx, ]), nrow = 96, ncol = 96),
-                            col = gray((0:255)/255))
-                points(96 - glbObsAll[obsIx, glb_rsp_var_raw],  
-                       96 - glbObsAll[obsIx, "left_eye_center_y"],  
-                       col = "blue")
+#                 image(1:96, 1:96, 
+#                             matrix(data = rev(glbFeatsImage[[feat]]$imgMtrx[obsIx, ]), nrow = 96, ncol = 96),
+#                             col = gray((0:255)/255))
+#                 points(96 - glbObsAll[obsIx, glb_rsp_var_raw],  
+#                        96 - glbObsAll[obsIx, "left_eye_center_y"],  
+#                        col = "blue")
+                mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"))
             }    
         }
+        
+        if (!is.null(glbFeatsImage[[feat]]$patchSize)) {
+            extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
+                                                    paste0("extract.features.image", ".", feat, ".patch"), 
+                                                            major.inc = TRUE)
+            
+            #crdX <- paste(glb_rsp_var, "x", sep = "_") glb_rsp_var == "left_eye_center_x"
+            crdX <- paste("left_eye_center", "x", sep = "_")
+            crdY <- paste("left_eye_center", "y", sep = "_")            
+            patches <- foreach(obsIx = c(1:nrow(glbObsAll))[glbObsAll$.src == "Train"], 
+            # patches <- foreach(obsIx = 1:7039,
+                               .combine = rbind) %dopar% {                
+                img <- matrix(data = glbFeatsImage[[feat]]$imgMtrx[obsIx,], nrow = 96, ncol = 96)
+                x   <- glbObsAll[obsIx, crdX]
+                y   <- glbObsAll[obsIx, crdY]
+                x1  <- x - glbFeatsImage[[feat]]$patchSize
+                x2  <- x + glbFeatsImage[[feat]]$patchSize
+                y1  <- y - glbFeatsImage[[feat]]$patchSize
+                y2  <- y + glbFeatsImage[[feat]]$patchSize
+                if ((!is.na(x)) && (!is.na(y)) && (x1 >= 1) && (x2 <= 96) && (y1 >= 1) && (y2 <= 96)) {
+                    result <- as.vector(img[x1:x2, y1:y2])
+                } else {
+                    result <- NULL
+                }
+                result <- result
+            }
+            
+            patchEdgeLength = 2 * glbFeatsImage[[feat]]$patchSize + 1
+            glbFeatsImage[[feat]]$meanPatchMtrx <- 
+                matrix(data = colMeans(patches), nrow = patchEdgeLength, ncol = patchEdgeLength)
+            print(sprintf("    Mean patch (size = %d) for %s:%s", 
+                          glbFeatsImage[[feat]]$patchSize, feat, glb_rsp_var))
+            image(1:patchEdgeLength, 1:patchEdgeLength,
+                  glbFeatsImage[[feat]]$meanPatchMtrx[patchEdgeLength:1, patchEdgeLength:1],
+                  col = gray((0:255) / 255))
+            
+            searchSize <- 2
+            meanX <- mean(glbObsAll[glbObsAll$.src == "Train", crdX], na.rm = TRUE)
+            meanY <- mean(glbObsAll[glbObsAll$.src == "Train", crdY], na.rm = TRUE)            
+            x1    <- as.integer(meanX) - searchSize
+            x2    <- as.integer(meanX) + searchSize
+            y1    <- as.integer(meanY) - searchSize
+            y2    <- as.integer(meanY) + searchSize
+            searchSpace <- expand.grid(x = x1:x2, y = y1:y2)
+
+            # Evaluate method results            
+            predictObsNew <- 
+                foreach(obsIx = c(1:nrow(glbObsAll))[glbObsAll$.src == "Test"], 
+                # foreach(obsIx = 8820:8822,
+                               .combine = rbind) %dopar% {
+                    # img <- mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"))                                   
+                    img <- mygetImage(obsIx, feat)
+                    patchSize <- glbFeatsImage[[feat]]$patchSize
+                    thsObs <- foreach(j = 1:nrow(searchSpace), .combine = rbind) %dopar% {
+                        x     <- searchSpace$x[j]
+                        y     <- searchSpace$y[j]
+                        p     <- img[(x - patchSize):(x + patchSize), (y - patchSize):(y + patchSize)]
+                        score <- cor(as.vector(p), as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
+                        score <- ifelse(is.na(score), 0, score)
+                        data.frame(x, y, score)
+                    }
+                    best <- cbind(glbObsAll[obsIx, glbFeatsId, FALSE], thsObs[which.max(thsObs$score), ])
+                    # mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"), ovrlHighlight = c(best$x, best$y))
+            }
+            
+            # Output NewPatches
+            outObsNew <- 
+                foreach(obsIx = c(1:nrow(glbObsAll))[glbObsAll$.src == "Test"], 
+                # foreach(obsIx = 8820:8822,
+                               .combine = rbind) %dopar% {
+                    # img <- mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"))                                   
+                    img <- mygetImage(obsIx, feat)
+                    patchSize <- glbFeatsImage[[feat]]$patchSize
+                    thsObs <- foreach(j = 1:nrow(searchSpace), .combine = rbind) %dopar% {
+                        x     <- searchSpace$x[j]
+                        y     <- searchSpace$y[j]
+                        p     <- img[(x - patchSize):(x + patchSize), (y - patchSize):(y + patchSize)]
+                        score <- cor(as.vector(p), as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
+                        score <- ifelse(is.na(score), 0, score)
+                        data.frame(x, y, score)
+                    }
+                    # best <- cbind(glbObsAll[obsIx, glbFeatsId, FALSE], thsObs[which.max(thsObs$score), ])
+                    thsObsOut <- cbind(glbObsAll[obsIx, glbFeatsId, FALSE], thsObs)
+                    # mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"), ovrlHighlight = c(best$x, best$y))
+            }
+            write.csv(outObsNew, paste0(glbOut$pfx, "Test.csv"), row.names = FALSE)
+            
+            # Output TrnPatches
+            outObsTrn <- 
+                foreach(obsIx = c(1:nrow(glbObsAll))[glbObsAll$.src == "Train"], 
+                # foreach(obsIx = 1:5,
+                               .combine = rbind) %dopar% {
+                    # img <- mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"))                                   
+                    img <- mygetImage(obsIx, feat)
+                    patchSize <- glbFeatsImage[[feat]]$patchSize
+                    lblX <- floor(glbObsAll[obsIx, "left_eye_center_x"])
+                    lblY <- floor(glbObsAll[obsIx, "left_eye_center_y"])                    
+                    thsObs <- foreach(j = 1:nrow(searchSpace), .combine = rbind) %dopar% {
+                        x     <- searchSpace$x[j]
+                        y     <- searchSpace$y[j]
+                        p     <- img[(x - patchSize):(x + patchSize), (y - patchSize):(y + patchSize)]
+                        score <- cor(as.vector(p), as.vector(glbFeatsImage[[feat]]$meanPatchMtrx))
+                        score <- ifelse(is.na(score), 0, score)
+                        label <- ifelse((x == lblX) && (y == lblY), "left_eye_center", ".none")
+                        data.frame(x, y, score, label)
+                    }
+                    # best <- cbind(glbObsAll[obsIx, glbFeatsId, FALSE], thsObs[which.max(thsObs$score), ])
+                    thsObsOut <- cbind(glbObsAll[obsIx, glbFeatsId, FALSE], thsObs)
+                    # mygetImage(obsIx, feat, plot = TRUE, featHighlight = c(glb_rsp_var_raw, "left_eye_center_y"), ovrlHighlight = c(best$x, best$y))
+            }
+            write.csv(outObsTrn, paste0(glbOut$pfx, "Train.csv"), row.names = FALSE)
+            print(table(outObsTrn$label))
+            print("Summary by label:")
+            for (label in unique(outObsTrn$label))
+                print(summary(outObsTrn[outObsTrn$label == label, ]))
+            for (type in c("min", "max")) {
+                print(sprintf("Train: %s score for +ve label:", type))
+                sbstObsTrn <- outObsTrn[outObsTrn$label != ".none", ]
+                if (type == "min") print(thsPatch <- sbstObsTrn[which.min(sbstObsTrn$score), ])
+                if (type == "max") print(thsPatch <- sbstObsTrn[which.max(sbstObsTrn$score), ])
+                img <- mygetImage(which(glbObsAll[, glbFeatsId] == thsPatch[, glbFeatsId]), feat, plot = TRUE,
+                                  featHighlight = c("left_eye_center_x", "left_eye_center_y"))
+            }
+            for (type in c("min", "max")) {
+                print(sprintf("Train: %s score for -ve label:", type))
+                sbstObsTrn <- outObsTrn[outObsTrn$label == ".none", ]
+                if (type == "min") print(thsPatch <- sbstObsTrn[which.min(sbstObsTrn$score), ])
+                if (type == "max") print(thsPatch <- sbstObsTrn[which.max(sbstObsTrn$score), ])
+                img <- mygetImage(which(glbObsAll[, glbFeatsId] == thsPatch[, glbFeatsId]), feat, plot = TRUE,
+                                  featHighlight = c("left_eye_center_x", "left_eye_center_y"),
+                                  ovrlHighlight = c(thsPatch$x, thsPatch$y))
+            }    
+            
+            # Script level call for fit
+#             ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+#                                     id.prefix = "MFO", type = glb_model_type, 
+#                                     trainControl.method = "none",
+#                                     train.method = ifelse(glb_is_regression, "lm", "myMFO_classfr"))),
+#                                 indep_vars = ".rnorm", rsp_var = glb_rsp_var,
+#                                 fit_df = glbObsFit, OOB_df = glbObsOOB)
+            
+            # Script level call for predict
+#             obs_df <- glb_get_predictions(obs_df, mdl_id = glb_fin_mdl_id, rsp_var = glb_rsp_var, 
+#                                             prob_threshold_def = prob_threshold_def)
+
+        }
+        
     }
     
     glbObsAll <- glbObsAll[, setdiff(names(glbObsAll), names(glbFeatsImage))]
@@ -1742,7 +1936,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.price", major.inc 
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.price, cache=FALSE, echo=FALSE}
+```{r extract.features.price, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.price.chunk.df <- myadd_chunk(NULL, "extract.features.price.bgn")
 
 if (!is.null(glbFeatsPrice)) {
@@ -1776,7 +1970,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.text", major.inc =
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.text, cache=FALSE, echo=FALSE}
+```{r extract.features.text, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 extract.features.text.chunk.df <- myadd_chunk(NULL, "extract.features.text.bgn")
 
 if (length(glbFeatsText) > 0) {
@@ -2914,7 +3108,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.string", major.inc
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.string, cache=FALSE, echo=FALSE}
+```{r extract.features.string, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 # String extraction should be at the end since many features come in as strings (e.g. datetime, image)
 extract.features.string.chunk.df <- myadd_chunk(NULL, "extract.features.string.bgn")
 
@@ -2946,20 +3140,8 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.end", major.inc = 
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r extract.features.end, cache=FALSE, echo=FALSE}
+```{r extract.features.end, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 
-# print(sapply(names(glbObsTrn), function(col) sum(is.na(glbObsTrn[, col]))))
-# print(sapply(names(glbObsNew), function(col) sum(is.na(glbObsNew[, col]))))
-
-# print(myplot_scatter(glbObsTrn, "<col1_name>", "<col2_name>", smooth=TRUE))
-
-#stop(here"); glb2Sav(); glbObsAll <- savObsAll
-
-# if (glb_save_envir)
-#     save(glb_feats_df, 
-#          glbObsAll, #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-#          file=paste0(glb_out_pfx, "extract_features_dsk.RData"))
-# load(paste0(glb_out_pfx, "extract_features_dsk.RData"))
 
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
@@ -2968,7 +3150,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc = T
 ```
 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
-```{r manage.missing.data, cache=FALSE, echo=FALSE}
+```{r manage.missing.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 
 # If mice crashes with error: Error in get(as.character(FUN), mode = "function", envir = envir) : object 'State' of mode 'function' was not found
 #   consider excluding 'State' as a feature
@@ -3015,7 +3197,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r cluster.data, cache=FALSE, echo=FALSE}
+```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 mycompute_entropy_df <- function(obs_df, entropy_var, by_var=NULL) {   
     require(lazyeval)
     require(dplyr)
@@ -3123,7 +3305,7 @@ if (glb_cluster) {
 #stop(here"); glb2Sav()    
     grp_ids <- sort(unique(glbObsAll[, glbFeatsCategory]))
     glb_cluster_size_df_lst <- list()
-    png(paste0(glb_out_pfx, "FeatsTxtClusters.png"), 
+    png(paste0(glbOut$pfx, "FeatsTxtClusters.png"), 
         width = 480 * 2, height = 480 * length(grp_ids))
     grid.newpage()
     pushViewport(viewport(layout = grid.layout(nrow = length(grp_ids), ncol = 2)))
@@ -3283,7 +3465,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r partition.data.training, cache=FALSE, echo=FALSE}
+```{r partition.data.training, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 startTm = proc.time()["elapsed"]
 print(sprintf("partition.data.training chunk: setup: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - startTm))
@@ -3379,6 +3561,7 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
             tmp_trnobs_df[, rspGrpVar] = tmpObsTrn[, rspGrpVar]
         tmp_trnobs_df <- orderBy(reformulate(c(rspGrpVar, glbFeatsCategory)), tmp_trnobs_df)
         require(sampling)
+        set.seed(glbObsTrnPartitionSeed)
         split_strata <- sampling::strata(tmp_trnobs_df, 
                                stratanames = c(rspGrpVar, glbFeatsCategory),
                                size = OOB_strata_size[!is.na(OOB_strata_size)],
@@ -3474,19 +3657,13 @@ print("glbObsOOB: "); print(dim(glbObsOOB))
 print("glbObsNew: "); print(dim(glbObsNew))
 # # Does not handle NULL or length(glbFeatsId) > 1
 
-if (glb_save_envir)
-    save(glbObsAll, #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-         file=paste0(glb_out_pfx, "blddfs_dsk.RData"))
-# load(paste0(glb_out_pfx, "blddfs_dsk.RData"))
-
-
 print(sprintf("partition.data.training chunk: teardown: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - startTm))
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "select.features", major.inc = TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r select.features, cache=FALSE, echo=FALSE}
+```{r select.features, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
 glb_feats_df <- myselect_features(entity_df = glbObsTrn, 
                                   exclude_vars_as_features = glbFeatsExclude, 
@@ -3670,24 +3847,13 @@ print("glbObsAll vs. glb_feats_df: ");
 print(setdiff(setdiff(names(glbObsAll), glb_feats_df$id), 
                 myfind_chr_cols_df(glbObsAll)))
 
-if (glb_save_envir)
-    save(glb_feats_df, 
-         glbObsAll, #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-         file=paste0(glb_out_pfx, "selfts_dsk.RData"))
-# load(paste0(glb_out_pfx, "blddfs_dsk.RData"))
-
-# if (!all.equal(tmp_feats_df, glb_feats_df))
-#     stop("glb_feats_df r/w not working")
-# if (!all.equal(tmp_entity_df, glbObsAll))
-#     stop("glbObsAll r/w not working")
-
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc=TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r fit.models_0, cache=FALSE}
+```{r fit.models_0, cache=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 fit.models_0_chunk_df <- myadd_chunk(NULL, "fit.models_0_bgn", label.minor = "setup")
-# load(paste0(glb_out_pfx, "dsk.RData"))
+# load(paste0(glbOut$pfx, "dsk.RData"))
 
 get_model_sel_frmla <- function() {
     model_evl_terms <- c(NULL)
@@ -3727,7 +3893,7 @@ get_dsp_models_df <- function() {
     pltMdls <- setdiff(pltMdls, names(nParams[nParams == 0]))
     
     # length(pltMdls) == 21
-    png(paste0(glb_out_pfx, "bestTune.png"), width = 480 * 2, height = 480 * 4)
+    png(paste0(glbOut$pfx, "bestTune.png"), width = 480 * 2, height = 480 * 4)
     grid.newpage()
     pushViewport(viewport(layout = grid.layout(ceiling(length(pltMdls) / 2.0), 2)))
     pltIx <- 1
@@ -4050,6 +4216,7 @@ ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
         trainControl.number=glb_rcv_n_folds, trainControl.repeats=glb_rcv_n_repeats,
             trainControl.classProbs = glb_is_classification,
             trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            trainControl.allowParallel = glbMdlAllowParallel,
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
         train.method="glmnet")),
@@ -4065,8 +4232,8 @@ rm(ret_lst)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 ```
 
-```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15}
-fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor="setup")
+```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
+fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
 topindep_var <- NULL; interact_vars <- NULL;
@@ -4384,7 +4551,7 @@ fit.models_1_chunk_df <-
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 ```
 
-```{r fit.models_2, cache=FALSE, fig.height=10, fig.width=15}
+```{r fit.models_2, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 fit.models_2_chunk_df <- 
     myadd_chunk(NULL, "fit.models_2_bgn", label.minor = "setup")
 
@@ -4493,7 +4660,7 @@ if (length(goback_vars) > 0) {
 # mltd_models_df <- merge(mltd_models_df, glb_models_df[, c("id", "model_method")], 
 #                         all.x=TRUE)
 
-png(paste0(glb_out_pfx, "models_bar.png"), width=480*3, height=480*2)
+png(paste0(glbOut$pfx, "models_bar.png"), width=480*3, height=480*2)
 #print(gp <- myplot_bar(mltd_models_df, "id", "value", colorcol_name="model_method") + 
 print(gp <- myplot_bar(df=mltd_models_df, xcol_name="id", ycol_names="value") + 
         geom_errorbar(data=mrgdCI_models_df, 
@@ -4887,7 +5054,7 @@ if (!is.null(glbFeatsCategory)) {
 
 write.csv(glbObsOOB[, c(glbFeatsId, 
                 grep(glb_rsp_var, names(glbObsOOB), fixed=TRUE, value=TRUE))], 
-    paste0(gsub(".", "_", paste0(glb_out_pfx, glb_sel_mdl_id), fixed=TRUE), 
+    paste0(gsub(".", "_", paste0(glbOut$pfx, glb_sel_mdl_id), fixed=TRUE), 
            "_OOBobs.csv"), row.names=FALSE)
 
 fit.models_2_chunk_df <- 
@@ -4895,7 +5062,7 @@ fit.models_2_chunk_df <-
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc=FALSE)
 ```
 
-```{r fit.models_3, cache=FALSE, fig.height=10, fig.width=15}
+```{r fit.models_3, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 # if (sum(is.na(glbObsAll$D.P.http)) > 0)
 #         stop("fit.models_3: Why is this happening ?")
 
@@ -4916,15 +5083,6 @@ sync_glb_obs_df()
     
 print(setdiff(names(glbObsNew), names(glbObsAll)))
 
-if (glb_save_envir)
-    save(glb_feats_df, 
-         glbObsAll, #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-         glb_models_df, dsp_models_df, glb_models_lst, glb_sel_mdl, glb_sel_mdl_id,
-         glb_model_type,
-        file=paste0(glb_out_pfx, "selmdl_dsk.RData"))
-#load(paste0(glb_out_pfx, "selmdl_dsk.RData"))
-
-rm(ret_lst)
 replay.petrisim(pn=glb_analytics_pn, 
     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
         "model.selected")), flip_coord=TRUE)
@@ -4932,7 +5090,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc=TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r fit.data.training_0, cache=FALSE}
+```{r fit.data.training_0, cache=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 #load(paste0(glb_inp_pfx, "dsk.RData"))
 
 if (!is.null(glb_fin_mdl_id) && (glb_fin_mdl_id %in% names(glb_models_lst))) {
@@ -5077,7 +5235,7 @@ rm(ret_lst)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc=FALSE)
 ```
 
-```{r fit.data.training_1, cache=FALSE}
+```{r fit.data.training_1, cache=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 #stop(here"); glb2Sav()
 if (glb_is_classification && glb_is_binomial) 
     prob_threshold <- glb_models_df[glb_models_df$id == glb_sel_mdl_id,
@@ -5137,16 +5295,8 @@ for (col in setdiff(names(glbObsOOB), names(glbObsAll)))
     
 print(setdiff(names(glbObsNew), names(glbObsAll)))
 
-if (glb_save_envir)
-    save(glb_feats_df, glbObsAll, 
-         #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-         glb_models_df, dsp_models_df, glb_models_lst, glb_model_type,
-         glb_sel_mdl, glb_sel_mdl_id,
-         glb_fin_mdl, glb_fin_mdl_id,
-        file = paste0(glb_out_pfx, "dsk.RData"))
-
 #glb2Sav(); all.equal(savObsAll, glbObsAll); all.equal(sav_models_lst, glb_models_lst)
-#load(file = paste0(glb_out_pfx, "dsk_knitr.RData"))
+#load(file = paste0(glbOut$pfx, "dsk_knitr.RData"))
 #cmpCols <- names(glbObsAll)[!grepl("\\.Final\\.", names(glbObsAll))]; all.equal(savObsAll[, cmpCols], glbObsAll[, cmpCols]); all.equal(savObsAll[, "H.P.http"], glbObsAll[, "H.P.http"]); 
 
 replay.petrisim(pn = glb_analytics_pn, 
@@ -5156,7 +5306,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "predict.data.new", major.inc = TRUE
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r predict.data.new, cache=FALSE, echo=FALSE}
+```{r predict.data.new, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 # Compute final model predictions
 
 #glb2Sav(); all.equal(savObsAll, glbObsAll); all.equal(savObsTrn, glbObsTrn); all.equal(savObsNew, glbObsNew)  
@@ -5233,14 +5383,15 @@ if (glb_is_classification) {
                 grep("\\.n\\.(.+)\\.", names(glbLvlCategory), value = TRUE))]
     tmpLvlCategory <- tmpLvlCategory[rowSums(is.na(tmpLvlCategory)) > 0, ]
     errLvlIx <- c(NULL)
-    for (clss in unique(glbObsTrn[, glb_rsp_var])) {
-        newClmn <- paste0(".n.New.", as.character(clss))
-        trnClmn <- paste0(".n.Trn.", as.character(clss))        
-        errLvlIx <- union(errLvlIx, 
-                            which(!is.na(tmpLvlCategory[, newClmn]) &
-                                (tmpLvlCategory[, newClmn] > 0) & 
-                                is.na(tmpLvlCategory[, trnClmn])))
-    }
+    if (nrow(tmpLvlCategory) > 0) 
+        for (clss in unique(glbObsTrn[, glb_rsp_var])) {
+            newClmn <- paste0(".n.New.", as.character(clss))
+            trnClmn <- paste0(".n.Trn.", as.character(clss))        
+            errLvlIx <- union(errLvlIx, 
+                                which(!is.na(tmpLvlCategory[, newClmn]) &
+                                    (tmpLvlCategory[, newClmn] > 0) & 
+                                    is.na(tmpLvlCategory[, trnClmn])))
+        }
     if (length(errLvlIx) > 0) {
         print("ObsNew Prediction errors in categories:")
         print(tmpLvlCategory[errLvlIx, ])
@@ -5392,7 +5543,7 @@ if (!is.null(glbOutStackFnames)) {
 }
 
 if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df)
-out_fname <- paste0(glb_out_pfx, "out.csv")
+out_fname <- paste0(glbOut$pfx, "out.csv")
 write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 #cat(" ", "\n", file=submit_fn, append=TRUE)
 
@@ -5560,14 +5711,6 @@ if ((length(diff <- setdiff(names(glbObsTrn), names(glbObsAll))) > 0) ||
     print(diff)
     stop("glbObs* not in sync")
 }
-
-if (glb_save_envir)
-    save(glb_feats_df, glbObsAll, 
-         #glbObsTrn, glbObsFit, glbObsOOB, glbObsNew,
-         glb_models_df, dsp_models_df, glb_models_lst, glb_model_type,
-         glb_sel_mdl, glb_sel_mdl_id,
-         glb_fin_mdl, glb_fin_mdl_id,
-        file=paste0(glb_out_pfx, "prdnew_dsk.RData"))
 
 # tmp_replay_lst <- replay.petrisim(pn=glb_analytics_pn, 
 #     replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
