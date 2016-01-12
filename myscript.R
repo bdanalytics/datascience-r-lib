@@ -47,6 +47,13 @@ mydsp_chunk <- function(chunks_df) {
 }
 #mydsp_chunk(glb_chunks_df)
 
+mysavChunk <- function(envFilePfx, chunkLbl) {
+    savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
+    savFile <- paste0(envFilePfx, chunkLbl, ".RData")
+    print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
+    save(list = savObjects, file = savFile)
+}
+
 myevlChunk <- function(chunkSpecsLst, envFilePfx) {
     if (!is.null(chunkSpecsLst$first)) {
         stop("myevlChunk: not implemented yet")
