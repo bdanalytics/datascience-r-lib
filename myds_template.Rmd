@@ -623,15 +623,20 @@ glbRFESizes <- list()
 glbObsFitOutliers <- list()
 # If outliers.n >= 10; consider concatenation of interaction vars
 # glbObsFitOutliers[["<mdlFamily>"]] <- c(NULL
-    # is.na(.rstudent)
-    # is.na(.dffits)
-    # .hatvalues >= 0.99        
-    # -38,167,642 < minmax(.rstudent) < 49,649,823    
+#     is.na(.rstudent)
+#     max(.rstudent)
+#     is.na(.dffits)
+#     .hatvalues >= 0.99        
+#     -38,167,642 < minmax(.rstudent) < 49,649,823    
 #     , <comma-separated-<glbFeatsId>>
 #                                     )
 glbObsTrnOutliers <- list()
+glbObsTrnOutliers[["Final"]] <- union(glbObsFitOutliers[["All.X"]],
+                                c(NULL
+                                ))
 
 # influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
+#mdlId <- "All.X##rcv#glm"; obs_df <- fitobs_df
 #mdlId <- "RFE.X.glm"; obs_df <- fitobs_df
 #mdlId <- "Final.glm"; obs_df <- trnobs_df
 #mdlId <- "CSM2.X.glm"; obs_df <- fitobs_df
@@ -639,6 +644,7 @@ glbObsTrnOutliers <- list()
 #mdlIdFamily <- paste0(head(unlist(str_split(mdlId, "\\.")), -1), collapse="."); obs_df <- dplyr::filter_(obs_df, interp(~(!(var %in% glbObsFitOutliers[[mdlIdFamily]])), var = as.name(glbFeatsId))); model_diags_df <- cbind(obs_df, data.frame(.rstudent=stats::rstudent(glb_models_lst[[mdlId]]$finalModel)), data.frame(.dffits=stats::dffits(glb_models_lst[[mdlId]]$finalModel)), data.frame(.hatvalues=stats::hatvalues(glb_models_lst[[mdlId]]$finalModel)));print(summary(model_diags_df[, c(".rstudent",".dffits",".hatvalues")])); table(cut(model_diags_df$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
 
 #print(subset(model_diags_df, is.na(.rstudent))[, glbFeatsId])
+#print(model_diags_df[which.max(model_diags_df$.rstudent), ])
 #print(subset(model_diags_df, is.na(.dffits))[, glbFeatsId])
 #print(model_diags_df[which.min(model_diags_df$.dffits), ])
 #print(subset(model_diags_df, .hatvalues > 0.99)[, glbFeatsId])
@@ -882,6 +888,19 @@ glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
                   )
 
 # Output specs
+# lclgetfltout_df <- function(obsout_df) {
+#     require(tidyr)
+#     obsout_df <- obsout_df %>%
+#         tidyr::separate("ImageId.x.y", c(".src", ".pos", "x", "y"), 
+#                         sep = "#", remove = TRUE, extra = "merge")
+#     maxout_df <- obsout_df %>%
+#         dplyr::group_by(.pos) %>%
+#         dplyr::summarize(maxProb1 = max(Probability1))
+#     fltout_df <- merge(maxout_df, obsout_df, 
+#                        by.x = c(".pos", "maxProb1"), by.y = c(".pos", "Probability1"),
+#                        all.x = TRUE)
+#     return(fltout_df)
+# }
 glbObsOut <- list(NULL
         # glbFeatsId will be the first output column, by default
         ,vars = list()
@@ -894,6 +913,21 @@ glbObsOut <- list(NULL
 #                                     select(matches("(RowId|Location)"))
 #                     return(tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")]))
 #                   }
+#         ,mapFn = function(obsout_df) {
+#                     #sav_obsout_df <- obsout_df; all.equal(sav_obsout_df, obsout_df)
+#                     fltout_df <- lclgetfltout_df(obsout_df) %>%
+#                         dplyr::mutate(ImageId = as.integer(.pos)) %>%
+#                         dplyr::select(ImageId, left_eye_center_x = x, left_eye_center_y = y) 
+#                     smpout_df <- read.csv('data/IdLookupTable.csv')
+#                     curout_df <- fltout_df %>% 
+#                                     tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
+#                                     merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
+#                                     dplyr::select(matches("(RowId|Location)")) %>%
+#                                     dplyr::filter(!is.na(Location))
+#                     prvout_df <- read.csv('Faces_patch_out.csv')
+#                     thsout_df <- rbind(curout_df, subset(prvout_df, !(RowId %in% curout_df$RowId)))
+#                     return(thsout_df <- orderBy(~RowId, thsout_df[, c("RowId", "Location")]))
+#                  }
                   )
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
 
@@ -942,7 +976,16 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
-#load("Faces_patch_extract.features.end.RData", verbose = TRUE)
+#mysavChunk(glbOut$pfx, glbChunks[["last"]])
+
+# Inspect max OOB FP
+#chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
+#chkObsOOBFP <- subset(chkObsOOB, label.fctr.All.X..rcv.glmnet == "left_eye_center") %>% dplyr::mutate(Probability1 = label.fctr.All.X..rcv.glmnet.prob) %>% select(-.src, -.pos, -x, -y) %>% lclgetfltout_df() %>% mutate(obj.distance = (((as.numeric(x) - left_eye_center_x.int) ^ 2) + ((as.numeric(y) - left_eye_center_y.int) ^ 2)) ^ 0.5) %>% dplyr::top_n(5, obj.distance) %>% dplyr::top_n(5, -patch.cor)
+#
+#newImgObs <- glbObsNew[(glbObsNew$ImageId == "Test#0001"), ]; print(newImgObs[which.max(newImgObs$label.fctr.Final..rcv.glmnet.prob), ])
+#OOBImgObs <- glbObsOOB[(glbObsOOB$ImageId == "Train#0003"), ]; print(OOBImgObs[which.max(OOBImgObs$label.fctr.All.X..rcv.glmnet.prob), ])
+
+#load("<scriptName>_extract.features.end.RData", verbose = TRUE)
 #mygetImage(which(glbObsAll[, glbFeatsId] == "Train#0003"), names(glbFeatsImage)[1], plot = TRUE, featHighlight = c("left_eye_center_x", "left_eye_center_y"), ovrlHighlight = c(66, 35))
 
 # Depict process
@@ -1897,8 +1940,16 @@ if (length(names(glbFeatsImage)) > 0) {
             outObsNew <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Test" , glbFeatsId], ]
             
-            print(myplot_histogram(outObsTrn, "patch.cor") + facet_wrap(~label, scales = "free_y") + 
+            print("outObsTrn patch.cor Distribution:")
+            print(tapply(outObsTrn[, "patch.cor"], outObsTrn[, "label"], summary))
+            print(myplot_violin(outObsTrn, "patch.cor", xcol_name = "label") + 
+                      facet_wrap(~label, scales = "free_y") + 
                       ggtitle(sprintf("%s:%s:outObsTrn", feat, "left_eye_center")))
+#             print(myplot_histogram(outObsTrn, "patch.cor") + facet_wrap(~label, scales = "free_y") + 
+#                       ggtitle(sprintf("%s:%s:outObsTrn\n%s", feat, "left_eye_center",
+#                                 paste(names(summary(outObsTrn[, "patch.cor"])), 
+#                             summary(outObsTrn[outObsTrn$label == "left_eye_center", "patch.cor"]), 
+#                             sep = ":", collapse = "; "))))      
             
             # Plot images with is.na(glbObsTrn$ptFeat) in outObsTrn
             tmpObsTrn <- 
@@ -1961,7 +2012,9 @@ if (length(names(glbFeatsImage)) > 0) {
             
             #savOutObsNew <- outObsNew; all.equal(savOutObsNew, outObsNew)
             outObsNew <- outObsNew[, c(glbFeatsId, "x", "y", "patch.cor")]
-            print(myplot_histogram(outObsNew, "patch.cor") + 
+            print("outObsNew patch.cor Distribution:")
+            print(summary(outObsNew[, "patch.cor"]))
+            print(myplot_violin(outObsNew, "patch.cor") + 
                       ggtitle(sprintf("%s:%s:outObsNew", feat, "left_eye_center")))
             
             selObsNew <- dplyr::group_by(outObsNew, ImageId) %>%
@@ -3987,6 +4040,8 @@ max_cor_y_x_vars <- orderBy(~ -cor.y.abs,
         subset(glb_feats_df, (exclude.as.feat == 0) & !nzv & !is.cor.y.abs.low & 
                                 is.na(cor.high.X)))[1:2, "id"]
 max_cor_y_x_vars <- max_cor_y_x_vars[!is.na(max_cor_y_x_vars)]
+if (length(max_cor_y_x_vars) < 2)
+    max_cor_y_x_vars <- union(max_cor_y_x_vars, ".pos")
 
 if (!is.null(glb_Baseline_mdl_var)) {
     if ((max_cor_y_x_vars[1] != glb_Baseline_mdl_var) & 
@@ -4301,6 +4356,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
+# refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
 topindep_var <- NULL; interact_vars <- NULL;
@@ -4406,6 +4462,8 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
     if (!is.null(glbObsFitOutliers[[mdl_id_pfx]])) {
         fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
                                          glbObsFitOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
+        print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
     } else fitobs_df <- glbObsFit
 
     if (is.null(glbMdlFamilies[[mdl_id_pfx]]))
@@ -4468,6 +4526,9 @@ mdl_id_pfx <- paste0(head(unlist(strsplit(mdl_id, "[.]")), -1), collapse = ".")
 if (!is.null(glbObsFitOutliers[[mdl_id_pfx]])) {
     fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
                                      glbObsFitOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
+        print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
+    
 } else fitobs_df <- glbObsFit
 
 for (prePr in glb_preproc_methods) {   
@@ -5262,9 +5323,13 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
 
     mdl_id_pfx <- ifelse(grepl("Ensemble", glb_sel_mdl_id),
                                    "Final.Ensemble", "Final")
-    trnobs_df <- if (is.null(glbObsTrnOutliers[[mdl_id_pfx]])) glbObsTrn else 
-        glbObsTrn[!(glbObsTrn[, glbFeatsId] %in%
-                            glbObsTrnOutliers[[mdl_id_pfx]]), ]
+    
+    trnobs_df <- glbObsTrn 
+    if (!is.null(glbObsTrnOutliers[[mdl_id_pfx]])) {
+        trnobs_df <- glbObsTrn[!(glbObsTrn[, glbFeatsId] %in% glbObsTrnOutliers[[mdl_id_pfx]]), ]
+        print(sprintf("Outliers removed: %d", nrow(glbObsTrn) - nrow(trnobs_df)))
+        print(setdiff(glbObsTrn[, glbFeatsId], trnobs_df[, glbFeatsId]))
+    }    
         
     # Force fitting of Final.glm to identify outliers
     method_vctr <- unique(c(myparseMdlId(glb_sel_mdl_id)$alg, glbMdlFamilies[["Final"]]))
