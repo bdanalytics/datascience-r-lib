@@ -2041,6 +2041,8 @@ mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
 myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indep_vars <- indep_vars
 
+    startTm <- proc.time()["elapsed"]
+    print(sprintf("myfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
     print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
 
     if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
@@ -2213,6 +2215,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 # 	    print(mdl_specs_lst[["train.tuneGrid"]])
 # 	}
 
+	print(sprintf("myfit_mdl: setup complete: %f secs", proc.time()["elapsed"] - startTm))
 	set.seed(111)
 	mdl <- train(reformulate(sort(indep_vars), response=rsp_var), data=fit_df
 	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df # does not handle interaction var specs
@@ -2223,6 +2226,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 				 , trControl=mdl_specs_lst[["trainControl"]]
 				 , tuneGrid=mdl_specs_lst[["train.tuneGrid"]]
 				 , tuneLength=mdl_specs_lst[["train.tuneLength"]])
+
+	print(sprintf("myfit_mdl: train complete: %f secs", proc.time()["elapsed"] - startTm))
 
 	# Make this assignment earlier than at the end, to facilitate debugging of the model
 	mdl$.myId <- mdl_specs_lst[["id"]]
@@ -2246,6 +2251,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     models_df$min.elapsedtime.everything <- mdl$times$everything["elapsed"]
     models_df$min.elapsedtime.final      <- mdl$times$final["elapsed"]
 
+    print(sprintf("myfit_mdl: train diagnostics complete: %f secs", proc.time()["elapsed"] - startTm))
+
 	# compute/gather fit & OOB prediction stats
     for (obs in c("fit", "OOB")) {
         # print(sprintf("    calling mypredict_mdl for %s:", obs))
@@ -2259,6 +2266,8 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
                             ret_type = "stats"),
     		                   all.x = TRUE)
     }
+
+    print(sprintf("myfit_mdl: predict complete: %f secs", proc.time()["elapsed"] - startTm))
 
 	if (nrow(mdl$results) > 0) {
 		myresults_df <- mdl$results
@@ -2282,6 +2291,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     row.names(all_models_df) <- all_models_df$id
 	glb_models_df <<- all_models_df
 
+	print(sprintf("myfit_mdl: exit: %f secs", proc.time()["elapsed"] - startTm))
     return(list("model" = mdl, "models_df" = models_df))
 }
 
