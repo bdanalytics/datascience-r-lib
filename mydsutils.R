@@ -456,16 +456,19 @@ mycompute_median <- function(vector) {
 
 mycompute_stats <- function(vector, stats=median) {
     if (is.factor(vector))
-        return(factor(levels(vector)[stats(as.numeric(vector), na.rm=TRUE)],
+        return(factor(levels(vector)[stats(as.numeric(vector), na.rm = TRUE)],
                       levels(vector)))
-    return(stats(vector, na.rm=TRUE))
+
+    if (any(class(tst <- try(stats(vector, na.rm = TRUE))) %in% c("try-error")))
+        tst <- NA
+    return(tst)
 }
 
 mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
     warning("deprecated to mycompute_stats_df")
 
-	if (class(df) != "data.frame")
-		stop("df argument is not a data.frame: it is ", class(df))
+	if (!any(class(df) %in% c("data.frame")))
+		stop("df argument is not a data.frame: it is ", paste(class(pltLvl), collapse = ","))
 
 	ret_df <- data.frame()
 
@@ -519,12 +522,15 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
-mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
-    if (class(df) != "data.frame")
-        stop("df argument is not a data.frame: it is ", class(df))
+mycompute_stats_df <- function(df, byvars_vctr = factor(0)) {
+
+    if (!any(class(df) %in% c("data.frame")))
+        stop("df argument is not a data.frame: it is ", paste(class(pltLvl), collapse = ","))
 
     ret_df <- data.frame()
-    stats_fns <- c(mean, median, sum); names(stats_fns) <- c(".mean", ".median", ".sum")
+    stats_fns <- c(.mean = mean, .median = median, .sum = sum)
+    #stats_fns <- c(.mean = mean, .median = median)
+    # names(stats_fns) <- c(".mean", ".median", ".sum")
 
     # gather numeric vars
     num_lst <- sapply(names(df), function(col)
@@ -559,18 +565,22 @@ mycompute_stats_df <- function(df, byvars_vctr=factor(0)) {
         #print("var="); print(var)
 
         this_df <- data.frame()
-        for (stat in stats_fns)
-            this_df <- mycbind_df(this_df,
-                             if (byvars_vctr == factor(0))
-                                as.data.frame(mycompute_stats(df[, var])) else
-                                as.data.frame(tapply(df[, var], df[, byvars_vctr],
-                                                     FUN=mycompute_stats, stat=stat)))
-        names(this_df) <- paste(var, names(stats_fns), sep="")
+        if (byvars_vctr == factor(0)) {
+            statVal <- sapply(names(stats_fns), function(statName)
+                                                mycompute_stats(df[, var], stats = stats_fns[[statName]]))
+            statVal <- as.data.frame(t(statVal))
+        } else {
+            statVal <- sapply(names(stats_fns), function(statName)
+                tapply(df[, var], df[, byvars_vctr], FUN = mycompute_stats, stats = stats_fns[[statName]]))
+            statVal <- as.data.frame(statVal)
+        }
+        names(statVal) <- paste0(var, names(stats_fns))
+        this_df <- mycbind_df(this_df, statVal)
 
         # tapply strips class info
         if (inherits(class(df[, var]), "Date")) {
             for (col in names(this_df))
-                this_df[, col] <- as.Date(this_df[, col], origin="1970-01-01")
+                this_df[, col] <- as.Date(this_df[, col], origin = "1970-01-01")
         }
 
         ret_df <- mycbind_df(ret_df, this_df)

@@ -14,9 +14,11 @@ suppressPackageStartupMessages(require(doBy))
 #    					  , labels=c("mean", "median")
 #    					  )
 
+# Potential Enhancements: Default to .frq if ycol_names = NULL
 myplot_bar <- function(df, xcol_name, ycol_names, colorcol_name=NULL, facet_spec=NULL,
                         xlabel_formatter=NULL) {
     require(ggplot2)
+    require(RColorBrewer)
 
     if (xcol_name == ".rownames")
         df[, xcol_name] <- rownames(df)
@@ -35,19 +37,18 @@ myplot_bar <- function(df, xcol_name, ycol_names, colorcol_name=NULL, facet_spec
 #         df <- sqldf(sql)
 #     }
 
-    sum_df <- mycompute_stats_df(df=df, byvars_vctr=xcol_name)
+    sum_df <- mycompute_stats_df(df = df, byvars_vctr = xcol_name)
 
     if (length(ycol_names) == 1) {
-        df <- df[order(df[, ycol_names], decreasing=TRUE), ]
-#         df$xcol <- df[, xcol_name]
-#         df$ycol <- df[, ycol_names]
-        g <- ggplot(df, aes_string(x=paste0("reorder(", xcol_name, ", ", ycol_names, ")"),
-                                   y=ycol_names))
-        if (is.null(colorcol_name)) g <- g + geom_bar(fill="blue", stat="identity") else
-                            g <- g + geom_bar(aes_string(fill=colorcol_name), stat="identity")
+        df <- df[order(df[, ycol_names], decreasing = TRUE), ]
+        g <- ggplot(df, aes_string(x = paste0("reorder(", xcol_name, ", ", ycol_names, ")"),
+                                   y = ycol_names))
+        if (is.null(colorcol_name)) g <- g + geom_bar(fill = "blue", stat = "identity") else
+                            g <- g + geom_bar(aes_string(fill = colorcol_name), stat = "identity") +
+                                    scale_color_brewer(type = "qual", palette = "Paired")
         g <- g + xlab(xcol_name) + ylab(ycol_names)
     } else {
-        require(reshape)
+        require(reshape2)
         mltd_df <- melt(df, id=xcol_name, measure=ycol_names)
         #g <- ggplot(mltd_df, aes_string(x=xcol_name, y="value", fill="variable"))
         names(mltd_df)[1] <- "xcol_name"
@@ -108,7 +109,7 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             g <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
         }
     } else {
-        require(reshape)
+        require(reshape2)
         mltd_df <- melt(df,, measure.vars=ycol_names)
         require(doBy)
         medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
@@ -250,7 +251,7 @@ myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL,
         g <- ggplot(df, aes(x=xcol, y=ycol))
         g <- g + geom_line(colour="blue") + xlab(xcol_name) + ylab(ycol_names)
     } else {
-        require(reshape)
+        require(reshape2)
         id.vars <- xcol_name
         if (!(is.null(facet_row_colnames))) id.vars <- c(id.vars, facet_row_colnames)
         if (!(is.null(facet_col_colnames))) id.vars <- c(id.vars, facet_col_colnames)
