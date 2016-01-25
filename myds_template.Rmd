@@ -948,6 +948,61 @@ glbObsOut <- list(NULL
 #                     return(thsout_df <- orderBy(~RowId, thsout_df[, c("RowId", "Location")]))
 #                  }
                   )
+#obsout_df <- savobsout_df
+# glbObsOut$mapFn <- function(obsout_df) {
+#     txfout_df <- dplyr::select(obsout_df, -.pos.y) %>%
+#         dplyr::mutate(
+#             lunch     = levels(glbObsTrn[, "lunch"    ])[
+#                        round(mean(as.numeric(glbObsTrn[, "lunch"    ])), 0)],
+#             dinner    = levels(glbObsTrn[, "dinner"   ])[
+#                        round(mean(as.numeric(glbObsTrn[, "dinner"   ])), 0)],
+#             reserve   = levels(glbObsTrn[, "reserve"  ])[
+#                        round(mean(as.numeric(glbObsTrn[, "reserve"  ])), 0)],
+#             outdoor   = levels(glbObsTrn[, "outdoor"  ])[
+#                        round(mean(as.numeric(glbObsTrn[, "outdoor"  ])), 0)],
+#             expensive = levels(glbObsTrn[, "expensive"])[
+#                        round(mean(as.numeric(glbObsTrn[, "expensive"])), 0)],
+#             liquor    = levels(glbObsTrn[, "liquor"   ])[
+#                        round(mean(as.numeric(glbObsTrn[, "liquor"   ])), 0)],
+#             table     = levels(glbObsTrn[, "table"    ])[
+#                        round(mean(as.numeric(glbObsTrn[, "table"    ])), 0)],
+#             classy    = levels(glbObsTrn[, "classy"   ])[
+#                        round(mean(as.numeric(glbObsTrn[, "classy"   ])), 0)],
+#             kids      = levels(glbObsTrn[, "kids"     ])[
+#                        round(mean(as.numeric(glbObsTrn[, "kids"     ])), 0)]
+#                       )
+#     
+#     print("ObsNew output class tables:")
+#     print(sapply(c("lunch","dinner","reserve","outdoor",
+#                    "expensive","liquor","table",
+#                    "classy","kids"), 
+#                  function(feat) table(txfout_df[, feat], useNA = "ifany")))
+#     
+#     txfout_df <- txfout_df %>%
+#         dplyr::mutate(labels = "") %>%
+#         dplyr::mutate(labels = 
+#     ifelse(lunch     != "-1", paste(labels, lunch    ), labels)) %>%
+#         dplyr::mutate(labels = 
+#     ifelse(dinner    != "-1", paste(labels, dinner   ), labels)) %>%
+#         dplyr::mutate(labels = 
+#     ifelse(reserve   != "-1", paste(labels, reserve  ), labels)) %>%
+#         dplyr::mutate(labels = 
+#     ifelse(outdoor   != "-1", paste(labels, outdoor  ), labels)) %>%
+#         dplyr::mutate(labels =         
+#     ifelse(expensive != "-1", paste(labels, expensive), labels)) %>%
+#         dplyr::mutate(labels =         
+#     ifelse(liquor    != "-1", paste(labels, liquor   ), labels)) %>%
+#         dplyr::mutate(labels =         
+#     ifelse(table     != "-1", paste(labels, table    ), labels)) %>%
+#         dplyr::mutate(labels =         
+#     ifelse(classy    != "-1", paste(labels, classy   ), labels)) %>%
+#         dplyr::mutate(labels =         
+#     ifelse(kids      != "-1", paste(labels, kids     ), labels)) %>%
+#         dplyr::select(business_id, labels)
+#     return(txfout_df)
+# }
+#if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df); print(head(obsout_df))
+
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
 
 if (glb_is_classification && glb_is_binomial) {
@@ -2017,7 +2072,7 @@ if (length(names(glbFeatsImage)) > 0) {
             outObsNew <- 
                 outObs[outObs[, glbFeatsId] %in% glbObsAll[glbObsAll$.src == "Test" , glbFeatsId], ]
             
-# stop(here"); save.image(file = paste0(glbOut$pfx, "tmp.RData"))            
+#stop(here"); save.image(file = paste0(glbOut$pfx, "tmp.RData"))            
 
             extract.features.image.chunk.df <- myadd_chunk(extract.features.image.chunk.df, 
                                  paste0("extract.features.image", ".", feat, ".patch.diagnostics"),
@@ -2133,8 +2188,8 @@ if (length(names(glbFeatsImage)) > 0) {
                 }
             }
             
-            write.csv(outObsNew[, setdiff(names(outObsNew), 
-                                          c("left_eye_center_x", "left_eye_center_y"))],
+            write.csv(outObsNew[, setdiff(names(outObsNew), c("label",
+                                          "left_eye_center_x", "left_eye_center_y"))],
                       paste0(glbOut$pfx, "Test.csv"), row.names = FALSE)
         }    
             
@@ -4208,7 +4263,7 @@ ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
     id.prefix="Max.cor.Y.rcv.1X1", type=glb_model_type, trainControl.method="none",
     train.method="glmnet")),
                     indep_vars=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
-                    fit_df=glbObsFit, OOB_df=glbObsOOB)
+                    fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 if (glbMdlCheckRcv) {
     # rcv_n_folds == 1 & rcv_n_repeats > 1 crashes
@@ -5773,7 +5828,11 @@ if (!is.null(glbOutStackFnames)) {
     }
 }
 
+#stop("here"); 
+savobsout_df <- obsout_df; all.equal(savobsout_df, obsout_df)
 if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df)
+#print(head(obsout_df))
+
 out_fname <- paste0(glbOut$pfx, "out.csv")
 write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
 #cat(" ", "\n", file=submit_fn, append=TRUE)

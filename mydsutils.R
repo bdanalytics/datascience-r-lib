@@ -68,7 +68,7 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
 
         url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
         download_filename_ext <- url_split[length(url_split)]
-        if (download_filename_ext == "zip") {
+        if (download_filename_ext %in% c("zip", "tgz")) {
             if (is.null(filename)) {
     #           stop("Please specify which file(filename=) should be imported from ",
     #                  download_filepath)
