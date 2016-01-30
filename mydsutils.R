@@ -420,8 +420,8 @@ mycheck_problem_data <- function(df, featsExclude, fctrMaxUniqVals = 20, termina
                            function(feat) length(unique(df[, feat])))
     length_fctrs <- length_fctrs[length_fctrs > fctrMaxUniqVals]
     if (length(length_fctrs) > 0) {
-        print("factors with high number of unique values: ")
-        print(length_fctrs)
+        print(sprintf("factors with high number of unique values: %d vs. max: %d",
+                      length_fctrs, fctrMaxUniqVals))
         if (terminate)
             stop("terminating script")
     }
@@ -1149,7 +1149,8 @@ myselect_features <- function(entity_df,  exclude_vars_as_features, rsp_var) {
 
 	# Collect factor & logical vars
 	class_vctr <- sapply(names(entity_df), function(col_name) class(entity_df[, col_name]))
-	factor_vars <- names(class_vctr[class_vctr == "factor"])
+	factor_vars <- names(class_vctr[sapply(class_vctr,
+	                                       function(thsVar) return(any(thsVar %in% c("factor"))))])
 	logical_vars <- names(class_vctr[class_vctr == "logical"])
 
     # Exclude rsp_var & user-specified features

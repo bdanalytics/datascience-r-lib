@@ -129,6 +129,7 @@ suppressPackageStartupMessages(require(caret))
 require(plyr)
 require(dplyr)
 require(knitr)
+require(stringr)
 #source("dbgcaret.R")
 #packageVersion("snow")
 #require(sos); findFn("cosine", maxPages=2, sortby="MaxScore")
@@ -260,6 +261,8 @@ glbFeatsDerive <- list();
 
     # character
 #     mapfn = function(Week) { return(substr(Week, 1, 10)) }
+#     mapfn = function(Name) { return(sapply(Name, function(thsName) 
+#                                             str_sub(unlist(str_split(thsName, ","))[1], 1, 1))) } 
 
 #     mapfn = function(descriptor) { return(plyr::revalue(descriptor, c(
 #         "ABANDONED BUILDING"  = "OTHER",
@@ -289,6 +292,9 @@ glbFeatsDerive <- list();
     # numeric
 # Create feature based on record position/id in data   
 glbFeatsDerive[[".pos"]] <- list(
+    mapfn = function(.rnorm) { return(1:length(.rnorm)) }       
+    , args = c(".rnorm"))    
+glbFeatsDerive[[".pos.y"]] <- list(
     mapfn = function(.rnorm) { return(1:length(.rnorm)) }       
     , args = c(".rnorm"))    
 
@@ -924,29 +930,7 @@ glbObsOut <- list(NULL
         # glbFeatsId will be the first output column, by default
         ,vars = list()
 #         ,mapFn = function(obsout_df) {
-#                     require(tidyr)
-#                     smpout_df <- read.csv('data/IdLookupTable.csv')
-#                     tmpout_df <- obsout_df %>% 
-#                                     tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
-#                                     merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
-#                                     select(matches("(RowId|Location)"))
-#                     return(tmpout_df <- orderBy(~RowId, tmpout_df[, c("RowId", "Location")]))
 #                   }
-#         ,mapFn = function(obsout_df) {
-#                     #sav_obsout_df <- obsout_df; all.equal(sav_obsout_df, obsout_df)
-#                     fltout_df <- lclgetfltout_df(obsout_df) %>%
-#                         dplyr::mutate(ImageId = as.integer(.pos)) %>%
-#                         dplyr::select(ImageId, left_eye_center_x = x, left_eye_center_y = y) 
-#                     smpout_df <- read.csv('data/IdLookupTable.csv')
-#                     curout_df <- fltout_df %>% 
-#                                     tidyr::gather(key = FeatureName, value = Location, -ImageId) %>%
-#                                     merge(smpout_df[, -4], all.y = TRUE, sort = FALSE) %>%
-#                                     dplyr::select(matches("(RowId|Location)")) %>%
-#                                     dplyr::filter(!is.na(Location))
-#                     prvout_df <- read.csv('Faces_patch_out.csv')
-#                     thsout_df <- rbind(curout_df, subset(prvout_df, !(RowId %in% curout_df$RowId)))
-#                     return(thsout_df <- orderBy(~RowId, thsout_df[, c("RowId", "Location")]))
-#                  }
                   )
 #obsout_df <- savobsout_df
 # glbObsOut$mapFn <- function(obsout_df) {
@@ -1008,6 +992,9 @@ glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn"
 if (glb_is_classification && glb_is_binomial) {
     glbObsOut$vars[["Probability1"]] <- 
         "%<d-% glbObsNew[, mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$prob]" 
+#     glbObsOut$vars[[glb_rsp_var_raw]] <- 
+#         "%<d-% glb_map_rsp_var_to_raw(glbObsNew[, 
+#                                             mygetPredictIds(glb_rsp_var, glb_fin_mdl_id)$value])"         
 } else {
 #     glbObsOut$vars[[glbFeatsId]] <- 
 #         "%<d-% as.integer(gsub('Test#', '', glbObsNew[, glbFeatsId]))"
@@ -1244,7 +1231,7 @@ if ((is.null(glbObsNewFile$splitSpecs$method) || (glbObsNewFile$splitSpecs$metho
                        glbObsAll[duplicated2(glbObsAll[, glbFeatsId, FALSE]),]))
     stop(glbFeatsId, " duplicated in glbObsAll")
 }
-glbFeatsExclude <- union(glbFeatsExclude, glbFeatsId)
+#glbFeatsExclude <- union(glbFeatsExclude, glbFeatsId)
 
 glbObsAll <- dplyr::arrange(glbObsAll, .pos)
 glbObsTrn <- glbObsNew <- NULL
@@ -1437,7 +1424,7 @@ glb_chk_data <- function(featsExclude = glbFeatsExclude,
     if (is.numeric(glbObsAll[, glb_rsp_var_raw]))
         print(myplot_histogram(glbObsAll, glb_rsp_var_raw) + facet_wrap(~ .src)) else
         print(ggplot(glbObsAll, aes_string(x = glb_rsp_var_raw)) + 
-                  geom_bar(aes_string(fill = glbFeatsCategory), stat = "count") + facet_wrap(~ .src))
+                geom_bar(aes_string(fill = glbFeatsCategory), stat = "count") + facet_wrap(~ .src))
     
     if (glb_is_classification) 
         dsp_class_dstrb(var=ifelse(glb_rsp_var %in% names(glbObsAll), 
@@ -1504,8 +1491,8 @@ if (is.numeric(glbObsAll[, glbFeatsId]))
 
 # Check distributions of newly transformed / extracted vars
 #   Enhancement: remove vars that were displayed ealier
-dsp_numeric_feats_dstrb(feats_vctr = setdiff(names(glbObsAll), 
-                            c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude)))
+print(dsp_numeric_feats_dstrb(feats_vctr = setdiff(names(glbObsAll), 
+                c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude))))
 
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
@@ -3837,6 +3824,7 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         split_strata <- sampling::strata(tmp_trnobs_df, 
                                stratanames = c(rspGrpVar, glbFeatsCategory),
                                size = OOB_strata_size[!is.na(OOB_strata_size)],
+                               #size = c(40, 81, 65, 54),                               
                                method = "srswor")
         glbObsOOB <- getdata(tmp_trnobs_df, split_strata)[, names(glbObsTrn)]
         glbObsFit <- glbObsTrn[!glbObsTrn[, glbFeatsId] %in% 
@@ -3942,7 +3930,7 @@ glb_feats_df <- myselect_features(entity_df = glbObsTrn,
                                   rsp_var = glb_rsp_var)
 
 glb_feats_df <- orderBy(~-cor.y, 
-          myfind_cor_features(feats_df=glb_feats_df, obs_df=glbObsTrn, rsp_var=glb_rsp_var,
+          myfind_cor_features(feats_df = glb_feats_df, obs_df = glbObsTrn, rsp_var = glb_rsp_var,
                               nzv.freqCut = glbFeatsNzvFreqMax, 
                               nzv.uniqueCut = glbFeatsNzvUniqMin))
 print(subset(glb_feats_df, select = -id))
@@ -5828,7 +5816,7 @@ if (!is.null(glbOutStackFnames)) {
     }
 }
 
-#stop("here"); 
+#stop(here"); 
 savobsout_df <- obsout_df; all.equal(savobsout_df, obsout_df)
 if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df)
 #print(head(obsout_df))
