@@ -731,6 +731,8 @@ myplot_scatter <- function(df, xcol_name, ycol_name,
 }
 
 myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
+    require(stringr)
+
 #     if ((length(ycol_names) > 1) & (!missing(xcol_name)))
 #         stop("Multiple feats not implemented with x variable.",
 #              "\n  Consider using facet parameter instead.")
@@ -756,6 +758,21 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             p <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
             if (all(is.numeric(df[, ycol_names])))
                 p <- p + scale_y_continuous(labels = myformat_number)
+
+            shapiro <- data.frame()
+            if (is.numeric(df[, ycol_names]) &&
+                (length(unique(df[, ycol_names])) > 1)) {
+                shapiro <- as.data.frame(tapply(df[, ycol_names], df[, xcol_name], shapiro.test))
+                names(shapiro)[1] <- "shapiro.test"
+                shapiro[, xcol_name] <- row.names(shapiro)
+                shapiro[, paste0(ycol_names, ".shapiro.pval")] <-
+                    sapply(shapiro$shapiro.test,
+                           function(res) as.numeric(unlist(str_split(res, ","))[2]))
+                shapiro <- shapiro[, c(xcol_name, paste0(ycol_names, ".shapiro.pval"))]
+                shapiro[, paste0(ycol_names, ".shapiro.lbl")] <- paste("shapiro.pval:\n",
+                            formatC(shapiro[, paste0(ycol_names, ".shapiro.pval")], format = "e"))
+                #sprintf("%0.4e", shapiro[1, paste0(ycol_names, ".shapiro.pval")])
+            }
         }
     } else {
         mltd_df <- melt(df,, measure.vars=ycol_names)
@@ -783,20 +800,18 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 
 
     if (length(ycol_names) == 1) {
-        aes_str <- paste0("linetype=\"dashed\", yintercept=as.numeric(", ycol_names, ")")
-        aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-#         p <- p + geom_hline(data=medians_df,
-#                             mapping=aes_mapping, show_guide=TRUE
-#                             , color="black", size=1)
-#         p <- p + scale_linetype_identity(guide="legend", name="Stats",
-#                                          labels=rownames(medians_df))
-
         aes_str <- paste0("y=", ycol_names, ".median * 1.05",
                           ", label=myformat_number(round(", ycol_names, ".median))")
         aes_mapping <- eval(parse(text = paste("aes(", aes_str, ")")))
-        p <- p + geom_text(data=medians_df,
-                           mapping=aes_mapping
-                           , color="NavyBlue", size=3.5)
+        p <- p + geom_text(data = medians_df, mapping = aes_mapping, color = "NavyBlue", size = 3.5)
+
+        if (nrow(shapiro) > 0) {
+            p <- p + geom_text(data = shapiro,
+                            aes_string(x = xcol_name, label = paste0(ycol_names, ".shapiro.lbl")),
+                               y = max(df[, ycol_names], na.rm = TRUE) * 1.05,
+                               color = "NavyBlue", size = 3.5, inherit.aes = FALSE)
+            p <- p + ylim(NA, max(df[, ycol_names], na.rm = TRUE) * 1.10)
+        }
     } else {
         if (is.null(xcol_name)) {
             p <- p + geom_text(data=medians_df,
@@ -817,3 +832,12 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     return(p)
 }
 
+myplotImg <- function(img) {
+    require(reshape2)
+    require(ggplot2)
+
+    image <- apply(img, 1:2, function(v) rgb(v[1], v[2], v[3]))
+    image <- melt(image)
+    return(ggplot(image, aes(Var2, -Var1, fill = value)) +
+               geom_raster() + scale_fill_identity() + xlab(" ") + ylab(" "))
+}

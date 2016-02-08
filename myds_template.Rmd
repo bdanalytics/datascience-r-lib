@@ -197,7 +197,7 @@ glb_map_rsp_raw_to_var <- NULL
 
 #if glb_rsp_var_raw is character:
 #print(table(glbObsAll[, glb_rsp_var_raw]))
-#glb_map_rsp_raw_to_var(tst <- c(NA, names(table(glbObsAll[, glb_rsp_var_raw])))) 
+#print(table(glb_map_rsp_raw_to_var(tst <- glbObsAll[, glb_rsp_var_raw]), useNA = "ifany")) 
 
 glb_map_rsp_var_to_raw <- NULL 
 # function(var) {
@@ -211,7 +211,7 @@ glb_map_rsp_var_to_raw <- NULL
 #     c("<=50K", " >50K")[as.numeric(var)]
 #     c(FALSE, TRUE)[as.numeric(var)]
 # }
-# glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(tst))
+#print(table(glb_map_rsp_var_to_raw(glb_map_rsp_raw_to_var(tst)), useNA = "ifany"))
 
 if ((glb_rsp_var != glb_rsp_var_raw) && is.null(glb_map_rsp_raw_to_var))
     stop("glb_map_rsp_raw_to_var function expected")
