@@ -77,6 +77,7 @@ Summary of key steps & error improvement stats:
         - "RTextTools", "tau", "RWeka", and "textcat" packages
     
 - fit.models chunk:
+    - Classification: Plot AUC Curves for all models & highlight glbMdlSel
     - Prediction accuracy scatter graph:
     -   Add tiles (raw vs. PCA)
     -   Use shiny for drop-down of "important" features
@@ -196,7 +197,7 @@ glb_map_rsp_raw_to_var <- NULL
 #glb_map_rsp_raw_to_var(tst <- c(NA, as.numeric(summary(glbObsAll[, glb_rsp_var_raw])))) 
 
 #if glb_rsp_var_raw is character:
-#print(table(glbObsAll[, glb_rsp_var_raw]))
+#print(table(glbObsAll[, glb_rsp_var_raw], useNA = "ifany"))
 #print(table(glb_map_rsp_raw_to_var(tst <- glbObsAll[, glb_rsp_var_raw]), useNA = "ifany")) 
 
 glb_map_rsp_var_to_raw <- NULL 
@@ -1405,7 +1406,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "inspect.data", major.inc=TRUE)
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r inspect.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
+```{r inspect.data, cache=FALSE, echo=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
 #print(str(glbObsAll))
 #View(glbObsAll)
 
@@ -1445,24 +1446,36 @@ if (!is.null(glb_map_rsp_raw_to_var)) {
 
 # check distribution of all numeric data
 dsp_numeric_feats_dstrb <- function(feats_vctr) {
-    grid.newpage()
-    pushViewport(viewport(layout = grid.layout(ceiling(length(feats_vctr) / 2.0), 2)))
-    pltIx <- 1
-    for (feat in feats_vctr) {
-        #print(sprintf("feat: %s", feat))
-        if (glb_is_regression)
-            gp <- myplot_scatter(df=glbObsAll, ycol_name=glb_rsp_var, xcol_name=feat,
-                                 smooth=TRUE)
-        if (glb_is_classification)
-            #gp <- myplot_box(df=glbObsAll, ycol_names=feat, xcol_name=glb_rsp_var)
-            gp <- myplot_violin(glbObsAll, ycol_names = feat, xcol_name = glb_rsp_var)
-        if (inherits(glbObsAll[, feat], "factor"))
-            gp <- gp + facet_wrap(reformulate(feat))
-        print(gp + labs(title = feat), 
-              vp = viewport(layout.pos.row = ceiling(pltIx / 2.0), 
-                            layout.pos.col = ((pltIx - 1) %% 2) + 1))  
+    # Batches of batch_size
+    batch_size <- 4;
+    for (batch in 1:ceiling(length(feats_vctr) / batch_size)) {
+        grid.newpage()
+        pushViewport(viewport(layout = grid.layout(ceiling(batch_size / 2.0), 2)))
+        pltIx <- 1
+        for (feat in feats_vctr[((batch-1)*batch_size + 1) : 
+                                min(((batch)*batch_size), length(feats_vctr))]) {
+            #print(sprintf("feat: %s", feat))
+            if (glb_is_regression)
+                gp <- myplot_scatter(df=glbObsAll, ycol_name=glb_rsp_var, xcol_name=feat,
+                                     smooth=TRUE)
+            if (glb_is_classification)
+                #gp <- myplot_box(df=glbObsAll, ycol_names=feat, xcol_name=glb_rsp_var)
+                gp <- myplot_violin(glbObsAll, ycol_names = feat, xcol_name = glb_rsp_var)
+            if (inherits(glbObsAll[, feat], "factor"))
+                gp <- gp + facet_wrap(reformulate(feat))
+            gp <- gp + labs(title = feat)
+            
+            savgp <- gp
+            print(gp, vp = viewport(layout.pos.row = ceiling(pltIx / 2.0), 
+                                    layout.pos.col = ((pltIx - 1) %% 2) + 1)) 
+#             gp <- savgp
+#             png(sprintf("%snumeric_feats_dstrb%d.png", glbOut$pfx, batch))
+#             print(gp, vp = viewport(layout.pos.row = ceiling(pltIx / 2.0), 
+#                                     layout.pos.col = ((pltIx - 1) %% 2) + 1)) 
+#             dev.off()
         
-        pltIx <- pltIx + 1        
+            pltIx <- pltIx + 1        
+        }
     }
 }
 
