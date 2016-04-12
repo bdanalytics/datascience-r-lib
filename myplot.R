@@ -954,3 +954,24 @@ myplotImg <- function(img) {
     return(ggplot(image, aes(Var2, -Var1, fill = value)) +
                geom_raster() + scale_fill_identity() + xlab(" ") + ylab(" "))
 }
+
+mypltWordCloud <- function(DTMtrx, minFrq = 1) {
+    require(wordcloud)
+
+    # calculate the frequency of words
+    v <- sort(colSums(DTMtrx), decreasing = TRUE)
+    myNames <- names(v)
+    #minFrq <- glb_txt_terms_control$bounds$global[1]
+    minFrqSpec <- minFrq
+    d <- subset(data.frame(word = myNames, freq = v), freq >= minFrq)
+    while (nrow(d) > 200) {
+        # wordcloud takes a long time
+        minFrq <- min(d$freq)
+        d <- subset(d, freq > minFrq)
+    }
+    minFrq <- min(d$freq)
+    if (minFrq > minFrqSpec)
+        print(sprintf("        Wordcloud filtered for freq: %d vs. specification: %d", 
+                      floor(minFrq), minFrqSpec))
+    print(wordcloud(d$word, d$freq, min.freq = minFrq))
+}

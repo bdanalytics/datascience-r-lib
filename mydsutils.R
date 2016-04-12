@@ -1031,6 +1031,117 @@ myextractTimeLags <- function(Obs, FeatTime, rsp_var, rsp_var_raw, impute.na = "
     return(retObs[, -1, FALSE])
 }
 
+mygetTxtTerms <- function(terms_TDM, rspVctr,
+						  compute.cor.y = FALSE, compute.nzv = FALSE, compute.chisq = FALSE, 
+						  compute.classWeights = FALSE) {
+	tmEnter <- as.numeric(proc.time()["elapsed"])
+	print(sprintf("mygetTxtTerms: enter: elapsed: %0.2f secs",
+				  as.numeric(proc.time()["elapsed"]) - tmEnter))
+
+	terms_mtrx <- as.matrix(as.TermDocumentMatrix(terms_TDM))
+	docms_mtrx <- as.matrix(as.DocumentTermMatrix(terms_TDM))        
+	terms_df <- data.frame(term = dimnames(terms_mtrx)$Terms,
+						   weight = rowSums(terms_mtrx),
+						   freq = rowSums(terms_mtrx > 0))
+	terms_df$pos <- 1:nrow(terms_df)
+	print(sprintf("mygetTxtTerms: terms_df setup: elapsed: %0.2f secs",
+				  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	
+	if (compute.cor.y) {
+		terms_df$cor.y <- as.vector(
+			cor(docms_mtrx[!is.na(rspVctr),], 
+				as.numeric(rspVctr[!is.na(rspVctr)]),
+							  use = "pairwise.complete.obs"))
+		terms_df$cor.y.abs <- abs(terms_df$cor.y)
+#         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
+#                         as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
+#                                 use = "pairwise.complete.obs"))
+		print(sprintf("mygetTxtTerms: terms_df cor.y: elapsed: %0.2f secs",
+					  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	}
+	
+	# compute nzv before chisq.test since terms with nzv.freqRatio beyond a max threshold are not chisq.significant ???
+	if (compute.nzv) {
+		nzv_df <- 
+#                 caret::nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glbFeatsNzvFreqMax,
+#                             uniqueCut = glbFeatsNzvUniqMin, saveMetrics = TRUE)
+			# caret::nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",], 
+			mycaret.nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",],
+							   freqCut = glbFeatsNzvFreqMax, uniqueCut = glbFeatsNzvUniqMin,
+							   saveMetrics = TRUE, foreach = TRUE)
+		terms_df$nzv.freqRatio <- nzv_df$freqRatio
+#         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
+#                                                breaks = sort(c(min(terms_df$nzv.freqRatio), 
+#                                                                 glbFeatsNzvFreqMax,
+#                                                            max(terms_df$nzv.freqRatio))))
+		terms_df$nzv.percentUnique <- nzv_df$percentUnique
+#         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
+#               breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
+#                                                             glbFeatsNzvUniqMin,
+#                                                       max(terms_df$nzv.percentUnique))))
+#         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:",
+#          terms_df$nzv.freqRatio.cut.fctr,
+#                                             "\n%Unq:", terms_df$nzv.percentUnique.cut.fctr))
+		terms_df$nzv <- nzv_df$nzv
+		print(sprintf("mygetTxtTerms: terms_df nzv: elapsed: %0.2f secs",
+					  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	}
+	
+	# to check is nzv.freqRatio max threshold is properly set
+# summary(full_terms_df$nzv.freqRatio)
+# full_terms_df$chisq.pval.significant <-
+#     cut(full_terms_df$chisq.pval, breaks = c(0, 0.05, max(full_terms_df$chisq.pval, na.rm = TRUE)))
+# ggplot(full_terms_df, mapping = aes(x = nzv.percentUnique, y = nzv.freqRatio)) +
+#     geom_point(aes(color = chisq.pval.significant), position = "jitter")
+# significant_terms_df <- subset(full_terms_df, chisq.pval < 0.05)
+# summary(significant_terms_df$nzv.freqRatio)
+	
+	if (compute.chisq) {
+		naDf <- data.frame(chisq.stat = NA, chisq.pval = NA)
+		trnObsIx <- !is.na(rspVctr)
+		chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %dopar% 
+		# chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %do% 
+		# chisqDf <- foreach(ix = 1:30, .combine = rbind) %do% 
+#                 if ((length(unique(docms_mtrx[trnObsIx, ix])) > 1) && 
+#                     (terms_df[ix, "nzv.freqRatio"] <= 3265)) # Empirical setting
+			if (length(unique(docms_mtrx[trnObsIx, ix])) > 1)
+			{
+				chisq <- chisq.test(docms_mtrx[trnObsIx, ix], 
+									rspVctr[trnObsIx])
+				tmpDf <- data.frame(chisq.stat = chisq$statistic,
+									chisq.pval = chisq$p.value)
+			} else {
+				tmpDf <- naDf
+			}
+#         terms_df[ix, "chisq.stat"] <- chisq$statistic
+#         terms_df[ix, "chisq.pval"] <- chisq$p.value 
+		terms_df <- cbind(terms_df, chisqDf)       
+		print(sprintf("mygetTxtTerms: terms_df chisq.test: elapsed: %0.2f secs",
+					  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	}
+	
+	if (compute.classWeights) {
+		for (cls in unique(glbObsAll[, glb_txt_cor_var])) {
+			if (!is.na(cls)) {
+				obsMask <- as.numeric(!is.na(glbObsAll[, glb_txt_cor_var]) &
+										(glbObsAll[, glb_txt_cor_var] == cls))
+			} else {
+				obsMask <- as.numeric(is.na(glbObsAll[, glb_txt_cor_var]))
+			}    
+			terms_df[, paste0("weight.mean.", as.character(cls))] <- 
+				colSums(t(terms_mtrx) * obsMask) * 1.0 / sum(obsMask)
+		}    
+		print(sprintf("mygetTxtTerms: terms_df weight.glb_txt_cor_var: elapsed: %0.2f secs",
+				  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	}    
+	
+	print(sprintf("mygetTxtTerms: exit: elapsed: %0.2f secs",
+				  as.numeric(proc.time()["elapsed"]) - tmEnter))
+	
+	# Check all calls to get_terms_DTM_terms to change returned order assumption
+	return(terms_df <- orderBy(~ -weight, terms_df))
+}
+
 myimputeMissingData <- function(inpObs, miceSeed = 144) {
     require(mice)
 

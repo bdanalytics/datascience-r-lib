@@ -2433,122 +2433,12 @@ if (length(glbFeatsText) > 0) {
     extract.features.text.chunk.df <- myadd_chunk(extract.features.text.chunk.df, 
             paste0("extract.features_", "build.corpus"), major.inc = TRUE)
     
-    get_txt_terms <- function(terms_TDM, 
-                              compute.cor.y = FALSE, compute.nzv = FALSE, compute.chisq = FALSE, 
-                              compute.classWeights = FALSE) {
-        tmEnter <- as.numeric(proc.time()["elapsed"])
-        print(sprintf("get_txt_terms: enter: elapsed: %0.2f secs",
-                      as.numeric(proc.time()["elapsed"]) - tmEnter))
-    
-        terms_mtrx <- as.matrix(as.TermDocumentMatrix(terms_TDM))
-        docms_mtrx <- as.matrix(as.DocumentTermMatrix(terms_TDM))        
-        terms_df <- data.frame(term = dimnames(terms_mtrx)$Terms,
-                               weight = rowSums(terms_mtrx),
-                               freq = rowSums(terms_mtrx > 0))
-        terms_df$pos <- 1:nrow(terms_df)
-        print(sprintf("get_txt_terms: terms_df setup: elapsed: %0.2f secs",
-                      as.numeric(proc.time()["elapsed"]) - tmEnter))
-        
-        if (compute.cor.y) {
-            terms_df$cor.y <- 
-                cor(docms_mtrx[glbObsAll$.src == "Train",], 
-                    as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
-                                  use = "pairwise.complete.obs")
-            terms_df$cor.y.abs <- abs(terms_df$cor.y)
-    #         .rnorm.cor.y.abs <- abs(cor(glbObsAll[glbObsAll$.src == "Train", ".rnorm"],
-    #                         as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
-    #                                 use = "pairwise.complete.obs"))
-            print(sprintf("get_txt_terms: terms_df cor.y: elapsed: %0.2f secs",
-                          as.numeric(proc.time()["elapsed"]) - tmEnter))
-        }
-        
-        # compute nzv before chisq.test since terms with nzv.freqRatio beyond a max threshold are not chisq.significant ???
-        if (compute.nzv) {
-            nzv_df <- 
-#                 caret::nzv(docms_mtrx[glbObsAll$.src == "Train",], freqCut = glbFeatsNzvFreqMax,
-#                             uniqueCut = glbFeatsNzvUniqMin, saveMetrics = TRUE)
-                # caret::nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",], 
-                mycaret.nearZeroVar(docms_mtrx[glbObsAll$.src == "Train",],
-                                   freqCut = glbFeatsNzvFreqMax, uniqueCut = glbFeatsNzvUniqMin,
-                                   saveMetrics = TRUE, foreach = TRUE)
-            terms_df$nzv.freqRatio <- nzv_df$freqRatio
-    #         terms_df$nzv.freqRatio.cut.fctr <- cut(terms_df$nzv.freqRatio, 
-    #                                                breaks = sort(c(min(terms_df$nzv.freqRatio), 
-    #                                                                 glbFeatsNzvFreqMax,
-    #                                                            max(terms_df$nzv.freqRatio))))
-            terms_df$nzv.percentUnique <- nzv_df$percentUnique
-    #         terms_df$nzv.percentUnique.cut.fctr <- cut(terms_df$nzv.percentUnique, 
-    #               breaks = sort(c(min(terms_df$nzv.percentUnique) - .Machine$double.neg.eps, 
-    #                                                             glbFeatsNzvUniqMin,
-    #                                                       max(terms_df$nzv.percentUnique))))
-    #         terms_df$nzv.quad.fctr <- as.factor(paste0("fRatio:",
-    #          terms_df$nzv.freqRatio.cut.fctr,
-    #                                             "\n%Unq:", terms_df$nzv.percentUnique.cut.fctr))
-            terms_df$nzv <- nzv_df$nzv
-            print(sprintf("get_txt_terms: terms_df nzv: elapsed: %0.2f secs",
-                          as.numeric(proc.time()["elapsed"]) - tmEnter))
-        }
-        
-        # to check is nzv.freqRatio max threshold is properly set
-# summary(full_terms_df$nzv.freqRatio)
-# full_terms_df$chisq.pval.significant <-
-#     cut(full_terms_df$chisq.pval, breaks = c(0, 0.05, max(full_terms_df$chisq.pval, na.rm = TRUE)))
-# ggplot(full_terms_df, mapping = aes(x = nzv.percentUnique, y = nzv.freqRatio)) +
-#     geom_point(aes(color = chisq.pval.significant), position = "jitter")
-# significant_terms_df <- subset(full_terms_df, chisq.pval < 0.05)
-# summary(significant_terms_df$nzv.freqRatio)
-        
-        if (compute.chisq) {
-            naDf <- data.frame(chisq.stat = NA, chisq.pval = NA)
-            trnObsIx <- (glbObsAll$.src == "Train")
-            chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %dopar% 
-            # chisqDf <- foreach(ix = 1:nrow(terms_df), .combine = rbind.data.frame) %do% 
-            # chisqDf <- foreach(ix = 1:30, .combine = rbind) %do% 
-#                 if ((length(unique(docms_mtrx[trnObsIx, ix])) > 1) && 
-#                     (terms_df[ix, "nzv.freqRatio"] <= 3265)) # Empirical setting
-                if (length(unique(docms_mtrx[trnObsIx, ix])) > 1)
-                {
-                    chisq <- chisq.test(docms_mtrx[trnObsIx, ix], 
-                                        glbObsAll[trnObsIx, glb_rsp_var])
-                    tmpDf <- data.frame(chisq.stat = chisq$statistic,
-                                        chisq.pval = chisq$p.value)
-                } else {
-                    tmpDf <- naDf
-                }
-    #         terms_df[ix, "chisq.stat"] <- chisq$statistic
-    #         terms_df[ix, "chisq.pval"] <- chisq$p.value 
-            terms_df <- cbind(terms_df, chisqDf)       
-            print(sprintf("get_txt_terms: terms_df chisq.test: elapsed: %0.2f secs",
-                          as.numeric(proc.time()["elapsed"]) - tmEnter))
-        }
-        
-        if (compute.classWeights) {
-            for (cls in unique(glbObsAll[, glb_txt_cor_var])) {
-                if (!is.na(cls)) {
-                    obsMask <- as.numeric(!is.na(glbObsAll[, glb_txt_cor_var]) &
-                                            (glbObsAll[, glb_txt_cor_var] == cls))
-                } else {
-                    obsMask <- as.numeric(is.na(glbObsAll[, glb_txt_cor_var]))
-                }    
-                terms_df[, paste0("weight.mean.", as.character(cls))] <- 
-                    colSums(t(terms_mtrx) * obsMask) * 1.0 / sum(obsMask)
-            }    
-            print(sprintf("get_txt_terms: terms_df weight.glb_txt_cor_var: elapsed: %0.2f secs",
-                      as.numeric(proc.time()["elapsed"]) - tmEnter))
-        }    
-        
-        print(sprintf("get_txt_terms: exit: elapsed: %0.2f secs",
-                      as.numeric(proc.time()["elapsed"]) - tmEnter))
-        
-        # Check all calls to get_terms_DTM_terms to change returned order assumption
-        return(terms_df <- orderBy(~ -weight, terms_df))
-    }
     #plt_full_df <- get_terms_DTM_terms(terms_DTM=glb_full_terms_DTM_lst[[txtFeat]])
     
     get_corpus_terms <- function(txt_corpus, ...) {
         set.seed(glbFeatsTextSeed)        
         terms_TDM <- TermDocumentMatrix(txt_corpus, control = glb_txt_terms_control)
-        return(terms_df <- get_txt_terms(terms_TDM, ...))
+        return(terms_df <- mygetTxtTerms(terms_TDM, glbObsAll[, glb_rsp_var], ...))
     }
     
 #stop(here"); glb2Sav()    
@@ -2748,7 +2638,7 @@ mytokenize3grams <- content_transformer(function(x) {
         txt_corpus <- tm_map(glbFeatsTextCorpus[[txtFeat]], removeNumbers, lazy = TRUE)
         # myngramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
         TdmNgrams <- TermDocumentMatrix(txt_corpus, control = list(tokenize = mytokenize3grams))
-        txtTdmNgrams <- get_txt_terms(TdmNgrams,
+        txtTdmNgrams <- mygetTxtTerms(TdmNgrams, glbObsAll[, glb_rsp_var], 
                         compute.nzv = FALSE, compute.chisq = FALSE, compute.classWeights = FALSE)
 #         txtTdmNgrams$vldTerms <- sapply(1:nrow(txtTdmNgrams), function(rowIx) {
 #             tokens <- unlist(str_split(txtTdmNgrams[rowIx, "term"], " ")); 
@@ -2880,33 +2770,18 @@ mytokenize3grams <- content_transformer(function(x) {
     extract.features.text.chunk.df <- myadd_chunk(extract.features.text.chunk.df, 
             paste0("extract.features_", "report.corpus.wordcloud"), major.inc = TRUE)
     
-    myplot_wordcloud <- function(DTMtrx) {
-        require(wordcloud)
-
-        # calculate the frequency of words
-        v <- sort(colSums(DTMtrx), decreasing = TRUE)
-        myNames <- names(v)
-        minFrq <- glb_txt_terms_control$bounds$global[1]
-        d <- subset(data.frame(word = myNames, freq = v), freq >= minFrq)
-        while (nrow(d) > 200) {
-            # wordcloud takes a long time
-            minFrq <- min(d$freq)
-            d <- subset(d, freq > minFrq)
-        }
-        minFrq <- min(d$freq)
-        if (minFrq > glb_txt_terms_control$bounds$global[1])
-            print(sprintf("        Wordcloud filtered for freq: %d vs. control: %d", 
-                          floor(minFrq), glb_txt_terms_control$bounds$global[1]))
-        print(wordcloud(d$word, d$freq, min.freq = minFrq))
-    }
-        
     for (txtFeat in names(glbFeatsText)) {
         print(sprintf("    Wordcloud (All) post-stem term weights for %s:", txtFeat))
-        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]])
+        mypltWordCloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]], 
+                            minFrq = glb_txt_terms_control$bounds$global[1])
         print(sprintf("    Wordcloud (Trn only) post-stem term weights for %s:", txtFeat))
-        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Train", ])
+        mypltWordCloud(
+            glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Train", ], 
+                            minFrq = glb_txt_terms_control$bounds$global[1])
         print(sprintf("    Wordcloud (New only) post-stem term weights for %s:", txtFeat))
-        myplot_wordcloud(glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Test", ])
+        mypltWordCloud(
+            glb_post_stem_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.src == "Test", ], 
+                            minFrq = glb_txt_terms_control$bounds$global[1])
     }    
 
     for (txtFeat in names(glbFeatsText)) {
@@ -3055,12 +2930,12 @@ mytokenize3grams <- content_transformer(function(x) {
         sprs_DTM <- glb_sprs_DTM_lst[[txtFeat]]        
 
         print("   Full TermMatrix:"); print(full_DTM)
-        # full_terms_df <- get_txt_terms(full_DTM)
+        # full_terms_df <- mygetTxtTerms(full_DTM)
         # terms_full_df <- glb_post_stem_words_terms_df_lst[[txtFeat]]
         terms_full_df <- glbFeatsText[[txtFeat]]$postFilterTermsDf
 
         print("   Sparse TermMatrix:"); print(sprs_DTM)
-        terms_sprs_df <- get_txt_terms(sprs_DTM, compute.classWeights = TRUE)
+        terms_sprs_df <- mygetTxtTerms(sprs_DTM, glbObsAll[, glb_rsp_var], compute.classWeights = TRUE)
 #         sprs_terms_df <- sprs_terms_df[, c(2, 1, 3, 4)]
 #         col_names <- names(sprs_terms_df)
 #         col_names[2:length(col_names)] <- 
