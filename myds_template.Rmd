@@ -31,8 +31,6 @@ Source:
 Time period: 
 
 ```{r set_global_options_wd, echo=FALSE}
-# Rename 
-#   indep_vars_vctr -> indep_vars ; create a function ?
 setwd("~/Documents/Work/<ProjectPath>")
 # print(names(sys.frame(1)))
 # print(getSrcFilename(function (x) { x }))
@@ -152,6 +150,9 @@ glbObsNewFile <- list(url = "<obsNewFileName>") # default OR
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
+# Assume glb_is_separate_newobs_dataset is FALSE iff glbObsNewFile is NULL ?
+#   glb_split_entity_newobs_datasets not needed since FALSE is not supported ?
+#   glbObsNewFile$splitSpecs$method should be part of glbObsTrnFile specs ?
 glb_is_separate_newobs_dataset <- TRUE    # or TRUE
     glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
 

@@ -1418,6 +1418,21 @@ myget_vectorized_obs_df <- function(obs_df, rsp_var, indep_vars) {
 ## 07.1	    identify model parameters (e.g. # of neighbors for knn, # of estimators for ensemble models)
 
 ## 08.	    fit models
+
+myadjustInteractionFeats <- function(featsDf, vars_vctr) {
+    for (feat in subset(featsDf, !is.na(interaction.feat))$id)
+        if (feat %in% vars_vctr)
+            vars_vctr <- union(setdiff(vars_vctr, feat), 
+                paste0(featsDf[featsDf$id == feat, "interaction.feat"], ":",
+                       feat))
+    return(vars_vctr)
+}
+
+mygetIndepVar <- function(featsDf) {
+	return(myadjustInteractionFeats(featsDf, 
+									  subset(featsDf, !nzv & (exclude.as.feat != 1))[, "id"]))
+}
+
 myprint_mdl <- function(mdl) {
 	if (!inherits(mdl, "train"))
         stop("Not a legitimate \"train\" object")
@@ -2160,8 +2175,8 @@ mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
 }
 #mygen_seeds(seeds_lst_len=(glb_rcv_n_folds * glb_rcv_n_repeats) + 1, seeds_elmnt_lst_len=9)
 
-myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
-    #spec_indep_vars <- indep_vars
+myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
+    #spec_indepVar <- indepVar
 
     startTm <- proc.time()["elapsed"]
     print(sprintf("myfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
@@ -2174,11 +2189,11 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 
 	models_df <- data.frame(id=mdl_specs_lst[["id"]])
 
-	if ((length(indep_vars) == 1) && any(indep_vars %in% "."))
-    	indep_vars <- setdiff(names(fit_df), rsp_var)
+	if ((length(indepVar) == 1) && any(indepVar %in% "."))
+    	indepVar <- setdiff(names(fit_df), rsp_var)
 
-	print(sprintf("    indep_vars: %s", paste(indep_vars, collapse=",")))
-    models_df$feats	<- paste(indep_vars, collapse=",")
+	print(sprintf("    indepVar: %s", paste(indepVar, collapse=",")))
+    models_df$feats	<- paste(indepVar, collapse=",")
 
     rsp_var_out <- paste0(rsp_var, ".predict.", mdl_specs_lst[["id"]])
 
@@ -2218,7 +2233,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
             if (mdl_specs_lst[["train.method"]] == "bagEarth") {
         mdl_specs_lst[["train.tuneGrid"]] <- expand.grid(
             nprune=tail(2^(1:as.integer(log2(length(setdiff(names(
-                myget_vectorized_obs_df(fit_df, rsp_var, indep_vars)), rsp_var))))), 5), # same as RFE
+                myget_vectorized_obs_df(fit_df, rsp_var, indepVar)), rsp_var))))), 5), # same as RFE
             # degree == Maximum degree of interaction (Friedman’s mi). Default is 1, meaning build an additive model (i.e., no interaction terms).
             degree=1)
 #     } else  if (mdl_specs_lst[["train.method"]] == "svmLinear") {
@@ -2313,19 +2328,19 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
     }
 
 	# varImp crashes for bayesglm if char/string features are present in fit_df
-	fit_df <- fit_df[, c(rsp_var, sort(unique(unlist(strsplit(indep_vars, "[:\\*]")))))]
+	fit_df <- fit_df[, c(rsp_var, sort(unique(unlist(strsplit(indepVar, "[:\\*]")))))]
 
 	# preProcess method %in% c("pca", "range") train crashes if a column has no variance (might result from a dummy var)
 	if (!is.null(mdl_specs_lst[["train.preProcess"]]) &&
 	    grepl("(ica|pca|range)", mdl_specs_lst[["train.preProcess"]])) {
-    	vctr_fit_df <- myget_vectorized_obs_df(fit_df, rsp_var = rsp_var, indep_vars = indep_vars)
+    	vctr_fit_df <- myget_vectorized_obs_df(fit_df, rsp_var = rsp_var, indepVar = indepVar)
     	unqlen_cols <- sapply(names(vctr_fit_df), function(col)
     	                                            length(unique(vctr_fit_df[, col])))
     	if (length(problem_cols <- unqlen_cols[unqlen_cols <= 1]) > 0) {
     	    warning(paste0("myfit_mdl: preProcess method: range currently does not work for columns with no variance: ", paste0(names(problem_cols), collapse=", ")), immediate.=TRUE)
     	    return(NULL)
-#     	    indep_vars <- setdiff(names(vctr_fit_df), c(rsp_var, names(problem_cols)))
-#     	    fit_df <- vctr_fit_df[, c(rsp_var, indep_vars)]
+#     	    indepVar <- setdiff(names(vctr_fit_df), c(rsp_var, names(problem_cols)))
+#     	    fit_df <- vctr_fit_df[, c(rsp_var, indepVar)]
     	}
 	}
 
@@ -2339,7 +2354,7 @@ myfit_mdl <- function(mdl_specs_lst, indep_vars, rsp_var, fit_df, OOB_df=NULL) {
 
 	print(sprintf("myfit_mdl: setup complete: %f secs", proc.time()["elapsed"] - startTm))
 	set.seed(111)
-	mdl <- train(reformulate(sort(indep_vars), response=rsp_var), data=fit_df
+	mdl <- train(reformulate(sort(indepVar), response=rsp_var), data=fit_df
 	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df # does not handle interaction var specs
 				 , method=mdl_specs_lst[["train.method"]]
 				 , preProcess=mdl_specs_lst[["train.preProcess"]]
