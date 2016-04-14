@@ -1,13 +1,13 @@
 mycaret.nearZeroVar <- function(x, freqCut = 95/5, uniqueCut = 10, saveMetrics = FALSE,
-          foreach = FALSE, allowParallel = TRUE)
+          foreach = FALSE, allowParallel = TRUE, ...)
 {
-    if (packageVersion("caret") != '6.0.64')
+    if (packageVersion("caret") != '6.0.68')
         stop("mycaret.nearZeroVar: Check if the bug is fixed, else create pull request")
     loadNamespace("caret")
 
     if (!foreach)
         return(nzv(x, freqCut = freqCut, uniqueCut = uniqueCut,
-                   saveMetrics = saveMetrics))
+                   saveMetrics = saveMetrics, ...))
     # `%op%` <- getOper(foreach && allowParallel && getDoParWorkers() >
     `%op%` <- caret:::getOper(foreach && allowParallel && getDoParWorkers() >
                           1)
@@ -17,7 +17,7 @@ mycaret.nearZeroVar <- function(x, freqCut = 95/5, uniqueCut = 10, saveMetrics =
             # This doesn't work when name is "0" / 0
             # r <- nzv(x[[name]], freqCut = freqCut, uniqueCut = uniqueCut,
             r <- nzv(x[, name], freqCut = freqCut, uniqueCut = uniqueCut,
-                     saveMetrics = TRUE)
+                     saveMetrics = TRUE, ...)
             r[, "column"] <- name
             r
         }
@@ -30,7 +30,14 @@ mycaret.nearZeroVar <- function(x, freqCut = 95/5, uniqueCut = 10, saveMetrics =
         {
             # nzv(x[[name]], freqCut = freqCut, uniqueCut = uniqueCut,
             nzv(x[, name], freqCut = freqCut, uniqueCut = uniqueCut,
-                    saveMetrics = FALSE)
+                    saveMetrics = FALSE, ...)
+            if (length(r) > 0 && r == 1) 
+                              TRUE
+                            else FALSE     
+        }                      
+        res <- which(res)
+        if (names) {
+            res <- colnames(x)[res]                                         
         }
     }
     res
