@@ -98,7 +98,8 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
 
     if (length(ycol_names) == 1) {
         if (is.null(xcol_name)) {
-            medians_df <- mycompute_medians_df(df[, ycol_names, FALSE])
+            # medians_df <- mycompute_medians_df(df[, ycol_names, FALSE])
+            stats_df <- mycompute_stats_df(df = df[, ycol_names, FALSE])
             g <- ggplot(df, aes_string(x=factor(0), y=ycol_names))
             g <- g + xlab(" ")
         } else {
@@ -112,7 +113,9 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         require(reshape2)
         mltd_df <- melt(df,, measure.vars=ycol_names)
         require(doBy)
-        medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
+        # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
+        stats_df <- mycompute_stats_df(df = mltd_df[, c("value", "variable")],
+                                       byvars_vctr = "variable")
         g <- ggplot(mltd_df, aes(x=variable, y=value))
         g <- g + xlab(" ")
     }
@@ -130,7 +133,9 @@ myplot_box <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         if (class(df[, ycol_names]) == "num")
             g <- g + scale_y_continuous(labels=myformat_number)
 
-        if (!inherits(df[, ycol_names], "logical")) { # logical crashes- why ???
+        if (!inherits(df[, ycol_names], "logical") && # logical crashes- why ???
+            !inherits(df[, ycol_names], "Date")       # Date crashes- why ???
+           ) {
             aes_str <- paste0("y=", ycol_names, ".median", " * ",
                               ycol_names, ".median.offset.mult ",
                                 ", label=myformat_number(round(", ycol_names, ".median))")
@@ -875,7 +880,20 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             shapiro <- data.frame()
             if (is.numeric(df[, ycol_names]) &&
                 (length(unique(df[, ycol_names])) > 1)) {
-                shapiro <- as.data.frame(tapply(df[, ycol_names], df[, xcol_name], shapiro.test))
+                if (nrow(df) > 5000) {
+                    # Ideally we should sample 5K of each df[, xcol_name]
+                    smpDf <- data.frame()
+                    for (x in unique(df[, xcol_name])) {
+                        smpThsDf <- df[df[, xcol_name] == x, ]
+                        if (nrow(smpThsDf) > 5000)
+                            smpThsDf <-
+                                smpThsDf[sample.split(smpThsDf[, ycol_names], SplitRatio = 5000), ]
+                        smpDf <- rbind(smpDf, smpThsDf)
+                    }
+                }
+                else smpDf <- df
+                shapiro <-
+                    as.data.frame(tapply(smpDf[, ycol_names], smpDf[, xcol_name], shapiro.test))
                 names(shapiro)[1] <- "shapiro.test"
                 shapiro[, xcol_name] <- row.names(shapiro)
                 shapiro[, paste0(ycol_names, ".shapiro.pval")] <-
@@ -971,7 +989,7 @@ mypltWordCloud <- function(DTMtrx, minFrq = 1) {
     }
     minFrq <- min(d$freq)
     if (minFrq > minFrqSpec)
-        print(sprintf("        Wordcloud filtered for freq: %d vs. specification: %d", 
+        print(sprintf("        Wordcloud filtered for freq: %d vs. specification: %d",
                       floor(minFrq), minFrqSpec))
     print(wordcloud(d$word, d$freq, min.freq = minFrq))
 }

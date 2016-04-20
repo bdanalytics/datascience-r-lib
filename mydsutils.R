@@ -852,8 +852,9 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         #             data.frame(.date=strptime(gsub("(.*?) 2:(.*)", "\\1 3:\\2",
         #                 glbObsAll[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
         if (sum(is.na(dates_df$.date)) > 0) {
+            tmpDf <- df[is.na(dates_df$.date), c(id_vars, rsp_var, var)]
+            print(dim(tmpDf)); print(tmpDf)
             stop("NA POSIX dates for ", var)
-            print(df[is.na(dates_df$.date), c(id_vars, rsp_var, var)])
         }
 
         .date <- dates_df$.date
@@ -881,9 +882,14 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         require(XML)
         hldays <- c(NULL)
         for (year in sort(unique(format(.date, "%Y")))) {
-            doc.html = htmlTreeParse(paste0('http://about.usps.com/news/events-calendar/',
-                                            year, '-federal-holidays.htm'),
-                                     useInternalNodes = TRUE)
+            doc.url <- paste0('http://about.usps.com/news/events-calendar/',
+                              year, '-federal-holidays.htm')
+            print(sprintf("   accessing url: %s", doc.url))
+            doc.html <- try(htmlTreeParse(doc.url, useInternalNodes = TRUE))
+            if (inherits(doc.html, "try-error")) {
+                warning("unable to access url:", doc.url, "; skipping ...")
+                next
+            }
 
             #         # Extract all the paragraphs (HTML tag is p, starting at
             #         # the root of the document). Unlist flattens the list to
@@ -898,7 +904,12 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
             # parse the tree by tables
             # txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
             # parse the tree by span & ul
-            txt <- unlist(strsplit(xpathSApply(doc.html, "//span/ul", xmlValue), "\n"))
+            txt <- xpathSApply(doc.html, "//span/ul", xmlValue)
+            if (length(txt) == 0) {
+                warning("  xpathSApply did not work for url:", doc.url, "; skipping ...")
+                next
+            }
+            txt <- unlist(strsplit(txt, "\n"))
 
             # do some clean up with regular expressions
             txt <- grep("day, ", txt, value = TRUE)
@@ -910,7 +921,7 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
             hldays <- union(hldays,
                     format(strptime(paste(txt, " ", year, sep = ""), "%B %e %Y"), "%Y-%m-%d"))
             if (any(is.na(hldays)))
-                stop("US Federal Holidays not found for year: ", year)
+                warning("US Federal Holidays not found for year: ", year)
         }
         dates_df[, paste0(var, ".hlday")] <-
             ifelse(format(.date, "%Y-%m-%d") %in% hldays, 1, 0)

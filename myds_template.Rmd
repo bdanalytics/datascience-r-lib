@@ -113,11 +113,12 @@ Summary of key steps & error improvement stats:
 rm(list = ls())
 set.seed(12345)
 options(stringsAsFactors = FALSE)
-source("~/Dropbox/datascience/R/myscript.R")
+source("~/Dropbox/datascience/R/mycaret.R")
 source("~/Dropbox/datascience/R/mydsutils.R")
-source("~/Dropbox/datascience/R/myplot.R")
 source("~/Dropbox/datascience/R/mypetrinet.R")
 source("~/Dropbox/datascience/R/myplclust.R")
+source("~/Dropbox/datascience/R/myplot.R")
+source("~/Dropbox/datascience/R/myscript.R")
 source("~/Dropbox/datascience/R/mytm.R")
 # Gather all package requirements here
 suppressPackageStartupMessages(require(doMC))
@@ -137,31 +138,29 @@ require(stringr)
 # Inputs
 #   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>"
 #   sep = choose from c(NULL, "\t")
-glbObsTrnFile <- list(url = "<obsTrnFileName>") 
-
-glbObsNewFile <- list(url = "<obsNewFileName>") # default OR
-    #list(splitSpecs = list(method = NULL #select from c(NULL, "condition", "sample", "copy")
+glbObsTrnFile <- list(url = "<obsTrnFileName>")
+    #, splitSpecs = list(method = "copy" # default when glbObsNewFile is NULL
+    #                       select from c("copy", NULL ???, "condition", "sample", )
     #                      ,nRatio = 0.3 # > 0 && < 1 if method == "sample" 
     #                      ,seed = 123 # any integer or glbObsTrnPartitionSeed if method == "sample" 
     #                      ,condition = # or 'is.na(<var>)'; '<var> <condition_operator> <value>'    
     #                      )
-    #    )                   
+    # )                   
+ 
+
+glbObsNewFile <- NULL # default OR list(url = "<obsNewFileName>") 
 
 glbInpMerge <- NULL #: default
 #     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
-
-# Assume glb_is_separate_newobs_dataset is FALSE iff glbObsNewFile is NULL ?
-#   glb_split_entity_newobs_datasets not needed since FALSE is not supported ?
-#   glbObsNewFile$splitSpecs$method should be part of glbObsTrnFile specs ?
-glb_is_separate_newobs_dataset <- TRUE    # or TRUE
-    glb_split_entity_newobs_datasets <- TRUE  # FALSE not supported - use "copy" for glbObsNewFile$splitSpecs$method # select from c(FALSE, TRUE)
 
 glbObsDropCondition <- NULL # : default
 #   enclose in single-quotes b/c condition might include double qoutes
 #       use | & ; NOT || &&    
 #   '<condition>' 
     # 'grepl("^First Draft Video:", glbObsAll$Headline)'
+    # 'is.na(glbObsAll[, glb_rsp_var_raw])'
     # '(is.na(glbObsAll[, glb_rsp_var_raw]) & grepl("Train", glbObsAll[, glbFeatsId]))'
+    # 'is.na(strptime(glbObsAll[, "Date"], glbFeatsDateTime[["Date"]]["format"], tz = glbFeatsDateTime[["Date"]]["timezone"]))'
 #nrow(do.call("subset",list(glbObsAll, parse(text=paste0("!(", glbObsDropCondition, ")")))))
     
 glb_obs_repartition_train_condition <- NULL # : default
@@ -230,6 +229,7 @@ glbFeatsCategory <- NULL # choose from c(NULL : default, "<category_feat>")
 glbFeatsExclude <- c(NULL
 #   Feats that shd be excluded due to known causation by prediction variable
 # , "<feat1", "<feat2>"
+#   Feats that are factors with unique values (as % of nObs) > 49 (empirically derived)
 #   Feats that are linear combinations (alias in glm)
 #   Feature-engineering phase -> start by excluding all features except id & category & work each one in
                     ) 
@@ -315,6 +315,29 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #print(summary(glbObsAll$WordCount))
 #print(summary(mapfn(glbObsAll$WordCount)))
     
+# If imputation shd be skipped for this feature
+# glbFeatsDerive[["District.fctr"]] <- list(
+#     mapfn = function(District) {
+#         raw <- District;
+#         ret_vals <- rep_len("NA", length(raw)); 
+#         ret_vals[!is.na(raw)] <- sapply(raw[!is.na(raw)], function(elm) 
+#                                         ifelse(elm < 10, "1-9", 
+#                                         ifelse(elm < 20, "10-19", "20+")));
+#         return(relevel(as.factor(ret_vals), ref = "NA"))
+#     }       
+#     , args = c("District"))    
+
+# If imputation of missing data is not working ...
+# glbFeatsDerive[["FertilityRate.nonNA"]] <- list(
+#     mapfn = function(FertilityRate, Region) {
+#         RegionMdn <- tapply(FertilityRate, Region, FUN = median, na.rm = TRUE)
+# 
+#         retVal <- FertilityRate
+#         retVal[is.na(FertilityRate)] <- RegionMdn[Region[is.na(FertilityRate)]]
+#         return(retVal)
+#     }
+#     , args = c("FertilityRate", "Region"))
+    
 #     mapfn = function(HOSPI.COST) { return(cut(HOSPI.COST, 5, breaks = c(0, 100000, 200000, 300000, 900000), labels = NULL)) }     
 #     mapfn = function(Rasmussen)  { return(ifelse(sign(Rasmussen) >= 0, 1, 0)) } 
 #     mapfn = function(startprice) { return(startprice ^ (1/2)) }       
@@ -360,9 +383,10 @@ glb_derive_vars <- names(glbFeatsDerive)
 # print(which_ix <- which(args_lst[[arg]] == 0.75)); print(drv_vals[which_ix]); 
 
 glbFeatsDateTime <- list()
+# Use OlsonNames() to enumerate supported time zones
 # glbFeatsDateTime[["<DateTimeFeat>"]] <- 
-#     c(format = "%Y-%m-%d %H:%M:%S", timezone = "America/New_York", impute.na = TRUE, 
-#       last.ctg = TRUE, poly.ctg = TRUE)
+#     c(format = "%Y-%m-%d %H:%M:%S", timezone = "US/Eastern", impute.na = TRUE, 
+#       last.ctg = FALSE, poly.ctg = FALSE)
 
 glbFeatsPrice <- NULL # or c("<price_var>")
 
@@ -669,12 +693,12 @@ glbObsTrnOutliers[["Final"]] <- union(glbObsFitOutliers[["All.X"]],
 
 #model_diags_df[row.names(model_diags_df) %in% names(outliers$rstudent)[c(1:2)], ]
 #ctgry_diags_df <- model_diags_df[model_diags_df[, glbFeatsCategory] %in% c("Unknown#0"), ]
-#myplot_parcoord(obs_df=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indep_vars[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
+#myplot_parcoord(obs_df=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
 #table(glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), "startprice.log10.cut.fctr"])
 #glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), c(glbFeatsId, "startprice")]
 
 # No outliers & .dffits == NaN
-#myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indep_vars[1:10])], obs_ix=seq(1:nrow(model_diags_df))[is.na(model_diags_df$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
+#myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:10])], obs_ix=seq(1:nrow(model_diags_df))[is.na(model_diags_df$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
 
 # Modify mdlId to (build & extract) "<FamilyId>#<Fit|Trn>#<caretMethod>#<preProc1.preProc2>#<samplingMethod>"
 glb_models_lst <- list(); glb_models_df <- data.frame()
@@ -885,7 +909,7 @@ glb_mdl_ensemble <- NULL
 
 # Only for classifications; for regressions remove "(.*)\\.prob" form the regex
 # tmp_fitobs_df <- glbObsFit[, grep(paste0("^", gsub(".", "\\.", mygetPredictIds$value, fixed = TRUE), "CSM\\.X\\.(.*)\\.prob"), names(glbObsFit), value = TRUE)]; cor_mtrx <- cor(tmp_fitobs_df); cor_vctr <- sort(cor_mtrx[row.names(orderBy(~-Overall, varImp(glb_models_lst[["Ensemble.repeatedcv.glmnet"]])$imp))[1], ]); summary(cor_vctr); cor_vctr
-#ntv.glm <- glm(reformulate(indep_vars, glb_rsp_var), family = "binomial", data = glbObsFit)
+#ntv.glm <- glm(reformulate(indepVar, glb_rsp_var), family = "binomial", data = glbObsFit)
 #step.glm <- step(ntv.glm)
 
 glb_sel_mdl_id <- "All.X##rcv#glmnet" #select from c(NULL, "All.X##rcv#glmnet", "RFE.X##rcv#glmnet", <mdlId>)
@@ -1125,7 +1149,6 @@ glbObsTrn <- myimport_data(specs = glbObsTrnFile, comment = "glbObsTrn", force_h
 # glbObsTrn <- read.table("data/hygiene.dat.labels", col.names=c("dirty"),
 #                             na.strings="[none]")
 # glbObsTrn$review <- readLines("data/hygiene.dat", n =-1)
-# comment(glbObsTrn) <- "glbObsTrn"                                
 
 # glbObsTrn <- data.frame()
 # for (symbol in c("Boeing", "CocaCola", "GE", "IBM", "ProcterGamble")) {
@@ -1136,10 +1159,7 @@ glbObsTrn <- myimport_data(specs = glbObsTrnFile, comment = "glbObsTrn", force_h
 #     glbObsTrn <- myrbind_df(glbObsTrn, sym_trnobs_df)
 # }
                                 
-# glbObsTrn <- 
-#     glbObsTrn %>% dplyr::filter(Year >= 1999)
-                                
-if (glb_is_separate_newobs_dataset) {
+if (!is.null(glbObsNewFile)) {
     glbObsNew <- myimport_data(specs = glbObsNewFile, comment = "glbObsNew", force_header = TRUE)
     
     # To make plots / stats / checks easier in chunk:inspectORexplore.data
@@ -1147,40 +1167,38 @@ if (glb_is_separate_newobs_dataset) {
     comment(glbObsAll) <- "glbObsAll"
 } else {
     glbObsAll <- glbObsTrn; comment(glbObsAll) <- "glbObsAll"
-    if (!glb_split_entity_newobs_datasets) {
-        stop("!glb_split_entity_newobs_datasets: not implemented yet") 
-        glbObsNew <- glbObsTrn[sample(1:nrow(glbObsTrn),
-                                          max(2, nrow(glbObsTrn) / 1000)),]                    
-    } else      if (is.null(glbObsNewFile$splitSpecs) || 
-                    is.null(glbObsNewFile$splitSpecs$method)) {
-            stop("glbObsNewFile$splitSpecs$method required when glb_is_separate_newobs_dataset is FALSE")
-        } else  if (glbObsNewFile$splitSpecs$method == "condition") {
-            glbObsNew <- do.call("subset", 
-                list(glbObsTrn, parse(text=glb_split_newdata_condition)))
-            glbObsTrn <- do.call("subset", 
-                list(glbObsTrn, parse(text=paste0("!(", 
-                                                      glb_split_newdata_condition,
-                                                      ")"))))
-        } else if (glbObsNewFile$splitSpecs$method == "sample") {
-                require(caTools)
-                
-                set.seed(glbObsNewFile$splitSpecs$seed)
-                split <- sample.split(glbObsTrn[, glb_rsp_var_raw], 
-                                      SplitRatio = (1 - glbObsNewFile$splitSpecs$nRatio))
-                glbObsNew <- glbObsTrn[!split, ] 
-                glbObsTrn <- glbObsTrn[split ,]
-        } else if (glbObsNewFile$splitSpecs$method == "copy") {  
-            glbObsTrn <- glbObsAll
-            comment(glbObsTrn) <- "glbObsTrn"
-            glbObsNew <- glbObsAll
-            comment(glbObsNew) <- "glbObsNew"
-        } else stop("glbObsNewFile$splitSpecs$method should be %in% c('condition', 'sample', 'copy')")   
+    if (is.null(glbObsTrnFile$splitSpecs) ||
+        is.null(glbObsTrnFile$splitSpecs$method)) {
+        warning("No file specified for glbObsNew & splitSpecs$method not specified. Defaulting to copy.")
+        glbObsTrnFile$splitSpecs <- list(method = "copy")
+    } 
+            if (glbObsTrnFile$splitSpecs$method == "condition") {
+        glbObsNew <- do.call("subset", 
+            list(glbObsTrn, parse(text=glb_split_newdata_condition)))
+        glbObsTrn <- do.call("subset", 
+            list(glbObsTrn, parse(text=paste0("!(", 
+                                                  glb_split_newdata_condition,
+                                                  ")"))))
+    } else if (glbObsTrnFile$splitSpecs$method == "sample") {
+            require(caTools)
+            
+            set.seed(glbObsTrnFile$splitSpecs$seed)
+            split <- sample.split(glbObsTrn[, glb_rsp_var_raw], 
+                                  SplitRatio = (1 - glbObsTrnFile$splitSpecs$nRatio))
+            glbObsNew <- glbObsTrn[!split, ] 
+            glbObsTrn <- glbObsTrn[split ,]
+    } else if (glbObsTrnFile$splitSpecs$method == "copy") {  
+        glbObsTrn <- glbObsAll
+        comment(glbObsTrn) <- "glbObsTrn"
+        glbObsNew <- glbObsAll
+        comment(glbObsNew) <- "glbObsNew"
+    } else stop("glbObsTrnFile$splitSpecs$method should be %in% c('condition', 'sample', 'copy')")   
 
     comment(glbObsNew) <- "glbObsNew"
     myprint_df(glbObsNew)
     str(glbObsNew)
 
-    if (glb_split_entity_newobs_datasets) {
+    if (is.null(glbObsNewFile)) {
         myprint_df(glbObsTrn)
         str(glbObsTrn)        
     }
@@ -1225,7 +1243,7 @@ if (length(glbFeatsId) == 0) {
     glbObsNew$.rownames <- as.numeric(rownames(subset(glbObsAll, .src == "Test")))
     glbFeatsId <- ".rownames"
 }
-if ((is.null(glbObsNewFile$splitSpecs$method) || (glbObsNewFile$splitSpecs$method != "copy")) && 
+if ((is.null(glbObsTrnFile$splitSpecs$method) || (glbObsTrnFile$splitSpecs$method != "copy")) && 
     ((nDups <- sum(duplicated(glbObsAll[, glbFeatsId, FALSE]))) > 0)) {
     require(gdata)
     print(sprintf("Found %d duplicates in glbObsAll", nDups))
@@ -1311,7 +1329,7 @@ require(dplyr)
 require(lazyeval)
 require(gdata)
 
-if (glb_is_separate_newobs_dataset || (glbObsNewFile$splitSpecs$method != "copy")) {
+if (is.null(glbObsNewFile) || (glbObsTrnFile$splitSpecs$method != "copy")) {
     dupObsAll <- glbObsAll[duplicated2(
         # subset(glbObsAll, select = -c(UniqueID, Popular, .src))
         glbObsAll[, setdiff(names(glbObsAll), c(glbFeatsId, glb_rsp_var_raw, ".src"))]
@@ -1327,7 +1345,7 @@ if (glb_is_separate_newobs_dataset || (glbObsNewFile$splitSpecs$method != "copy"
     print(sprintf("Found %d duplicates by all features:", nrow(dupObsAll)))
     myprint_df(dupObsAll)
 } else {
-    print("Skipping duplicates check since glbObsNewFile$splitSpecs$method == 'copy'")
+    print("Skipping duplicates check since glbObsTrnFile$splitSpecs$method == 'copy'")
     dupObsAll <- data.frame()
 }    
 
@@ -3321,11 +3339,21 @@ if (glb_impute_na_data &&
     #   (only delete chars, glb_rsp_var_raw, glb_rsp_var & numerics in FeatsExclude)
     feedImp <- setdiff(names(glbObsAll), myfind_chr_cols_df(glbObsAll))
     feedImp <- setdiff(feedImp, union(glb_rsp_var, glb_rsp_var_raw))
+    feedImp <- setdiff(feedImp, c(glbFeatsId, ".category", ".rnorm", ".pos", ".pos.y"))
     #feedImp <- setdiff(feedImp, grep("\\.[POSIX|zoo]", feedImp, value = TRUE))
     feedImp <- setdiff(feedImp, 
                        intersect(glbFeatsExclude, 
                                  setdiff(names(glbObsAll), myfind_chr_cols_df(glbObsAll))))
-    feedImp <- setdiff(feedImp, ".rnorm")
+    
+    featsFctr <- grep(".fctr", feedImp, fixed = TRUE, value = TRUE)
+    featsNzvFctr <- mycaret.nearZeroVar(glbObsAll[, featsFctr], saveMetrics = TRUE,
+                                        foreach = FALSE, # TRUE if foreach works
+                                        names = TRUE
+                                        )
+    featsNzvFctr$id <- featsFctr
+    # Empirical derivation
+    feedImp <- setdiff(feedImp, subset(featsNzvFctr, (percentUnique >= 49))$id)
+
     nonna_df <- myimputeMissingData(glbObsAll[, feedImp], miceSeed = glb_mice_complete.seed)
 #colIx=6
 #cbind(nonna_df[is.na(glbObsAll[, names(nonna_df[colIx]), FALSE]), names(nonna_df[colIx])], glbObsAll[is.na(glbObsAll[, names(nonna_df[colIx])]), c(glb_dsp_cols, names(nonna_df[colIx]))]); 
@@ -3846,11 +3874,11 @@ for (feat in names(glbFeatsInteractionOnly))
         glbFeatsInteractionOnly[[feat]]
         
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
-indep_vars <- subset(glb_feats_df, !nzv & (exclude.as.feat != 1))[, "id"]
-numeric_indep_vars <- indep_vars[!grepl(".fctr", indep_vars, fixed = TRUE)]
+indepVar <- mygetIndepVar(glb_feats_df)
+numeric_indepVar <- indepVar[!grepl(".fctr", indepVar, fixed = TRUE)]
 glb_feats_df$shapiro.test.p.value <- NA
-glb_feats_df[glb_feats_df$id %in% numeric_indep_vars, "shapiro.test.p.value"] <- 
-    sapply(numeric_indep_vars, function(feat) {
+glb_feats_df[glb_feats_df$id %in% numeric_indepVar, "shapiro.test.p.value"] <- 
+    sapply(numeric_indepVar, function(feat) {
         # shapiro.test(glbObsTrn[, var][1:min(5000, nrow(glbObsTrn))])$p.value)
         if (nrow(glbObsTrn) <= 5000) smplVals <- glbObsTrn[, feat] else
             smplVals <- glbObsTrn[, feat][sample.int(nrow(glbObsTrn), 5000)]
@@ -3877,18 +3905,9 @@ if ("variable" %in% names(pltTrnObs))
 print(gp)
 #myplot_histogram(pltTrnObs, "D.npnct11.log", fill_col_name="sold", show_stats = TRUE)
 
-myadjust_interaction_feats <- function(vars_vctr) {
-    for (feat in subset(glb_feats_df, !is.na(interaction.feat))$id)
-        if (feat %in% vars_vctr)
-            vars_vctr <- union(setdiff(vars_vctr, feat), 
-                paste0(glb_feats_df[glb_feats_df$id == feat, "interaction.feat"], ":",
-                       feat))
-    return(vars_vctr)
-}
-
 # Need to create an option for allowParallel ???
-myrun_rfe <- function(obs_df, indep_vars, sizes = NULL) {
-    rfe_obs_df <- myget_vectorized_obs_df(obs_df, glb_rsp_var, indep_vars)
+myrun_rfe <- function(obs_df, indepVar, sizes = NULL) {
+    rfe_obs_df <- myget_vectorized_obs_df(obs_df, glb_rsp_var, indepVar)
     predictors_vctr <- setdiff(names(rfe_obs_df), glb_rsp_var)
     
     if (glb_is_regression)  rfeFuncs <- lmFuncs else {    
@@ -3943,9 +3962,8 @@ myrun_rfe <- function(obs_df, indep_vars, sizes = NULL) {
 #stop(here"); glb2Sav()
 # shd .clusterid.fctr be excluded from this ? or include encoding of glbFeatsCategory:.clusterid.fctr ?
 if (grepl("RFE\\.X", names(glbMdlFamilies))) {
-    indep_vars <- myadjust_interaction_feats(subset(glb_feats_df, 
-                                                    !nzv & (exclude.as.feat != 1))$id)
-    rfe_fit_results <- myrun_rfe(obs_df = glbObsFit, indep_vars = indep_vars, 
+    indepVar <- mygetIndepVar(glb_feats_df)
+    rfe_fit_results <- myrun_rfe(obs_df = glbObsFit, indepVar = indepVar, 
                                  sizes = glbRFESizes[["RFE.X"]])
 }
 
@@ -3953,11 +3971,10 @@ if (grepl("RFE\\.X", names(glbMdlFamilies))) {
 #                 sav_rfe_results[-which(names(sav_rfe_results) == "times")]))
 
 # require(mRMRe)
-# indep_vars_vctr <- subset(glb_feats_df, !nzv &
-#                                         (exclude.as.feat != 1))[, "id"]
-# indep_vars_vctr <- setdiff(indep_vars_vctr, 
-#                     myfind_fctr_cols_df(glbObsTrn[, c(glb_rsp_var, indep_vars_vctr)]))
-# tmp_trnobs_df <- glbObsTrn[, c(glb_rsp_var, indep_vars_vctr)]
+# indepVar <- mygetIndepVar(glb_feats_df)
+# indepVar <- setdiff(indepVar, 
+#                     myfind_fctr_cols_df(glbObsTrn[, c(glb_rsp_var, indepVar)]))
+# tmp_trnobs_df <- glbObsTrn[, c(glb_rsp_var, indepVar)]
 # tmp_trnobs_df$biddable <- as.numeric(tmp_trnobs_df$biddable)
 # dd <- mRMR.data(data = tmp_trnobs_df)
 # mRMRe.fltr <- mRMR.classic(data = dd, target_indices = c(1), feature_count = 10)
@@ -4083,11 +4100,11 @@ if (!is.null(glb_Baseline_mdl_var)) {
 glb_model_type <- ifelse(glb_is_regression, "regression", "classification")
     
 # Model specs
-c("id.prefix", "method", "type",
-  # trainControl params
-  "preProc.method", "cv.n.folds", "cv.n.repeats", "summary.fn",
-  # train params
-  "metric", "metric.maximize", "tune.df")
+# c("id.prefix", "method", "type",
+#   # trainControl params
+#   "preProc.method", "cv.n.folds", "cv.n.repeats", "summary.fn",
+#   # train params
+#   "metric", "metric.maximize", "tune.df")
 
 # Baseline
 if (!is.null(glb_Baseline_mdl_var)) {
@@ -4096,7 +4113,7 @@ if (!is.null(glb_Baseline_mdl_var)) {
                                     label.minor = "mybaseln_classfr")
     ret_lst <- myfit_mdl(mdl_id="Baseline", 
                          model_method="mybaseln_classfr",
-                        indep_vars_vctr=glb_Baseline_mdl_var,
+                        indepVar=glb_Baseline_mdl_var,
                         rsp_var=glb_rsp_var,
                         fit_df=glbObsFit, OOB_df=glbObsOOB)
 }    
@@ -4112,7 +4129,7 @@ if (glb_is_classification) {
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "MFO", type = glb_model_type, trainControl.method = "none",
         train.method = ifelse(glb_is_regression, "lm", "myMFO_classfr"))),
-                            indep_vars = ".rnorm", rsp_var = glb_rsp_var,
+                            indepVar = ".rnorm", rsp_var = glb_rsp_var,
                             fit_df = glbObsFit, OOB_df = glbObsOOB)
 
         # "random" model - only for classification; 
@@ -4125,7 +4142,7 @@ if (glb_is_classification) {
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "Random", type = glb_model_type, trainControl.method = "none",
         train.method = "myrandom_classfr")),
-                        indep_vars = ".rnorm", rsp_var = glb_rsp_var,
+                        indepVar = ".rnorm", rsp_var = glb_rsp_var,
                         fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
 
@@ -4136,10 +4153,10 @@ fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df,
                         paste0("fit.models_0_", "Max.cor.Y.rcv.*X*"), major.inc = FALSE,
                                     label.minor = "glmnet")
 
-ret_lst <- myfit_mdl(mdl_specs_lst=myinit_mdl_specs_lst(mdl_specs_lst=list(
-    id.prefix="Max.cor.Y.rcv.1X1", type=glb_model_type, trainControl.method="none",
-    train.method="glmnet")),
-                    indep_vars=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
+ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+    id.prefix = "Max.cor.Y.rcv.1X1", type = glb_model_type, trainControl.method = "none",
+    train.method = "glmnet")),
+                    indepVar = max_cor_y_x_vars, rsp_var = glb_rsp_var, 
                     fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 if (glbMdlCheckRcv) {
@@ -4167,7 +4184,7 @@ if (glbMdlCheckRcv) {
                 trainControl.summaryFunction = glbMdlMetricSummaryFn,
                 train.method = "glmnet", train.metric = glbMdlMetricSummary, 
                 train.maximize = glbMdlMetricMaximize)),
-                                indep_vars = max_cor_y_x_vars, rsp_var = glb_rsp_var, 
+                                indepVar = max_cor_y_x_vars, rsp_var = glb_rsp_var, 
                                 fit_df = glbObsFit, OOB_df = glbObsOOB)
         }
     # Add parallel coordinates graph of glb_models_df[, glbMdlMetricsEval] to evaluate cv parameters
@@ -4189,7 +4206,7 @@ if (glbMdlCheckRcv) {
 #     id.prefix = "Max.cor.Y.rcv.1X1.cp.0", type = glb_model_type, trainControl.method = "none",
 #     train.method = "rpart",
 #     tune.df=data.frame(method="rpart", parameter="cp", min=0.0, max=0.0, by=0.1))),
-#                     indep_vars=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
+#                     indepVar=max_cor_y_x_vars, rsp_var=glb_rsp_var, 
 #                     fit_df=glbObsFit, OOB_df=glbObsOOB)
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
@@ -4205,7 +4222,7 @@ ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
                         train.metric = glbMdlMetricSummary, 
                         train.maximize = glbMdlMetricMaximize,    
                         train.method = "rpart")),
-                    indep_vars = max_cor_y_x_vars, rsp_var = glb_rsp_var, 
+                    indepVar = max_cor_y_x_vars, rsp_var = glb_rsp_var, 
                     fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 if ((length(glbFeatsDateTime) > 0) && 
@@ -4218,7 +4235,7 @@ if ((length(glbFeatsDateTime) > 0) &&
     indepVars <- c(max_cor_y_x_vars, 
             grep(paste(names(glbFeatsDateTime), "\\.day\\.minutes\\.poly\\.", sep = ""),
                         names(glbObsAll), value = TRUE))
-    indepVars <- myadjust_interaction_feats(indepVars)
+    indepVars <- myadjustInteractionFeats(glb_feats_df, indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
             id.prefix = "Max.cor.Y.Time.Poly", 
             type = glb_model_type, trainControl.method = "repeatedcv",
@@ -4228,7 +4245,7 @@ if ((length(glbFeatsDateTime) > 0) &&
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method = "glmnet")),
-        indep_vars = indepVars,
+        indepVar = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
@@ -4243,7 +4260,7 @@ if ((length(glbFeatsDateTime) > 0) &&
     indepVars <- c(max_cor_y_x_vars, 
             grep(paste(names(glbFeatsDateTime), "\\.last[[:digit:]]", sep = ""),
                         names(glbObsAll), value = TRUE))
-    indepVars <- myadjust_interaction_feats(indepVars)
+    indepVars <- myadjustInteractionFeats(glb_feats_df, indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "Max.cor.Y.Time.Lag", 
         type = glb_model_type, 
@@ -4255,7 +4272,7 @@ if ((length(glbFeatsDateTime) > 0) &&
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = indepVars,
+        indepVar = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
@@ -4270,7 +4287,7 @@ if (length(glbFeatsText) > 0) {
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.(?!([T|P]\\.))", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
-    indepVars <- myadjust_interaction_feats(indepVars)
+    indepVars <- myadjustInteractionFeats(glb_feats_df, indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "Max.cor.Y.Text.nonTP", 
         type = glb_model_type, 
@@ -4283,7 +4300,7 @@ if (length(glbFeatsText) > 0) {
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = indepVars,
+        indepVar = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
@@ -4292,7 +4309,7 @@ if (length(glbFeatsText) > 0) {
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.T\\.", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
-    indepVars <- myadjust_interaction_feats(indepVars)
+    indepVars <- myadjustInteractionFeats(glb_feats_df, indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "Max.cor.Y.Text.onlyT", 
         type = glb_model_type, 
@@ -4304,7 +4321,7 @@ if (length(glbFeatsText) > 0) {
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = indepVars,
+        indepVar = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
@@ -4313,7 +4330,7 @@ if (length(glbFeatsText) > 0) {
         indepVars <- union(indepVars, 
             grep(paste(str_to_upper(substr(txtFeat, 1, 1)), "\\.P\\.", sep = ""),
                         names(glbObsAll), perl = TRUE, value = TRUE))
-    indepVars <- myadjust_interaction_feats(indepVars)
+    indepVars <- myadjustInteractionFeats(glb_feats_df, indepVars)
     ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = "Max.cor.Y.Text.onlyP", 
         type = glb_model_type, 
@@ -4326,7 +4343,7 @@ if (length(glbFeatsText) > 0) {
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
-        indep_vars = indepVars,
+        indepVar = indepVars,
         rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 }
@@ -4348,7 +4365,7 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method="glmnet")),
-        indep_vars=c(max_cor_y_x_vars, paste(max_cor_y_x_vars[1], int_feats, sep=":")),
+        indepVar=c(max_cor_y_x_vars, paste(max_cor_y_x_vars[1], int_feats, sep=":")),
         rsp_var=glb_rsp_var, 
         fit_df=glbObsFit, OOB_df=glbObsOOB)
 }    
@@ -4357,9 +4374,7 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
 fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
                         paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
                                      label.minor = "glmnet")
-indep_vars <- subset(glb_feats_df, is.na(cor.high.X) & !nzv & 
-                              (exclude.as.feat != 1))[, "id"]  
-indep_vars <- myadjust_interaction_feats(indep_vars)
+indepVar <- mygetIndepVar(glb_feats_df)
 ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
             id.prefix = "Low.cor.X", 
             type = glb_model_type, 
@@ -4372,7 +4387,7 @@ ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method = "glmnet")),
-        indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+        indepVar = indepVar, rsp_var = glb_rsp_var, 
         fit_df = glbObsFit, OOB_df = glbObsOOB)
 
 fit.models_0_chunk_df <- 
@@ -4395,7 +4410,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
         myadd_chunk(fit.models_1_chunk_df, paste0("fit.models_1_", mdl_id_pfx),
                     major.inc = FALSE, label.minor = "setup")
 
-    indep_vars <- NULL;
+    indepVar <- NULL;
 
     if (grepl("\\.Interact", mdl_id_pfx)) {
         if (is.null(topindep_var) && is.null(interact_vars)) {
@@ -4439,7 +4454,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
                                       imp > imp_cutoff)), -1)
             if (length(interact_vars) > 0) {
                 interact_vars <-
-                    myadjust_interaction_feats(myextract_actual_feats(interact_vars))
+                    myadjustInteractionFeats(glb_feats_df, myextract_actual_feats(interact_vars))
                 interact_vars <- 
                     interact_vars[!grepl(topindep_var, interact_vars, fixed=TRUE)]
             }
@@ -4452,33 +4467,33 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
 #                                 )
 #            interact_vars <- setdiff(interact_vars, c("startprice.dgt2.is9", "color.fctr"))
             ###
-            indep_vars <- myextract_actual_feats(row.names(bst_featsimp_df))
-            indep_vars <- setdiff(indep_vars, topindep_var)
+            indepVar <- myextract_actual_feats(row.names(bst_featsimp_df))
+            indepVar <- setdiff(indepVar, topindep_var)
             if (length(interact_vars) > 0) {
-                indep_vars <- 
-                    setdiff(indep_vars, myextract_actual_feats(interact_vars))
-                indep_vars <- c(indep_vars, 
+                indepVar <- 
+                    setdiff(indepVar, myextract_actual_feats(interact_vars))
+                indepVar <- c(indepVar, 
                     paste(topindep_var, setdiff(interact_vars, topindep_var), 
                           sep = "*"))
-            } else indep_vars <- union(indep_vars, topindep_var)
+            } else indepVar <- union(indepVar, topindep_var)
         }
     }
     
-    if (is.null(indep_vars))
-        indep_vars <- glb_mdl_feats_lst[[mdl_id_pfx]]
+    if (is.null(indepVar))
+        indepVar <- glb_mdl_feats_lst[[mdl_id_pfx]]
 
-    if (is.null(indep_vars) && grepl("RFE\\.", mdl_id_pfx))
-        indep_vars <- myextract_actual_feats(predictors(rfe_fit_results))
+    if (is.null(indepVar) && grepl("RFE\\.", mdl_id_pfx))
+        indepVar <- myextract_actual_feats(predictors(rfe_fit_results))
     
-    if (is.null(indep_vars))
-        indep_vars <- subset(glb_feats_df, !nzv & (exclude.as.feat != 1))[, "id"]
+    if (is.null(indepVar))
+        indepVar <- mygetIndepVar(glb_feats_df)
     
-    if ((length(indep_vars) == 1) && (grepl("^%<d-%", indep_vars))) {    
-        indep_vars <- 
-            eval(parse(text = str_trim(unlist(strsplit(indep_vars, "%<d-%"))[2])))
+    if ((length(indepVar) == 1) && (grepl("^%<d-%", indepVar))) {    
+        indepVar <- 
+            eval(parse(text = str_trim(unlist(strsplit(indepVar, "%<d-%"))[2])))
     }    
 
-    indep_vars <- myadjust_interaction_feats(indep_vars)
+    indepVar <- myadjustInteractionFeats(glb_feats_df, indepVar)
     
     if (grepl("\\.Interact", mdl_id_pfx)) { 
         # if (method != tail(unlist(strsplit(bst_mdl_id, "[.]")), 1)) next
@@ -4504,7 +4519,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
         if (method %in% c("rpart", "rf")) {
             # rpart:    fubar's the tree
             # rf:       skip the scenario w/ .rnorm for speed
-            indep_vars <- setdiff(indep_vars, c(".rnorm"))
+            indepVar <- setdiff(indepVar, c(".rnorm"))
             #mdl_id <- paste0(mdl_id_pfx, ".no.rnorm")
         } 
 
@@ -4526,17 +4541,17 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method = method)),
-            indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+            indepVar = indepVar, rsp_var = glb_rsp_var, 
             fit_df = fitobs_df, OOB_df = glbObsOOB)
         
 #         ntv_mdl <- glmnet(x = as.matrix(
-#                               fitobs_df[, indep_vars]), 
+#                               fitobs_df[, indepVar]), 
 #                           y = as.factor(as.character(
 #                               fitobs_df[, glb_rsp_var])),
 #                           family = "multinomial")
 #         bgn = 1; end = 100;
 #         ntv_mdl <- glmnet(x = as.matrix(
-#                               subset(fitobs_df, pop.fctr != "crypto")[bgn:end, indep_vars]), 
+#                               subset(fitobs_df, pop.fctr != "crypto")[bgn:end, indepVar]), 
 #                           y = as.factor(as.character(
 #                               subset(fitobs_df, pop.fctr != "crypto")[bgn:end, glb_rsp_var])),
 #                           family = "multinomial")
@@ -4549,7 +4564,7 @@ fit.models_1_chunk_df <-
                 label.minor = "preProc")
 
 mdl_id <- orderBy(get_model_sel_frmla(), glb_models_df)[1, "id"]
-indep_vars_vctr <- trim(unlist(strsplit(glb_models_df[glb_models_df$id == mdl_id,
+indepVar <- trim(unlist(strsplit(glb_models_df[glb_models_df$id == mdl_id,
                                                       "feats"], "[,]")))
 method <- tail(unlist(strsplit(mdl_id, "[.]")), 1)
 mdl_id_pfx <- paste0(head(unlist(strsplit(mdl_id, "[.]")), -1), collapse = ".")
@@ -4576,12 +4591,12 @@ for (prePr in glb_preproc_methods) {
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method=method, train.preProcess=prePr)),
-            indep_vars=indep_vars_vctr, rsp_var=glb_rsp_var, 
+            indepVar=indepVar, rsp_var=glb_rsp_var, 
             fit_df=fitobs_df, OOB_df=glbObsOOB)
 }            
     
     # If (All|RFE).X.glm is less accurate than Low.Cor.X.glm
-    #   check NA coefficients & filter appropriate terms in indep_vars_vctr
+    #   check NA coefficients & filter appropriate terms in indepVar
 #     if (method == "glm") {
 #         orig_glm <- glb_models_lst[[paste0(mdl_id, ".", model_method)]]$finalModel
 #         orig_glm <- glb_models_lst[["All.X.glm"]]$finalModel; print(summary(orig_glm))
@@ -4607,7 +4622,7 @@ for (prePr in glb_preproc_methods) {
     # Since caret does not optimize rpart well
 #     if (method == "rpart")
 #         ret_lst <- myfit_mdl(mdl_id=paste0(mdl_id_pfx, ".cp.0"), model_method=method,
-#                                 indep_vars_vctr=indep_vars_vctr,
+#                                 indepVar=indepVar,
 #                                 model_type=glb_model_type,
 #                                 rsp_var=glb_rsp_var,
 #                                 fit_df=glbObsFit, OOB_df=glbObsOOB,        
@@ -4621,15 +4636,15 @@ for (prePr in glb_preproc_methods) {
     # easier to exclude features
 # require(gdata) # needed for trim
 # mdl_id <- "";
-# indep_vars_vctr <- head(subset(glb_models_df, grepl("All\\.X\\.", mdl_id), select=feats)
+# indepVar <- head(subset(glb_models_df, grepl("All\\.X\\.", mdl_id), select=feats)
 #                         , 1)[, "feats"]
-# indep_vars_vctr <- trim(unlist(strsplit(indep_vars_vctr, "[,]")))
-# indep_vars_vctr <- setdiff(indep_vars_vctr, ".rnorm")
+# indepVar <- trim(unlist(strsplit(indepVar, "[,]")))
+# indepVar <- setdiff(indepVar, ".rnorm")
 
     # easier to include features
 #stop(here"); sav_models_df <- glb_models_df; glb_models_df <- sav_models_df
 # !_sp
-# mdl_id <- "csm"; indep_vars_vctr <- c(NULL
+# mdl_id <- "csm"; indepVar <- c(NULL
 #     ,"prdline.my.fctr", "prdline.my.fctr:.clusterid.fctr"
 #     ,"prdline.my.fctr*biddable"
 #     #,"prdline.my.fctr*startprice.log"
@@ -4642,7 +4657,7 @@ for (prePr in glb_preproc_methods) {
 #                                            )
 # for (method in glbMdlMethods) {
 #     ret_lst <- myfit_mdl(mdl_id=mdl_id, model_method=method,
-#                                 indep_vars_vctr=indep_vars_vctr,
+#                                 indepVar=indepVar,
 #                                 model_type=glb_model_type,
 #                                 rsp_var=glb_rsp_var,
 #                                 fit_df=glbObsFit, OOB_df=glbObsOOB,
@@ -4653,7 +4668,7 @@ for (prePr in glb_preproc_methods) {
 # }
 ###
 
-# Ntv.1.lm <- lm(reformulate(indep_vars_vctr, glb_rsp_var), glbObsTrn); print(summary(Ntv.1.lm))
+# Ntv.1.lm <- lm(reformulate(indepVar, glb_rsp_var), glbObsTrn); print(summary(Ntv.1.lm))
 
 #glb_models_df[, "max.Accuracy.OOB", FALSE]
 #varImp(glb_models_lst[["Low.cor.X.glm"]])
@@ -4662,25 +4677,25 @@ for (prePr in glb_preproc_methods) {
 #glb_feats_df[grepl("npnct28", glb_feats_df$id), ]
 
     # User specified bivariate models
-#     indep_vars_vctr_lst <- list()
+#     indepVar_lst <- list()
 #     for (feat in setdiff(names(glbObsFit), 
 #                          union(glb_rsp_var, glbFeatsExclude)))
-#         indep_vars_vctr_lst[["feat"]] <- feat
+#         indepVar_lst[["feat"]] <- feat
 
     # User specified combinatorial models
-#     indep_vars_vctr_lst <- list()
+#     indepVar_lst <- list()
 #     combn_mtrx <- combn(c("<feat1_name>", "<feat2_name>", "<featn_name>"), 
 #                           <num_feats_to_choose>)
 #     for (combn_ix in 1:ncol(combn_mtrx))
 #         #print(combn_mtrx[, combn_ix])
-#         indep_vars_vctr_lst[[combn_ix]] <- combn_mtrx[, combn_ix]
+#         indepVar_lst[[combn_ix]] <- combn_mtrx[, combn_ix]
     
     # template for myfit_mdl
     #   rf is hard-coded in caret to recognize only Accuracy / Kappa evaluation metrics
     #       only for OOB in trainControl ?
     
 #     ret_lst <- myfit_mdl_fn(mdl_id=paste0(mdl_id_pfx, ""), model_method=method,
-#                             indep_vars_vctr=indep_vars_vctr,
+#                             indepVar=indepVar,
 #                             rsp_var=glb_rsp_var,
 #                             fit_df=glbObsFit, OOB_df=glbObsOOB,
 #                             n_cv_folds=glb_rcv_n_folds, tune_models_df=glbMdlTuneParams,
@@ -5050,20 +5065,20 @@ if (!is.null(glb_mdl_ensemble)) {
     # "RFE.X.*"; err.abs.fit.sum=; min.RMSE.fit=0.221114
     ### bid1_sp
 
-    indep_vars <- paste(mygetPredictIds(glb_rsp_var)$value, glb_mdl_ensemble, sep = "")
+    indepVar <- paste(mygetPredictIds(glb_rsp_var)$value, glb_mdl_ensemble, sep = "")
     if (glb_is_classification)
-        indep_vars <- paste(indep_vars, ".prob", sep = "")
+        indepVar <- paste(indepVar, ".prob", sep = "")
     # Some models in glb_mdl_ensemble might not be fitted e.g. RFE.X.Interact
-    indep_vars <- intersect(indep_vars, names(glbObsFit))
+    indepVar <- intersect(indepVar, names(glbObsFit))
     
-#     indep_vars <- grep(mygetPredictIds(glb_rsp_var)$value, names(glbObsFit), fixed=TRUE, value=TRUE)
+#     indepVar <- grep(mygetPredictIds(glb_rsp_var)$value, names(glbObsFit), fixed=TRUE, value=TRUE)
 #     if (glb_is_regression)
-#         indep_vars <- indep_vars[!grepl("(err\\.abs|accurate)$", indep_vars)]
+#         indepVar <- indepVar[!grepl("(err\\.abs|accurate)$", indepVar)]
 #     if (glb_is_classification && glb_is_binomial)
-#         indep_vars <- grep("prob$", indep_vars, value=TRUE) else
-#         indep_vars <- indep_vars[!grepl("err$", indep_vars)]
+#         indepVar <- grep("prob$", indepVar, value=TRUE) else
+#         indepVar <- indepVar[!grepl("err$", indepVar)]
 
-    #rfe_fit_ens_results <- myrun_rfe(glbObsFit, indep_vars)
+    #rfe_fit_ens_results <- myrun_rfe(glbObsFit, indepVar)
     
     for (method in c("glm", "glmnet")) {
         for (trainControlMethod in 
@@ -5092,7 +5107,7 @@ if (!is.null(glb_mdl_ensemble)) {
                     train.metric = glbMdlMetricSummary, 
                     train.maximize = glbMdlMetricMaximize,    
                     train.method = method)),
-                indep_vars = indep_vars, rsp_var = glb_rsp_var, 
+                indepVar = indepVar, rsp_var = glb_rsp_var, 
                 fit_df = glbObsFit, OOB_df = glbObsOOB)
         }
     }
@@ -5264,10 +5279,9 @@ if (!all(is.na(glbObsNew[, glb_rsp_var])))
     glb_models_lst[[glb_fin_mdl_id]] <- glb_fin_mdl
 } else {    
             if (grepl("RFE\\.X", names(glbMdlFamilies))) {
-                indep_vars <- myadjust_interaction_feats(subset(glb_feats_df, 
-                                                    !nzv & (exclude.as.feat != 1))[, "id"])
+                indepVar <- mygetIndepVar(glb_feats_df)
                 rfe_trn_results <- 
-                    myrun_rfe(glbObsTrn, indep_vars, glbRFESizes[["Final"]])
+                    myrun_rfe(glbObsTrn, indepVar, glbRFESizes[["Final"]])
                 if (!isTRUE(all.equal(sort(predictors(rfe_trn_results)),
                                       sort(predictors(rfe_fit_results))))) {
                     print("Diffs predictors(rfe_trn_results) vs. predictors(rfe_fit_results):")
@@ -5289,7 +5303,7 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
             mdlIdPfx <- paste0(c(head(mdl_id_components, -1), "Train"), 
                                collapse = ".")
             if (grepl("RFE\\.X\\.", mdlIdPfx)) 
-                mdlIndepVars <- myadjust_interaction_feats(myextract_actual_feats(
+                mdlIndepVars <- myadjustInteractionFeats(glb_feats_df, myextract_actual_feats(
                     predictors(rfe_trn_results))) else
                 mdlIndepVars <- trim(unlist(
             strsplit(glb_models_df[glb_models_df$id == mdl_id, "feats"], "[,]")))
@@ -5305,7 +5319,7 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                         train.metric = glbMdlMetricSummary, 
                         train.maximize = glbMdlMetricMaximize,    
                         train.method = tail(mdl_id_components, 1))),
-                    indep_vars = mdlIndepVars,
+                    indepVar = mdlIndepVars,
                     rsp_var = glb_rsp_var, 
                     fit_df = glbObsTrn, OOB_df = NULL)
             
@@ -5331,14 +5345,14 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
         # Find which models are relevant
         mdlimp_df <- subset(myget_feats_importance(glb_sel_mdl), imp > 5)
         if (glb_is_classification && glb_is_binomial)
-            indep_vars_vctr <- gsub("(.*)\\.(.*)\\.prob", "\\1\\.Train\\.\\2\\.prob",
+            indepVar <- gsub("(.*)\\.(.*)\\.prob", "\\1\\.Train\\.\\2\\.prob",
                                     row.names(mdlimp_df)) else
-            indep_vars_vctr <- gsub("(.*)\\.(.*)", "\\1\\.Train\\.\\2",
+            indepVar <- gsub("(.*)\\.(.*)", "\\1\\.Train\\.\\2",
                                     row.names(mdlimp_df))
     } else 
     if (grepl("RFE.X", glb_sel_mdl_id, fixed = TRUE)) {
-        indep_vars_vctr <- myextract_actual_feats(predictors(rfe_trn_results))
-    } else indep_vars_vctr <- 
+        indepVar <- myextract_actual_feats(predictors(rfe_trn_results))
+    } else indepVar <- 
                 trim(unlist(strsplit(glb_models_df[glb_models_df$id ==
                                                    glb_sel_mdl_id
                                                    , "feats"], "[,]")))
@@ -5367,7 +5381,7 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
         #source("caret_nominalTrainWorkflow.R")
         
         # glmnet requires at least 2 indep vars
-        if ((length(indep_vars_vctr) == 1) && (method %in% "glmnet"))
+        if ((length(indepVar) == 1) && (method %in% "glmnet"))
             next
         
         ret_lst <- 
@@ -5383,7 +5397,7 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                     train.maximize = glbMdlMetricMaximize,    
                     train.method = method,
                     train.preProcess = ths_preProcess)),
-                indep_vars = indep_vars_vctr, rsp_var = glb_rsp_var, 
+                indepVar = indepVar, rsp_var = glb_rsp_var, 
                 fit_df = trnobs_df, OOB_df = NULL)
         
         if ((length(method_vctr) == 1) || (method != "glm")) {
