@@ -55,82 +55,98 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
 
     url <- specs$url; filename <- specs$name
     if (!is.null(url)) {
-        url_split <- strsplit(url, "/", fixed=TRUE)[[1]]
-        download_filename <- gsub("%2F", "-", url_split[length(url_split)], fixed=TRUE)
-        download_filepath <- paste("./data", download_filename, sep="/")
-        if (!file.exists(download_filepath)) {
-        	print(sprintf("Downloading file %s from %s...", download_filepath, url))
+        url_split <- strsplit(url, "/", fixed = TRUE)
+        download_filepath <- c()
+        for (ix in 1:length(url_split)) {
+            thsURLSplit <- url_split[[ix]]
+            download_filename <- gsub("%2F", "-", thsURLSplit[length(thsURLSplit)], fixed = TRUE)
+            download_filepath[names(url_split)[ix]] <- paste("./data", download_filename, sep = "/")
+            if (!file.exists(download_filepath[names(url_split)[ix]])) {
+            	print(sprintf("Downloading file %s from %s...",
+            	              download_filepath[names(url_split)[ix]], url))
 
-            # Issue with downloading from https:// ??? currently downloads html doc even though url points to csv file
-            # download.file(url, destfile=download_filepath, method="curl")
-            download.file(url, destfile = download_filepath, method = "auto")
+                # Issue with downloading from https:// ??? currently downloads html doc even though url points to csv file
+                # download.file(url, destfile=download_filepath, method="curl")
+                download.file(url, destfile = download_filepath[names(url_split)[ix]],
+                              method = "auto")
+            }
         }
 
-        url_split <- strsplit(url, ".", fixed=TRUE)[[1]]
-        download_filename_ext <- url_split[length(url_split)]
-        if (download_filename_ext %in% c("zip", "tgz")) {
-            if (is.null(filename)) {
-    #           stop("Please specify which file(filename=) should be imported from ",
-    #                  download_filepath)
-    			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
-            }
+        url_split <- strsplit(url, ".", fixed = TRUE)
+        file_path <- c()
+        for (ix in 1:length(url_split)) {
+            thsURLSplit <- url_split[[ix]]
+            download_filename_ext <- thsURLSplit[length(thsURLSplit)]
+            if (download_filename_ext %in% c("zip", "tgz")) {
+                if (is.null(filename)) {
+        #           stop("Please specify which file(filename=) should be imported from ",
+        #                  download_filepath)
+        			filename <- substr(download_filename, 1, nchar(download_filename) - nchar(".zip"))
+                }
 
-            file_path <- paste("./data", filename, sep="/")
-            if (!file.exists(file_path)) {
-        		print(sprintf("Unzipping file %s...", file_path))
-                unzip(download_filepath, filename)
-            }
-        } else file_path <- download_filepath
-    } else file_path <- paste("./data", filename, sep="/")
+                file_path[names(url_split)[ix]] <- paste("./data", filename, sep="/")
+                if (!file.exists(file_path[names(url_split)[ix]])) {
+            		print(sprintf("Unzipping file %s...", file_path[names(url_split)[ix]]))
+                    unzip(download_filepath[names(url_split)[ix]], filename[names(url_split)[ix]])
+                }
+            } else file_path[names(url_split)[ix]] <- download_filepath[names(url_split)[ix]]
+        }
+    } else file_path <- paste("./data", filename, sep = "/")
 
-    # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
-    #	check if file contains header
-    first_record <- read.csv(file_path, header=FALSE, quote="", nrows=1)
+    obsDf <- data.frame()
+    for (ix in 1:length(file_path)) {
+        # read.csv reads files with ext %in% c(".csv", ".csv.bz2)
+        #	check if file contains header
+        first_record <- read.csv(file_path[ix], header = FALSE, quote = "", nrows = 1)
 
-	if (!force_header) {
-		header <- FALSE
+    	if (!force_header) {
+    		header <- FALSE
 
-		if (length(grep('^"', first_record[1, 1])) != 0)
-			header <- TRUE else {
-			col_names <- paste(first_record[,])
-			diffs <- setdiff(make.names(col_names), col_names)
-			if (length(diffs) == 0)
-				header <- TRUE else {
-				if (length(grep("^X", diffs)) == length(diffs))
-					header <- TRUE
-			}
-		}
+    		if (length(grep('^"', first_record[1, 1])) != 0)
+    			header <- TRUE else {
+    			col_names <- paste(first_record[,])
+    			diffs <- setdiff(make.names(col_names), col_names)
+    			if (length(diffs) == 0)
+    				header <- TRUE else {
+    				if (length(grep("^X", diffs)) == length(diffs))
+    					header <- TRUE
+    			}
+    		}
 
-		if (!(header))
-		{
-			warning(file_path, " does not contain header")
-			print("first 10 records:")
-			#print(system(paste0("head ", file_path)))
-			#system(paste0("head ", file_path, " | cat")))
-			print(readLines(file_path, n=10))
-		}
-	} else header <- TRUE
+    		if (!(header))
+    		{
+    			warning(file_path, " does not contain header")
+    			print("first 10 records:")
+    			#print(system(paste0("head ", file_path)))
+    			#system(paste0("head ", file_path, " | cat")))
+    			print(readLines(file_path, n=10))
+    		}
+    	} else header <- TRUE
 
-    print(sprintf("Reading file %s...", file_path))
-    if (is.null(specs$sep))
-        specs$sep = ","
+        print(sprintf("Reading file %s...", file_path[ix]))
+        if (is.null(specs$sep))
+            specs$sep = ","
 
-    if (specs$sep == "\t")
-        df <- read.delim(file_path, header = header, nrows = nrows, ...) else
-        df <- read.csv(file_path, header = header, nrows = nrows, ...)
+        if (specs$sep == "\t")
+            df <- read.delim(file_path[ix], header = header, nrows = nrows, ...) else
+            df <-   read.csv(file_path[ix], header = header, nrows = nrows, ...)
 
-    if (nrows > 0)
-    	warning("first ", nrows, " records read")
+        if (nrows > 0)
+        	warning("first ", nrows, " records read")
 
-    print(sprintf("dimensions of data in %s: %s rows x %s cols", file_path,
-                  format(dim(df)[1], big.mark=","),
-                  format(dim(df)[2], big.mark=",")))
+        print(sprintf("dimensions of data in %s: %s rows x %s cols", file_path[ix],
+                      format(dim(df)[1], big.mark = ","),
+                      format(dim(df)[2], big.mark = ",")))
+
+        df$.inp <- names(file_path)[ix]
+        obsDf <- rbind(obsDf, df)
+    }
 
 	if (!(missing(comment)))
-		comment(df) <- comment
+		comment(obsDf) <- comment
 
     if (print_diagn) {
-        tmpDf <- df
+        tmpDf <- obsDf
         if (length(chrCols <- myfind_chr_cols_df(tmpDf)) > 0) {
             for (chrCol in chrCols)
                 if (max(nchar(tmpDf[, chrCol]), na.rm = TRUE) > 100) {
@@ -139,10 +155,10 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
                 }
         }
 		myprint_df(tmpDf)
-		myprint_str_df(df)
+		myprint_str_df(obsDf)
     }
 
-    return(df)
+    return(obsDf)
 }
 #activity_df <- myimport_data("activity.csv",
 #                "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip")
@@ -867,13 +883,25 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         dates_df[, paste0(var, ".date.fctr")] <-
             cut(as.numeric(format(.date, "%d")), 5) # by month week
         dates_df[, paste0(var, ".juliandate")] <- as.numeric(format(.date, "%j"))
-        print(myplot_histogram(dates_df, paste0(var, ".juliandate")) +
-                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
+        if (is.numeric(dates_df[, rsp_var]))
+            print(myplot_scatter(dates_df, paste0(var, ".juliandate"), rsp_var)) else
+        { # Classification
+            if (length(unique(dates_df[, paste0(var, ".year")])) <= 5)
+                print(myplot_histogram(df = dates_df, hst_col_name = paste0(var, ".juliandate")) +
+                          facet_grid(as.formula(paste0(var, ".year", "~", rsp_var)))) else {
+                pltDf <- dates_df
+                pltDf[, paste0(var, ".year", ".cut")] <- cut(pltDf[, paste0(var, ".year")], 5)
+                print(myplot_histogram(df = pltDf, hst_col_name = paste0(var, ".juliandate")) +
+                          facet_grid(as.formula(paste0(var, ".year.cut", "~", rsp_var))))
+            }
+        }
 
         # wkday Sun=0; Mon=1; ...; Sat=6
         dates_df[, paste0(var, ".wkday")] <- as.numeric(format(.date, "%w"))
-        print(myplot_histogram(dates_df, paste0(var, ".wkday")) +
-                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
+        if (is.numeric(dates_df[, rsp_var]))
+            print(myplot_scatter(dates_df, paste0(var, ".wkday"), rsp_var)) else
+            print(myplot_histogram(dates_df, paste0(var, ".wkday")) +
+                      facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
         dates_df[, paste0(var, ".wkday.fctr")] <- as.factor(format(.date, "%w"))
         dates_df[, paste0(var, ".wkend")] <-
             as.numeric(dates_df[, paste0(var, ".wkday")] %in% c(0, 6))
@@ -931,11 +959,15 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
         print("**********")
         print(sprintf("Consider adding state & city holidays for glbFeatsDateTime: %s", var))
         print("**********")
-        print(myplot_histogram(dates_df, paste0(var, ".hlday")) +
-                  facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
+        if (is.numeric(dates_df[, rsp_var]))
+            print(myplot_scatter(dates_df, paste0(var, ".hlday"), rsp_var)) else
+            print(myplot_histogram(dates_df, paste0(var, ".hlday")) +
+                      facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
 
         dates_df[, paste0(var, ".hour")] <- as.numeric(format(.date, "%H"))
-        print(myplot_histogram(dates_df, paste0(var, ".hour")) +
+        if (is.numeric(dates_df[, rsp_var]))
+            print(myplot_scatter(dates_df, paste0(var, ".hour"), rsp_var)) else
+            print(myplot_histogram(dates_df, paste0(var, ".hour")) +
                   facet_grid(as.formula(paste0(var, ".year", "~", rsp_var))))
         dates_df[, paste0(var, ".hour.fctr")] <-
             if (length(unique(vals <- as.numeric(format(.date, "%H")))) <= 1)

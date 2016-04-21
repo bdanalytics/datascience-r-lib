@@ -136,9 +136,11 @@ require(stringr)
 
 # Analysis control global variables
 # Inputs
-#   url/name = "<pointer>"; if url specifies a zip file, name = "<filename>"
+#   url/name = "<PathPointer>"; if url specifies a zip file, name = "<filename>"; 
+#               or named collection of <PathPointer>s
 #   sep = choose from c(NULL, "\t")
-glbObsTrnFile <- list(url = "<obsTrnFileName>")
+glbObsTrnFile <- list(url = "<obsTrnFileName>") 
+    # or list(url = c(NULL, <.inp1> = "<path1>", <.inp2> = "<path2>"))
     #, splitSpecs = list(method = "copy" # default when glbObsNewFile is NULL
     #                       select from c("copy", NULL ???, "condition", "sample", )
     #                      ,nRatio = 0.3 # > 0 && < 1 if method == "sample" 
@@ -149,9 +151,6 @@ glbObsTrnFile <- list(url = "<obsTrnFileName>")
  
 
 glbObsNewFile <- NULL # default OR list(url = "<obsNewFileName>") 
-
-glbInpMerge <- NULL #: default
-#     list(fnames = c("<fname1>", "<fname2>")) # files will be concatenated
 
 glbObsDropCondition <- NULL # : default
 #   enclose in single-quotes b/c condition might include double qoutes
@@ -385,7 +384,7 @@ glb_derive_vars <- names(glbFeatsDerive)
 glbFeatsDateTime <- list()
 # Use OlsonNames() to enumerate supported time zones
 # glbFeatsDateTime[["<DateTimeFeat>"]] <- 
-#     c(format = "%Y-%m-%d %H:%M:%S", timezone = "US/Eastern", impute.na = TRUE, 
+#     c(format = "%Y-%m-%d %H:%M:%S" or "%m/%e/%y", timezone = "US/Eastern", impute.na = TRUE, 
 #       last.ctg = FALSE, poly.ctg = FALSE)
 
 glbFeatsPrice <- NULL # or c("<price_var>")
@@ -702,6 +701,9 @@ glbObsTrnOutliers[["Final"]] <- union(glbObsFitOutliers[["All.X"]],
 
 # Modify mdlId to (build & extract) "<FamilyId>#<Fit|Trn>#<caretMethod>#<preProc1.preProc2>#<samplingMethod>"
 glb_models_lst <- list(); glb_models_df <- data.frame()
+
+# Add xgboost algorithm
+
 # Regression
 if (glb_is_regression) {
     glbMdlMethods <- c(NULL
@@ -1465,6 +1467,17 @@ if (!is.null(glb_map_rsp_raw_to_var)) {
 
 # check distribution of all numeric data
 dsp_numeric_feats_dstrb <- function(feats_vctr) {
+    startTm <- proc.time()["elapsed"]
+    
+    nObsAll <- nrow(glbObsAll)
+    nObsSmp <- 20000
+    if (nObsAll >= nObsSmp) {
+        # Takes a long time
+        #   Borrow code from partition.data chunk if .src / .category obs need to be sampled
+        require(caTools)
+        pltObsSmp <- glbObsAll[sample.split(1:nrow(glbObsAll), SplitRatio = nObsSmp), ]
+    } else pltObsSmp <- glbObsAll
+
     # Batches of batch_size
     batch_size <- 4;
     for (batch in 1:ceiling(length(feats_vctr) / batch_size)) {
@@ -1475,27 +1488,21 @@ dsp_numeric_feats_dstrb <- function(feats_vctr) {
                                 min(((batch)*batch_size), length(feats_vctr))]) {
             #print(sprintf("feat: %s", feat))
             if (glb_is_regression)
-                gp <- myplot_scatter(df=glbObsAll, ycol_name=glb_rsp_var, xcol_name=feat,
-                                     smooth=TRUE)
+                gp <- myplot_scatter(df = pltObsSmp, ycol_name = glb_rsp_var, xcol_name = feat,
+                                     smooth = TRUE)
             if (glb_is_classification)
-                #gp <- myplot_box(df=glbObsAll, ycol_names=feat, xcol_name=glb_rsp_var)
-                gp <- myplot_violin(glbObsAll, ycol_names = feat, xcol_name = glb_rsp_var)
-            if (inherits(glbObsAll[, feat], "factor"))
+                gp <- myplot_violin(pltObsSmp, ycol_names = feat, xcol_name = glb_rsp_var)
+            if (inherits(pltObsSmp[, feat], "factor"))
                 gp <- gp + facet_wrap(reformulate(feat))
-            gp <- gp + labs(title = feat)
+            gp <- gp + labs(title = sprintf("Sample %d (of %d): %s", nObsSmp, nObsAll, feat))
             
-            savgp <- gp
             print(gp, vp = viewport(layout.pos.row = ceiling(pltIx / 2.0), 
                                     layout.pos.col = ((pltIx - 1) %% 2) + 1)) 
-#             gp <- savgp
-#             png(sprintf("%snumeric_feats_dstrb%d.png", glbOut$pfx, batch))
-#             print(gp, vp = viewport(layout.pos.row = ceiling(pltIx / 2.0), 
-#                                     layout.pos.col = ((pltIx - 1) %% 2) + 1)) 
-#             dev.off()
-        
             pltIx <- pltIx + 1        
         }
     }
+    
+    print(sprintf("elapsed Time (secs): %f", proc.time()["elapsed"] - startTm))
 }
 
 require(dplyr)
@@ -1513,9 +1520,20 @@ if (is.numeric(glbObsAll[, glb_rsp_var_raw]) &&
     pltObsAll[, facetVar] <- cut(pltObsAll[, glb_rsp_var_raw], 5)
 } else facetVar <- glb_rsp_var_raw
 
-if (is.numeric(glbObsAll[, glbFeatsId]))
-    print(gp <- myplot_histogram(pltObsAll, featsId, fill_col_name = ".src") + 
-                  facet_wrap(as.formula(paste0("~", facetVar)))) else {
+if (is.numeric(glbObsAll[, glbFeatsId])) {
+    nObsAll <- nrow(pltObsAll)
+    if (nObsAll >= 20000) {
+        # Takes a long time
+        #   Borrow code from partition.data chunk if .src / .category obs need to be sampled
+        require(caTools)
+        pltObsSmp <- pltObsAll[sample.split(1:nrow(pltObsAll), SplitRatio = 20000), ]
+    } else pltObsSmp <- pltObsAll
+    startTm <- proc.time()["elapsed"]
+    print(gp <- myplot_histogram(pltObsSmp, featsId, fill_col_name = ".src") + 
+                  facet_wrap(as.formula(paste0("~", facetVar))) + 
+                ggtitle(sprintf("Sample %d (from %d) Obs", nrow(pltObsSmp), nObsAll)))
+    print(sprintf("elapsed Time (secs): %f", proc.time()["elapsed"] - startTm))
+} else {
     pltObsFrq <- mycreate_sqlxtab_df(pltObsAll, c(featsId, facetVar, ".src"))                      
     print(gp <- myplot_hbar(pltObsFrq, featsId, ".n", colorcol_name = ".src") + 
                   facet_wrap(as.formula(paste0("~", facetVar))))
@@ -1524,7 +1542,7 @@ if (is.numeric(glbObsAll[, glbFeatsId]))
 # Check distributions of newly transformed / extracted vars
 #   Enhancement: remove vars that were displayed ealier
 print(dsp_numeric_feats_dstrb(feats_vctr = setdiff(names(glbObsAll), 
-                c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude))))
+            c(myfind_chr_cols_df(glbObsAll), glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude))))
 
 #   Convert factors to dummy variables
 #   Build splines   require(splines); bsBasis <- bs(training$age, df=3)
@@ -3308,10 +3326,11 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.end", major.inc = 
 ### Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r extract.features.end, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 
-
-replay.petrisim(pn=glb_analytics_pn, 
-    replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
-        "data.training.all","data.new")), flip_coord=TRUE)
+# sav_analytics_pn <- glb_analytics_pn
+# sav_analytics_avl_objs <- glb_analytics_avl_objs
+replay.petrisim(pn = glb_analytics_pn, 
+    replay.trans = (glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
+        "data.training.all","data.new")), flip_coord = TRUE)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "manage.missing.data", major.inc = TRUE)
 ```
 
@@ -4242,6 +4261,7 @@ if ((length(glbFeatsDateTime) > 0) &&
             trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
             trainControl.classProbs = glb_is_classification,
             trainControl.summaryFunction = glbMdlMetricSummaryFn,
+            trainControl.allowParallel = glbMdlAllowParallel,            
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
             train.method = "glmnet")),
@@ -4269,6 +4289,7 @@ if ((length(glbFeatsDateTime) > 0) &&
         trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
         trainControl.classProbs = glb_is_classification,
         trainControl.summaryFunction = glbMdlMetricSummaryFn,
+        trainControl.allowParallel = glbMdlAllowParallel,        
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
         train.method = "glmnet")),
@@ -5256,9 +5277,9 @@ sync_glb_obs_df()
     
 print(setdiff(names(glbObsNew), names(glbObsAll)))
 
-replay.petrisim(pn=glb_analytics_pn, 
-    replay.trans=(glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
-        "model.selected")), flip_coord=TRUE)
+replay.petrisim(pn = glb_analytics_pn, 
+    replay.trans = (glb_analytics_avl_objs <- c(glb_analytics_avl_objs, 
+        "model.selected")), flip_coord = TRUE)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.data.training", major.inc = TRUE)
 ```
 
@@ -5277,6 +5298,9 @@ if (!all(is.na(glbObsNew[, glb_rsp_var])))
     glb_fin_mdl_id <- paste0("Final.", glb_sel_mdl_id)
     glb_fin_mdl <- glb_sel_mdl
     glb_models_lst[[glb_fin_mdl_id]] <- glb_fin_mdl
+    mdlDf <- glb_models_df[glb_models_df$id == glb_sel_mdl_id, ]
+    mdlDf$id <- glb_fin_mdl_id
+    glb_models_df <- rbind(glb_models_df, mdlDf)
 } else {    
             if (grepl("RFE\\.X", names(glbMdlFamilies))) {
                 indepVar <- mygetIndepVar(glb_feats_df)
