@@ -56,6 +56,8 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
     url <- specs$url; filename <- specs$name
     if (!is.null(url)) {
         url_split <- strsplit(url, "/", fixed = TRUE)
+        if (is.null(names(url_split)))
+            names(url_split) <- as.character(1:length(url_split))
         download_filepath <- c()
         for (ix in 1:length(url_split)) {
             thsURLSplit <- url_split[[ix]]
@@ -73,6 +75,8 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
         }
 
         url_split <- strsplit(url, ".", fixed = TRUE)
+        if (is.null(names(url_split)))
+            names(url_split) <- as.character(1:length(url_split))
         file_path <- c()
         for (ix in 1:length(url_split)) {
             thsURLSplit <- url_split[[ix]]
@@ -138,7 +142,8 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
                       format(dim(df)[1], big.mark = ","),
                       format(dim(df)[2], big.mark = ",")))
 
-        df$.inp <- names(file_path)[ix]
+        if (length(names(file_path)) > 1)
+            df$.inp <- names(file_path)[ix]
         obsDf <- rbind(obsDf, df)
     }
 

@@ -139,7 +139,7 @@ require(stringr)
 #   url/name = "<PathPointer>"; if url specifies a zip file, name = "<filename>"; 
 #               or named collection of <PathPointer>s
 #   sep = choose from c(NULL, "\t")
-glbObsTrnFile <- list(url = "<obsTrnFileName>") 
+glbObsTrnFile <- list(url = "<obsTrnFileName>" 
     # or list(url = c(NULL, <.inp1> = "<path1>", <.inp2> = "<path2>"))
     #, splitSpecs = list(method = "copy" # default when glbObsNewFile is NULL
     #                       select from c("copy", NULL ???, "condition", "sample", )
@@ -147,9 +147,8 @@ glbObsTrnFile <- list(url = "<obsTrnFileName>")
     #                      ,seed = 123 # any integer or glbObsTrnPartitionSeed if method == "sample" 
     #                      ,condition = # or 'is.na(<var>)'; '<var> <condition_operator> <value>'    
     #                      )
-    # )                   
+    )                   
  
-
 glbObsNewFile <- NULL # default OR list(url = "<obsNewFileName>") 
 
 glbObsDropCondition <- NULL # : default
@@ -246,11 +245,6 @@ glb_map_vars <- NULL # or c("<var1>", "<var2>")
 glb_map_urls <- list();
 # glb_map_urls[["<var1>"]] <- "<var1.url>"
 
-glb_assign_pairs_lst <- NULL; 
-# glb_assign_pairs_lst[["<var1>"]] <- list(from=c(NA),
-#                                            to=c("NA.my"))
-glb_assign_vars <- names(glb_assign_pairs_lst)
-
 # Derived features; Use this mechanism to cleanse data ??? Cons: Data duplication ???
 glbFeatsDerive <- list();
 
@@ -261,6 +255,7 @@ glbFeatsDerive <- list();
 #data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
 
     # character
+#     mapfn = function(Education) { raw <- Education; raw[is.na(raw)] <- "NA.my"; return(as.factor(raw)) } 
 #     mapfn = function(Week) { return(substr(Week, 1, 10)) }
 #     mapfn = function(Name) { return(sapply(Name, function(thsName) 
 #                                             str_sub(unlist(str_split(thsName, ","))[1], 1, 1))) } 
@@ -375,8 +370,6 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #     mapfn=function(ILI.2.lag) { return(log(ILI.2.lag)) }
 
 # glbFeatsDerive[["<var1>"]] <- glbFeatsDerive[["<var2>"]]
-
-glb_derive_vars <- names(glbFeatsDerive)
 
 # tst <- "descr.my"; args_lst <- NULL; for (arg in glbFeatsDerive[[tst]]$args) args_lst[[arg]] <- glbObsAll[, arg]; print(head(args_lst[[arg]])); print(head(drv_vals <- do.call(glbFeatsDerive[[tst]]$mapfn, args_lst))); 
 # print(which_ix <- which(args_lst[[arg]] == 0.75)); print(drv_vals[which_ix]); 
@@ -755,7 +748,11 @@ glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
 # family: Choose from c("RFE.X", "CSM.X", "All.X", "Best.Interact")
 #   methods: Choose from c(NULL, <method>, glbMdlMethods) 
 #glbMdlFamilies[["RFE.X"]] <- c("glmnet", "glm") # non-NULL vector is mandatory
-glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")  # non-NULL vector is mandatory
+if (glb_is_classification && !glb_is_binomial)
+    # glm does not work for multinomial
+    glbMdlFamilies[["All.X"]] <- c("glmnet") else    
+    glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")
+
 #glbMdlFamilies[["Best.Interact"]] <- "glmnet" # non-NULL vector is mandatory
 
 # Check if interaction features make RFE better
@@ -775,7 +772,7 @@ glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")  # non-NULL vector is mandatory
 glbMdlFamilies[["Final"]] <- c(NULL) # NULL vector acceptable # c("glmnet", "glm")
 
 glbMdlAllowParallel <- list()
-#glbMdlAllowParallel[["<mdlId>"]] <- FALSE
+#glbMdlAllowParallel[["Final##rcv#glmnet"]] <- FALSE
 
 # Check if tuning parameters make fit better; make it mdlFamily customizable ?
 glbMdlTuneParams <- data.frame()
@@ -1398,15 +1395,15 @@ stop("aargh!!! here"); print("Fix this ...")
     glbFeatsExclude <- c(".grpid", glbFeatsExclude)
 }
 
-if (!is.null(glbInpMerge)) {
-    print("Running glbInpMerge specs...")
-    obsMrg <- data.frame()
-    for (fName in glbInpMerge$fnames) {
-        print(sprintf("    Appending rows from %s...", fName))
-        obsMrg <- rbind(obsMrg, read.csv(fName))
-    }
-    glbObsAll <- merge(glbObsAll, obsMrg, all.x = TRUE)
-}
+# if (!is.null(glbInpMerge)) {
+#     print("Running glbInpMerge specs...")
+#     obsMrg <- data.frame()
+#     for (fName in glbInpMerge$fnames) {
+#         print(sprintf("    Appending rows from %s...", fName))
+#         obsMrg <- rbind(obsMrg, read.csv(fName))
+#     }
+#     glbObsAll <- merge(glbObsAll, obsMrg, all.x = TRUE)
+# }
 
 if (!is.null(glb_obs_repartition_train_condition)) {
     print(sprintf("Running glb_obs_repartition_train_condition filter: %s",
@@ -1777,9 +1774,15 @@ if (length(glbFeatsDateTime) > 0) {
         pltObsAll <- 
             glbObsAll[, c(paste(feat, c(".month.fctr", ".wkend"), sep = ""), glb_rsp_var)]
         pltObsAll[, ".freq"] <- 1
-        print(myplot_bar(pltObsAll, xcol_name = paste0(feat, ".month.fctr"), 
-                         ycol_names = ".freq", colorcol_name = paste0(feat, ".wkend")) + 
-                  facet_wrap(reformulate(glb_rsp_var)))
+        if (length(unique(pltObsAll[, glb_rsp_var])) <= 5)
+            print(myplot_bar(pltObsAll, xcol_name = paste0(feat, ".month.fctr"), 
+                             ycol_names = ".freq", colorcol_name = paste0(feat, ".wkend")) + 
+                      facet_wrap(reformulate(glb_rsp_var))) else {
+            pltObsAll[, paste0(glb_rsp_var, ".cut")] <- cut(pltObsAll[, glb_rsp_var], 5)
+            print(myplot_bar(pltObsAll, xcol_name = paste0(feat, ".month.fctr"), 
+                             ycol_names = ".freq", colorcol_name = paste0(feat, ".wkend")) + 
+                      facet_wrap(reformulate(paste0(glb_rsp_var, ".cut"))))                          
+        }
 #         print(myplot_scatter(glbObsAll[glbObsAll[, paste0(feat, ".POSIX")] >=
 #                                                strptime("2012-12-01", "%Y-%m-%d"), ], 
 #                              xcol_name=paste0(feat, ".POSIX"),
@@ -1787,7 +1790,8 @@ if (length(glbFeatsDateTime) > 0) {
 
         # Create Time Series Polynomial features (overall & by category)
 #stop(here"); glb2Sav(); all.equal(savObsAll, glbObsAll); glbObsAll <- savObsAll
-        glbObsAll <- cbind(glbObsAll, myextractTimePoly(glbObsAll, feat))
+        if (nrow(tmPolyDf <- myextractTimePoly(obs = glbObsAll, feat = feat)) > 0)
+            glbObsAll <- cbind(glbObsAll, tmPolyDf)
         for (poly in grep(paste0(feat, ".day.minutes.poly."), names(glbObsAll), fixed = TRUE,
                           value = TRUE)) {
             print(myplot_scatter(glbObsAll, paste0(feat, ".day.minutes"), poly, 
@@ -1817,8 +1821,10 @@ if (length(glbFeatsDateTime) > 0) {
                                               impute.na = glbFeatsDateTime[[feat]]["impute.na"]))
         for (last in grep(paste0(feat, ".last"), names(glbObsAll), fixed = TRUE,
                           value = TRUE)) {
-            print(myplot_histogram(glbObsAll, last) +
-                            facet_grid(as.formula(paste0(feat, ".year.fctr", "~", glb_rsp_var))))
+            if (is.numeric(glbObsAll[, glb_rsp_var]))
+                print(myplot_scatter(glbObsAll, last, glb_rsp_var)) else
+                print(myplot_histogram(glbObsAll, last) +
+                                facet_grid(as.formula(paste0(feat, ".year.fctr", "~", glb_rsp_var))))
         }
         glbFeatsExclude <- union(glbFeatsExclude, c(paste0(feat, ".zoo")))
         
