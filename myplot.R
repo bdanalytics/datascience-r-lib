@@ -301,54 +301,66 @@ mypltModelStats <- function(df, measure, dim = NULL, scaleXFn = NULL, highLightI
     if (nrow(pltDf) > 0) {
         gp <- ggplot(pltDf, aes_string(x = dim[1], y = 'value'))
 
-        if (length(dim) > 1) {
-            aesStr <- sprintf("color = as.factor(%s)", dim[2])
-            aesMap <- eval(parse(text = paste("aes(", aesStr, ")")))
-            gp <- gp + geom_line(mapping = aesMap)
-        } else
+        if (length(dim) == 1) {
             gp <- gp + geom_line(color = 'blue')
+            gp <- gp + geom_point(color = 'blue')
+        } else {
+            if (length(dim) == 2)
+                aesStr <- sprintf("color = as.factor(%s)", dim[2]) else
+                    if (length(dim) == 3)
+                        aesStr <- sprintf("color = as.factor(%s), shape = as.factor(%s)",
+                                          dim[2], dim[3]) else
+                                              if (length(dim) >= 4)
+                                                  aesStr <- sprintf(
+                                                      "color = as.factor(%s), shape = as.factor(%s), linetype = as.factor(%s)",
+                                                      dim[2], dim[3], dim[4])
 
-        if (!is.null(scaleXFn) &&
-            !is.null(scaleXFn[dim[1]])) {
-            gp <- gp + switch(scaleXFn[dim[1]],
-                              log10 = scale_x_log10(),
-                              stop("switch error in mypltModelStats"))
-
-            if (scaleXFn[dim[1]] == "log10") {
-                #print("scaleXFn is log10")
-                if (0 %in% unique(df[, dim[1]]))
-                    for (key in measure) {
-                        # hline if x-axis has log scale & x = 0 value needs to be highlighted
-                        if (length(dim) > 1) {
-                            aesStr <-
-                                sprintf("yintercept = value, color = as.factor(%s)", dim[2])
-                            aesMap <- eval(parse(text = paste("aes(", aesStr, ")")))
-                            gp <- gp +
-                                geom_hline(data = pltDf[(pltDf[, dim[1]] == 0  ) &
-                                                            (pltDf[, 'key' ] == key) , ],
-                                           mapping = aesMap,
-                                           linetype = 'dashed')
-                        } else
-                            gp <- gp +
-                                geom_hline(data = pltDf[(pltDf[, dim[1]] == 0  ) &
-                                                            (pltDf[, 'key' ] == key) , ],
-                                           aes(yintercept = value), color = 'blue',
-                                           linetype = 'dashed')
-                    }
-            }
+                                              aesMap <- eval(parse(text = paste("aes(", aesStr, ")")))
+                                              gp <- gp + geom_line(mapping = aesMap)
+                                              gp <- gp + geom_point(mapping = aesMap)
         }
+
+        # if (!is.null(scaleXFn) &&
+        #     !is.null(scaleXFn[dim[1]])) {
+        #     gp <- gp + switch(scaleXFn[dim[1]],
+        #                       log10 = scale_x_log10(),
+        #                       stop("switch error in mypltModelStats"))
+        #
+        #     if (scaleXFn[dim[1]] == "log10") {
+        #         #print("scaleXFn is log10")
+        #         if (0 %in% unique(df[, dim[1]]))
+        #             for (key in measure) {
+        #                 # hline if x-axis has log scale & x = 0 value needs to be highlighted
+        #                 if (length(dim) > 1) {
+        #                     aesStr <-
+        #                         sprintf("yintercept = value, color = as.factor(%s)", dim[2])
+        #                     aesMap <- eval(parse(text = paste("aes(", aesStr, ")")))
+        #                     gp <- gp +
+        #                         geom_hline(data = pltDf[(pltDf[, dim[1]] == 0  ) &
+        #                                                     (pltDf[, 'key' ] == key) , ],
+        #                                    mapping = aesMap,
+        #                                    linetype = 'dashed')
+        #                 } else
+        #                     gp <- gp +
+        #                         geom_hline(data = pltDf[(pltDf[, dim[1]] == 0  ) &
+        #                                                     (pltDf[, 'key' ] == key) , ],
+        #                                    aes(yintercept = value), color = 'blue',
+        #                                    linetype = 'dashed')
+        #             }
+        #     }
+        # }
 
         gp <- gp +
             ylab('') +
-            scale_linetype_identity(guide = "legend") +
+            # scale_linetype_identity(guide = "legend") +
             theme(legend.position = "bottom")
 
-        if (length(dim) < 3)
+        if (length(dim) <= 4)
             gp <- gp + facet_grid(. ~ key,
-                                  scales = "free", labeller = "label_both")
-        gp <- gp + facet_grid(as.formula(paste(paste0(tail(dim, -2), collapse = "+"),
-                                               "~ key")),
-                              scales = "free", labeller = "label_both")
+                                  scales = "free", labeller = "label_both") else
+                                      gp <- gp + facet_grid(as.formula(paste(paste0(tail(dim, -3), collapse = "+"),
+                                                                             "~ key")),
+                                                            scales = "free", labeller = "label_both")
 
         if (!is.null(title))
             gp <- gp + ggtitle(title)
@@ -885,9 +897,11 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
                     smpDf <- data.frame()
                     for (x in unique(df[, xcol_name])) {
                         smpThsDf <- df[df[, xcol_name] == x, ]
-                        if (nrow(smpThsDf) > 5000)
+                        if (nrow(smpThsDf) > 5000) {
+                            require(caTools)
                             smpThsDf <-
                                 smpThsDf[sample.split(smpThsDf[, ycol_names], SplitRatio = 5000), ]
+                        }
                         smpDf <- rbind(smpDf, smpThsDf)
                     }
                 }

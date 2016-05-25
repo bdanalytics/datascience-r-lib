@@ -163,6 +163,9 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
 		myprint_str_df(obsDf)
     }
 
+    if (length(problems <- grep("\\.", names(obsDf), value = TRUE)) > 0)
+        stop("column names with periods will cause havoc during Fit vs. OOB partition: ", problems)
+
     return(obsDf)
 }
 #activity_df <- myimport_data("activity.csv",
