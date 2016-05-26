@@ -928,13 +928,13 @@ glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
                   )
 
 # Output specs
-# lclgetfltout_df <- function(obsout_df) {
+# lclgetfltout_df <- function(obsOutFinDf) {
 #     require(tidyr)
-#     obsout_df <- obsout_df %>%
+#     obsOutFinDf <- obsOutFinDf %>%
 #         tidyr::separate("ImageId.x.y", c(".src", ".pos", "x", "y"), 
 #                         sep = "#", remove = TRUE, extra = "merge")
 #     # mnm prefix stands for max_n_mean
-#     mnmout_df <- obsout_df %>%
+#     mnmout_df <- obsOutFinDf %>%
 #         dplyr::group_by(.pos) %>%
 #         #dplyr::top_n(1, Probability1) %>% # Score = 3.9426         
 #         #dplyr::top_n(2, Probability1) %>% # Score = ???; weighted = 3.94254;         
@@ -949,10 +949,10 @@ glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
 #         dplyr::summarize(xMeanN = weighted.mean(as.numeric(x), c(Probability1)), 
 #                          yMeanN = weighted.mean(as.numeric(y), c(Probability1)))  
 #     
-#     maxout_df <- obsout_df %>%
+#     maxout_df <- obsOutFinDf %>%
 #         dplyr::group_by(.pos) %>%
 #         dplyr::summarize(maxProb1 = max(Probability1))
-#     fltout_df <- merge(maxout_df, obsout_df, 
+#     fltout_df <- merge(maxout_df, obsOutFinDf, 
 #                        by.x = c(".pos", "maxProb1"), by.y = c(".pos", "Probability1"),
 #                        all.x = TRUE)
 #     fmnout_df <- merge(fltout_df, mnmout_df, 
@@ -963,12 +963,12 @@ glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
 glbObsOut <- list(NULL
         # glbFeatsId will be the first output column, by default
         ,vars = list()
-#         ,mapFn = function(obsout_df) {
+#         ,mapFn = function(obsOutFinDf) {
 #                   }
                   )
-#obsout_df <- savobsout_df
-# glbObsOut$mapFn <- function(obsout_df) {
-#     txfout_df <- dplyr::select(obsout_df, -.pos.y) %>%
+#obsOutFinDf <- savobsOutFinDf
+# glbObsOut$mapFn <- function(obsOutFinDf) {
+#     txfout_df <- dplyr::select(obsOutFinDf, -.pos.y) %>%
 #         dplyr::mutate(
 #             lunch     = levels(glbObsTrn[, "lunch"    ])[
 #                        round(mean(as.numeric(glbObsTrn[, "lunch"    ])), 0)],
@@ -1019,7 +1019,7 @@ glbObsOut <- list(NULL
 #         dplyr::select(business_id, labels)
 #     return(txfout_df)
 # }
-#if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df); print(head(obsout_df))
+#if (!is.null(glbObsOut$mapFn)) obsOutFinDf <- glbObsOut$mapFn(obsOutFinDf); print(head(obsOutFinDf))
 
 glb_out_obs <- NULL # select from c(NULL : default to "new", "all", "new", "trn")
 
@@ -1234,7 +1234,7 @@ comment(glbObsAll) <- "glbObsAll"
 ### Derivations using mapping functions
 ###     glbFeatsId might be in glbFeatsDerive
 set.seed(169); glbObsAll[, ".rnorm"] <- rnorm(n = nrow(glbObsAll))
-for (new_feat in glb_derive_vars) {
+for (new_feat in names(glbFeatsDerive)) {
     print(sprintf("Creating new feature: %s...", new_feat))
     args_lst <- NULL 
     for (arg in glbFeatsDerive[[new_feat]]$args) 
@@ -1337,7 +1337,7 @@ require(dplyr)
 require(lazyeval)
 require(gdata)
 
-if (is.null(glbObsNewFile) || (glbObsTrnFile$splitSpecs$method != "copy")) {
+if (is.null(glbObsTrnFile$splitSpec) || (glbObsTrnFile$splitSpecs$method != "copy")) {
     dupObsAll <- glbObsAll[duplicated2(
         # subset(glbObsAll, select = -c(UniqueID, Popular, .src))
         glbObsAll[, setdiff(names(glbObsAll), c(glbFeatsId, glb_rsp_var_raw, ".src"))]
@@ -1497,7 +1497,7 @@ dsp_numeric_feats_dstrb <- function(feats_vctr) {
                 gp <- myplot_scatter(df = pltObsSmp, ycol_name = glb_rsp_var, xcol_name = feat,
                                      smooth = TRUE)
             if (glb_is_classification)
-                gp <- myplot_violin(pltObsSmp, ycol_names = feat, xcol_name = glb_rsp_var)
+                gp <- myplot_violin(df = pltObsSmp, ycol_names = feat, xcol_name = glb_rsp_var)
             if (inherits(pltObsSmp[, feat], "factor"))
                 gp <- gp + facet_wrap(reformulate(feat))
             gp <- gp + labs(title = sprintf("Sample %d (of %d): %s", nObsSmp, nObsAll, feat))
@@ -1711,34 +1711,34 @@ if (!is.null(glb_map_vars)) {
 
 ### Forced Assignments
 #stop(here"); savObsAll <- glbObsAll; glbObsAll <- savObsAll
-for (feat in glb_assign_vars) {
-    new_feat <- paste0(feat, ".my")
-    print(sprintf("Forced Assignments for: %s -> %s...", feat, new_feat))
-    glbObsAll[, new_feat] <- glbObsAll[, feat]
-    
-    pairs <- glb_assign_pairs_lst[[feat]]
-    for (pair_ix in 1:length(pairs$from)) {
-        if (is.na(pairs$from[pair_ix]))
-            nobs <- nrow(filter(glbObsAll, 
-                                is.na(eval(parse(text=feat),
-                                            envir=glbObsAll)))) else
-            nobs <- sum(glbObsAll[, feat] == pairs$from[pair_ix])
-        #nobs <- nrow(filter(glbObsAll, is.na(Married.fctr)))    ; print(nobs)
-        
-        if ((is.na(pairs$from[pair_ix])) && (is.na(pairs$to[pair_ix])))
-            stop("what are you trying to do ???")
-        if (is.na(pairs$from[pair_ix]))
-            glbObsAll[is.na(glbObsAll[, feat]), new_feat] <- 
-                pairs$to[pair_ix] else
-            glbObsAll[glbObsAll[, feat] == pairs$from[pair_ix], new_feat] <- 
-                pairs$to[pair_ix]
-                    
-        print(sprintf("    %s -> %s for %s obs", 
-                      pairs$from[pair_ix], pairs$to[pair_ix], format(nobs, big.mark=",")))
-    }
-
-    glbFeatsExclude <- union(glbFeatsExclude, glb_assign_vars)
-}
+# for (feat in glb_assign_vars) {
+#     new_feat <- paste0(feat, ".my")
+#     print(sprintf("Forced Assignments for: %s -> %s...", feat, new_feat))
+#     glbObsAll[, new_feat] <- glbObsAll[, feat]
+#     
+#     pairs <- glb_assign_pairs_lst[[feat]]
+#     for (pair_ix in 1:length(pairs$from)) {
+#         if (is.na(pairs$from[pair_ix]))
+#             nobs <- nrow(filter(glbObsAll, 
+#                                 is.na(eval(parse(text=feat),
+#                                             envir=glbObsAll)))) else
+#             nobs <- sum(glbObsAll[, feat] == pairs$from[pair_ix])
+#         #nobs <- nrow(filter(glbObsAll, is.na(Married.fctr)))    ; print(nobs)
+#         
+#         if ((is.na(pairs$from[pair_ix])) && (is.na(pairs$to[pair_ix])))
+#             stop("what are you trying to do ???")
+#         if (is.na(pairs$from[pair_ix]))
+#             glbObsAll[is.na(glbObsAll[, feat]), new_feat] <- 
+#                 pairs$to[pair_ix] else
+#             glbObsAll[glbObsAll[, feat] == pairs$from[pair_ix], new_feat] <- 
+#                 pairs$to[pair_ix]
+#                     
+#         print(sprintf("    %s -> %s for %s obs", 
+#                       pairs$from[pair_ix], pairs$to[pair_ix], format(nobs, big.mark=",")))
+#     }
+# 
+#     glbFeatsExclude <- union(glbFeatsExclude, glb_assign_vars)
+# }
 
 #stop(here")
 #hex_vctr <- c("\n", "\211", "\235", "\317", "\333")
@@ -3682,7 +3682,7 @@ print(sprintf("partition.data.training chunk: setup: elapsed: %0.2f secs",
 
 if (all(is.na(glbObsNew[, glb_rsp_var]))) {
     set.seed(glbObsTrnPartitionSeed)
-    OOB_size <- nrow(glbObsNew) * 1.1
+    OOB_size <- nrow(glbObsTrn) * 0.2
     
     if (is.null(glbFeatsCategory)) {
         require(caTools)
@@ -3726,6 +3726,8 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         names(newobs_freq_df) <- gsub(".n", ".n.tst", names(newobs_freq_df), 
                                       fixed = TRUE)
         obs_freq_df <- merge(obs_freq_df, newobs_freq_df, all = TRUE)
+        if (sum(is.na(obs_freq_df)) > 0)
+            stop("chunk partition.data.training: NAs in obs_freq_df")
         strata_mtrx <- ceiling(
             matrix(obs_freq_df$.n.tst * 1.0 / sum(obs_freq_df$.n.tst)) %*%
                       matrix(OOB_rspvar_size, nrow = 1))
@@ -3781,6 +3783,78 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         glbObsFit <- glbObsTrn[!glbObsTrn[, glbFeatsId] %in% 
                                         glbObsOOB[, glbFeatsId], ]
     }
+    
+    # Check overlap / correlations
+    
+    lclcastMtx <- function(obsDf) {
+        #  For char columns convert them into as.numeric(factors)
+        #   ignore glbFeatsText for this exercise
+    
+        #   Find features (ignore glbFeatsExclude; 
+        #       assume all column names with period inside them are derived)
+        ftr <- setdiff(names(obsDf), 
+                        c(glbFeatsId, glb_rsp_var_raw, glb_rsp_var, 
+                          grep("\\.", names(obsDf), value = TRUE)))
+        ftrChr <- myfind_chr_cols_df(obsDf[, ftr])
+        ftrNonChr <- setdiff(ftr, ftrChr)
+        if (length(ftrNonChr) == 0) stop("lclCorMtx: this will not work with empty ftrNonChr")
+        retDf <- obsDf[, ftrNonChr, FALSE]
+            ftrChr <- setdiff(ftrChr, glbFeatsText)
+        for (ftr in ftrChr) {
+            retDf[, paste0(ftr, ".nmc")] <- as.numeric(as.factor(obsDf[, ftr]))
+        }
+        
+        return(retDf)    
+    }
+    
+    lclgetMatrixCorrelation <- function(x, y) {
+        startTm <- proc.time()["elapsed"]
+        # print(sprintf("  lclgetMatrixCorrelation: dim(x): %s", toString(dim(x))))
+        # print(sprintf("  lclgetMatrixCorrelation: dim(y): %s", toString(dim(y))))        
+        yCor <- foreach(obsIx = c(1:nrow(y)), .combine = c) %dopar% {
+        #yCor <- foreach(obsIx = c(1:nrow(y)), .combine = c) %do% {
+        # yCor <- c()
+        # for (obsIx in c(1:nrow(y))) {            
+            xyCor <- mean(proxy::simil(x, y[obsIx, ], method = "correlation"), na.rm = TRUE)
+            # print(sprintf("  lclgetMatrixCorrelation: obsIx: %5d; xyCor: %.4f", obsIx, xyCor))
+            # xyCor
+            # yCor <- c(yCor, xyCor)
+        }    
+        print(sprintf("lclgetMatrixCorrelation: duration: %f secs",
+                          proc.time()["elapsed"] - startTm))
+        return(yCor)
+    }
+    # print(lclgetMatrixCorrelation(x = mtxObsFit[1:10, ], y = mtxObsOOB[1:3, ]))
+    
+    mtxObsFit <- lclcastMtx(glbObsFit)
+    mtxObsOOB <- lclcastMtx(glbObsOOB)
+    mtxObsNew <- lclcastMtx(glbObsNew)    
+    
+    # lclgetMatrixCorrelation works faster with O(100) obs in each
+    # tmpObsFit = mtxObsFit[1:400, ]
+    # tmpObsOOB = mtxObsOOB[1:100, ]
+    # startTm = proc.time()["elapsed"]
+    # print(sprintf("cor of Fit vs. OOB: %.4f",
+    #               mean(lclgetMatrixCorrelation(tmpObsFit, tmpObsOOB), na.rm = TRUE)))
+    # print(sprintf("lclgetMatrixCorrelation: duration: %f secs",
+    #                       proc.time()["elapsed"] - startTm))
+    # startTm = proc.time()["elapsed"]    
+    # print(sprintf("cor of Fit vs. OOB: %.4f", mean( 
+    #         colMeans(proxy::simil(tmpObsFit, tmpObsOOB, method = "correlation"), na.rm = TRUE), 
+    #                                                 na.rm = TRUE)))
+    # print(sprintf("proxy::simil: duration: %f secs",
+    #                       proc.time()["elapsed"] - startTm))
+    
+    # print(sprintf("cor of Fit vs. OOB: %.4f", mean( 
+    #         colMeans(proxy::simil(mtxObsFit, mtxObsOOB, method = "correlation"), na.rm = TRUE), 
+    #                                                 na.rm = TRUE)))
+    OOBFitCor <- lclgetMatrixCorrelation(mtxObsFit, mtxObsOOB)
+    print(sprintf("cor of Fit vs. OOB: %.4f", mean(OOBFitCor, na.rm = TRUE)))
+    OOBNewCor <- lclgetMatrixCorrelation(mtxObsNew, mtxObsOOB)
+    print(sprintf("cor of New vs. OOB: %.4f", mean(OOBNewCor, na.rm = TRUE)))
+    NewFitCor <- lclgetMatrixCorrelation(mtxObsFit, mtxObsNew)
+    print(sprintf("cor of Fit vs. New: %.4f", mean(NewFitCor, na.rm = TRUE)))
+    
 } else {
     print(sprintf("Newdata contains non-NA data for %s; setting OOB to Newdata", 
                   glb_rsp_var))
@@ -3793,6 +3867,8 @@ print(sprintf("partition.data.training chunk: Fit/OOB partition complete: elapse
 if (!is.null(glb_max_fitobs) && (nrow(glbObsFit) > glb_max_fitobs)) {
     warning("glbObsFit restricted to glb_max_fitobs: ", 
             format(glb_max_fitobs, big.mark = ","))
+    
+    require(caTools)
     org_fitobs_df <- glbObsFit
     glbObsFit <- 
         org_fitobs_df[split <- sample.split(org_fitobs_df[, glb_rsp_var_raw], 
@@ -3929,8 +4005,7 @@ pltTrnObs <- glbObsTrn[, c(union(".rnorm",
                         not_nrml_feats_df$id[1:min(5, nrow(not_nrml_feats_df))]),
                             glb_cluster_entropy_var), FALSE]
 if (is.null(glb_cluster_entropy_var))
-    gp <- myplot_violin(pltTrnObs, 
-                    setdiff(names(pltTrnObs), glb_cluster_entropy_var)) else
+    gp <- myplot_violin(df = pltTrnObs, ycol_names = names(pltTrnObs)) else
     gp <- myplot_violin(pltTrnObs, 
                     setdiff(names(pltTrnObs), glb_cluster_entropy_var), 
                     xcol_name = glb_cluster_entropy_var)
@@ -5535,6 +5610,9 @@ for (obsSet in c("trn", "new")) {
     obs_df <- glb_get_predictions(obs_df, mdl_id = glbMdlFinId, 
                                     rsp_var = glb_rsp_var, 
                                     prob_threshold_def = prob_threshold_def)
+    obs_df <- glb_get_predictions(obs_df, mdl_id = glbMdlSelId, 
+                                    rsp_var = glb_rsp_var, 
+                                    prob_threshold_def = prob_threshold_def)
     if (obsSet == "all") glbObsAll <- obs_df else
     if (obsSet == "trn") glbObsTrn <- obs_df else
     if (obsSet == "new") glbObsNew <- obs_df
@@ -5550,12 +5628,21 @@ if (is.null(glb_out_obs)) obs_df <- glbObsNew else
                      all = glbObsAll, trn = glbObsTrn, new = glbObsNew)
 
 require(stringr)
-obsout_df <- obs_df[, glbFeatsId, FALSE]
+obsOutFinDf <- obs_df[, glbFeatsId, FALSE]
 for (clmn in names(glbObsOut$vars))
     if (!grepl("^%<d-%", glbObsOut$vars[[clmn]]))
-        obsout_df[, clmn] <- obs_df[, glbObsOut$vars[[clmn]]] else {
+        obsOutFinDf[, clmn] <- obs_df[, glbObsOut$vars[[clmn]]] else {
             feat <- str_trim(unlist(strsplit(glbObsOut$vars[[clmn]], "%<d-%"))[2])
-            obsout_df[, clmn] <- eval(parse(text = feat))
+            obsOutFinDf[, clmn] <- eval(parse(text = feat))
+    }        
+
+obsOutSelDf <- obs_df[, glbFeatsId, FALSE]
+for (clmn in names(glbObsOut$vars))
+    if (!grepl("^%<d-%", glbObsOut$vars[[clmn]]))
+        obsOutSelDf[, clmn] <- obs_df[, glbObsOut$vars[[clmn]]] else {
+            feat <- str_trim(unlist(strsplit(glbObsOut$vars[[clmn]], "%<d-%"))[2])
+            feat <- gsub("glbMdlFinId", "glbMdlSelId", feat)
+            obsOutSelDf[, clmn] <- eval(parse(text = feat))
     }        
 
 if (glb_is_classification) {
@@ -5567,7 +5654,7 @@ if (glb_is_classification) {
         tmp_newobs_df <- 
             merge(tmp_newobs_df, dupgrps_df, by = ".grpid", all.x = TRUE)
         tmp_newobs_df <- 
-            merge(tmp_newobs_df, obsout_df, by = glbFeatsId, all.x = TRUE)
+            merge(tmp_newobs_df, obsOutFinDf, by = glbFeatsId, all.x = TRUE)
         tmp_newobs_df$.err <- 
             ((tmp_newobs_df$Probability1 > 0.5) & (tmp_newobs_df$sold.0 > 0) |
              (tmp_newobs_df$Probability1 < 0.5) & (tmp_newobs_df$sold.1 > 0))
@@ -5626,7 +5713,7 @@ if (glb_is_classification) {
                            !nzv & 
                             (exclude.as.feat != 1) & 
                             !grepl(".fctr", id, fixed=TRUE))[, "id", FALSE]
-    ranges_all_df <- glbObsAll[, tmp_feats_df$id] %>% 
+    ranges_all_df <- glbObsAll[, tmp_feats_df$id, FALSE] %>% 
                         dplyr::summarise_each(funs(min(., na.rm=TRUE), 
                                                    max(., na.rm=TRUE))) %>%
                         tidyr::gather() %>%
@@ -5737,34 +5824,47 @@ if (glb_is_classification) {
     }
 }
 
-#stop(here"); glb2Sav(); sav_obsout_df <- obsout_df; all.equal(sav_obsout_df, obsout_df); obsout_df <- sav_obsout_df
+#stop(here"); glb2Sav(); sav_obsOutFinDf <- obsOutFinDf; all.equal(sav_obsOutFinDf, obsOutFinDf); obsOutFinDf <- sav_obsOutFinDf
 
 # This does not work for classification since AUC distribution might be different for different models
 #   -> Run glm on .prob from this glbMdlFinId & .prob from stacked file & stack condition as a feature
 if (!is.null(glbOutStackFnames)) {
     for (fname in glbOutStackFnames) {
-        print(sprintf("Stacking file %s to prediction output...", fname))
-        #obsout_df <- dplyr::arrange_(rbind(obsout_df, read.csv(fname)), "UniqueID")
-        obsout_df <- dplyr::arrange_(rbind(obsout_df, 
-                #read.csv(fname) %>% filter(!(UniqueID %in% obsout_df$UniqueID))),
-            #read.csv(fname) %>% filter(!(UniqueID %in% obsout_df[, glbFeatsId]))),
+        print(sprintf("Stacking file %s to prediction outputs...", fname))
+        #obsOutFinDf <- dplyr::arrange_(rbind(obsOutFinDf, read.csv(fname)), "UniqueID")
+        obsOutFinDf <- dplyr::arrange_(rbind(obsOutFinDf, 
+                #read.csv(fname) %>% filter(!(UniqueID %in% obsOutFinDf$UniqueID))),
+            #read.csv(fname) %>% filter(!(UniqueID %in% obsOutFinDf[, glbFeatsId]))),
             read.csv(fname) %>% 
-                dplyr::filter_(interp(~!(var %in% obsout_df$var), 
+                dplyr::filter_(interp(~!(var %in% obsOutFinDf$var), 
                                       var = as.name(glbFeatsId)))),
                                     glbFeatsId)
         
-        if (nrow(obsout_df) != length(unique(obsout_df[, glbFeatsId])))
+        if (nrow(obsOutFinDf) != length(unique(obsOutFinDf[, glbFeatsId])))
+            stop("Potential dups in stacked prediction output")
+        
+        obsOutSelDf <- dplyr::arrange_(rbind(obsOutSelDf, 
+                read.csv(fname) %>% 
+                dplyr::filter_(interp(~!(var %in% obsOutSelDf$var), 
+                                      var = as.name(glbFeatsId)))),
+                                    glbFeatsId)
+        
+        if (nrow(obsOutSelDf) != length(unique(obsOutSelDf[, glbFeatsId])))
             stop("Potential dups in stacked prediction output")
     }
 }
 
 #stop(here"); 
-savobsout_df <- obsout_df; all.equal(savobsout_df, obsout_df)
-if (!is.null(glbObsOut$mapFn)) obsout_df <- glbObsOut$mapFn(obsout_df)
-#print(head(obsout_df))
+# savobsOutFinDf <- obsOutFinDf; all.equal(savobsOutFinDf, obsOutFinDf)
+if (!is.null(glbObsOut$mapFn)) {
+    obsOutFinDf <- glbObsOut$mapFn(obsOutFinDf)
+    obsOutSelDf <- glbObsOut$mapFn(obsOutSelDf)    
+}    
+#print(head(obsOutFinDf))
 
-out_fname <- paste0(glbOut$pfx, "out.csv")
-write.csv(obsout_df, out_fname, quote = FALSE, row.names = FALSE)
+# out_fname <- paste0(glbOut$pfx, "out.csv")
+write.csv(obsOutFinDf, paste0(glbOut$pfx, "out_fin.csv"), quote = FALSE, row.names = FALSE)
+write.csv(obsOutSelDf, paste0(glbOut$pfx, "out_sel.csv"), quote = FALSE, row.names = FALSE)
 #cat(" ", "\n", file=submit_fn, append=TRUE)
 
 # print(orderBy(~ -max.auc.OOB, glb_models_df[, c("id", 

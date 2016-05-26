@@ -875,7 +875,7 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
     }
 
     if (length(ycol_names) == 1) {
-        if (missing(xcol_name)) {
+        if (is.null(xcol_name)) {
             medians_df <- summaryBy(as.formula(paste0(ycol_names, " ~ factor(0)")), df,
                                     FUN=c(median), na.rm=TRUE)
             p <- ggplot(df, aes_string(x=factor(0), y=ycol_names))
@@ -888,11 +888,12 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
             p <- ggplot(df, aes_string(x=xcol_name, y=ycol_names))
             if (all(is.numeric(df[, ycol_names])))
                 p <- p + scale_y_continuous(labels = myformat_number)
-
-            shapiro <- data.frame()
-            if (is.numeric(df[, ycol_names]) &&
-                (length(unique(df[, ycol_names])) > 1)) {
-                if (nrow(df) > 5000) {
+        }
+        shapiro <- data.frame()
+        if (is.numeric(df[, ycol_names]) &&
+            (length(unique(df[, ycol_names])) > 1)) {
+            if (nrow(df) > 5000) {
+                if (!is.null(xcol_name)) {
                     # Ideally we should sample 5K of each df[, xcol_name]
                     smpDf <- data.frame()
                     for (x in unique(df[, xcol_name])) {
@@ -904,19 +905,32 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
                         }
                         smpDf <- rbind(smpDf, smpThsDf)
                     }
-                }
-                else smpDf <- df
+                } else smpDf <- df[sample.int(nrow(df), size = 5000, replace = FALSE), , FALSE]
+            }
+            else smpDf <- df
+            if (!is.null(xcol_name)) {
                 shapiro <-
-                    as.data.frame(tapply(smpDf[, ycol_names], smpDf[, xcol_name], shapiro.test))
+                    as.data.frame(tapply(smpDf[, ycol_names], smpDf[, xcol_name],
+                                         shapiro.test))
                 names(shapiro)[1] <- "shapiro.test"
                 shapiro[, xcol_name] <- row.names(shapiro)
                 shapiro[, paste0(ycol_names, ".shapiro.pval")] <-
                     sapply(shapiro$shapiro.test,
                            function(res) as.numeric(unlist(str_split(res, ","))[2]))
                 shapiro <- shapiro[, c(xcol_name, paste0(ycol_names, ".shapiro.pval"))]
-                shapiro[, paste0(ycol_names, ".shapiro.lbl")] <- paste("shapiro.pval:\n",
-                            formatC(shapiro[, paste0(ycol_names, ".shapiro.pval")], format = "e"))
+                shapiro[, paste0(ycol_names, ".shapiro.lbl")] <-
+                    paste("shapiro.pval:\n",
+                          formatC(shapiro[, paste0(ycol_names, ".shapiro.pval")], format = "e"))
                 #sprintf("%0.4e", shapiro[1, paste0(ycol_names, ".shapiro.pval")])
+            } else {
+                shapiro <- shapiro.test(smpDf[, ycol_names])
+                shapiro <- data.frame(list(shapiro.test = shapiro$statistic,
+                                           shapiro.pval = shapiro$p.value))
+                names(shapiro) <- gsub("shapiro.pval", paste0(ycol_names, ".shapiro.pval"),
+                                       names(shapiro), fixed = TRUE)
+                shapiro[, paste0(ycol_names, ".shapiro.lbl")] <-
+                    paste("shapiro.pval:\n",
+                          formatC(shapiro[, paste0(ycol_names, ".shapiro.pval")], format = "e"))
             }
         }
     } else {
@@ -937,12 +951,10 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         stop("facets not supported yet")
         require(doBy)
         sum_df <- summaryBy(steps ~ . , df, FUN=c(median))
-    } else {
     }
 
     p <- p + geom_violin(fill="grey80", color="blue") +
              stat_summary(fun.y=mean, pch=22, geom='point', color='red')
-
 
     if (length(ycol_names) == 1) {
         aes_str <- paste0("y=", ycol_names, ".median * 1.05",
@@ -951,10 +963,17 @@ myplot_violin <- function(df, ycol_names, xcol_name=NULL, facet_spec=NULL) {
         p <- p + geom_text(data = medians_df, mapping = aes_mapping, color = "NavyBlue", size = 3.5)
 
         if (nrow(shapiro) > 0) {
-            p <- p + geom_text(data = shapiro,
+            if (!is.null(xcol_name)) p <-
+                p +
+                geom_text(data = shapiro,
                             aes_string(x = xcol_name, label = paste0(ycol_names, ".shapiro.lbl")),
                                y = max(df[, ycol_names], na.rm = TRUE) * 1.05,
-                               color = "NavyBlue", size = 3.5, inherit.aes = FALSE)
+                               color = "NavyBlue", size = 3.5, inherit.aes = FALSE) else p <-
+                p +
+                geom_text(data = shapiro,
+                            aes_string(x = 1        , label = paste0(ycol_names, ".shapiro.lbl")),
+                                y = max(df[, ycol_names], na.rm = TRUE) * 1.05,
+                                color = "NavyBlue", size = 3.5, inherit.aes = FALSE)
             p <- p + ylim(NA, max(df[, ycol_names], na.rm = TRUE) * 1.10)
         }
     } else {
