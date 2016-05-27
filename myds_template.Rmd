@@ -325,6 +325,21 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #                                         ifelse(elm < 10, "1-9", 
 #                                         ifelse(elm < 20, "10-19", "20+")));
 #         return(relevel(as.factor(ret_vals), ref = "NA"))
+#     }
+#     mapfn = function(YOB) {
+#         raw <- 2016 - YOB 
+#         # raw[!is.na(raw) & raw >= 2010] <- NA
+#         raw[!is.na(raw) & (raw <= 15)] <- NA
+#         raw[!is.na(raw) & (raw >= 90)] <- NA        
+#         retVal <- rep_len("NA", length(raw))
+#         # breaks = c(1879, seq(1949, 1989, 10), 2049)
+#         # cutVal <- cut(raw[!is.na(raw)], breaks = breaks, 
+#         #               labels = as.character(breaks + 1)[1:(length(breaks) - 1)])
+#         cutVal <- cut(raw[!is.na(raw)], breaks = c(15, 20, 25, 30, 35, 40, 50, 65, 90))
+#         retVal[!is.na(raw)] <- levels(cutVal)[cutVal]
+#         return(factor(retVal, levels = c("NA"
+#                 ,"(15,20]","(20,25]","(25,30]","(30,35]","(35,40]","(40,50]","(50,65]","(65,90]"),
+#                         ordered = TRUE))
 #     }       
 #     , args = c("District"))    
 
@@ -3691,18 +3706,18 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         glbObsOOB <- glbObsTrn[split ,]            
         glbObsFit <- glbObsTrn[!split, ] 
     } else {
-        sample_vars <- c(glbFeatsCategory, glb_rsp_var_raw)
+        sample_vars <- c(glbFeatsCategory, glb_rsp_var)
         tmpObsTrn <- glbObsTrn[, sample_vars, FALSE]
         tmpObsNew <- glbObsNew[, sample_vars, FALSE]        
-        if (!all(is.na(tmpObsNew[, glb_rsp_var_raw])))
-            stop("Not implemeted yet...")
-        if (length(unqValsRspVar <- unique(tmpObsTrn[ ,glb_rsp_var_raw])) > 10) {
+        if (!all(is.na(tmpObsNew[, glb_rsp_var])))
+            stop("Not implemented yet...")
+        if (length(unqValsRspVar <- unique(tmpObsTrn[ ,glb_rsp_var])) > 10) {
             if (!is.numeric(unqValsRspVar))
                 stop("Not implemented yet...")
-            rspGrpVar <- paste0(glb_rsp_var_raw, ".cut.fctr")
-            tmpObsTrn[, rspGrpVar] <- cut(tmpObsTrn[, glb_rsp_var_raw], 
-                                          breaks = as.numeric(summary(tmpObsTrn[, glb_rsp_var_raw])))
-        } else rspGrpVar <- glb_rsp_var_raw
+            rspGrpVar <- paste0(glb_rsp_var, ".cut.fctr")
+            tmpObsTrn[, rspGrpVar] <- cut(tmpObsTrn[, glb_rsp_var], 
+                                          breaks = as.numeric(summary(tmpObsTrn[, glb_rsp_var])))
+        } else rspGrpVar <- glb_rsp_var
         
         rspvar_freq_df <- orderBy(reformulate(rspGrpVar), 
                                  mycreate_sqlxtab_df(tmpObsTrn, rspGrpVar))
@@ -3766,19 +3781,34 @@ if (all(is.na(glbObsNew[, glb_rsp_var]))) {
         print(sprintf("partition.data.training chunk: obs_freq_df complete: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - startTm))
         
-        OOB_strata_size <- as.vector(as.matrix(obs_freq_df[, 
-                                    grepl("^\\.strata\\.", names(obs_freq_df))]))
+        # OOB_strata_size <- as.vector(as.matrix(obs_freq_df[, 
+        #                             grepl("^\\.strata\\.", names(obs_freq_df))]))
         tmp_trnobs_df <- glbObsTrn
         if (rspGrpVar != glb_rsp_var_raw) 
             tmp_trnobs_df[, rspGrpVar] = tmpObsTrn[, rspGrpVar]
         tmp_trnobs_df <- orderBy(reformulate(c(rspGrpVar, glbFeatsCategory)), tmp_trnobs_df)
+        
+        # To get the right sort order
+        OOBGrd <- expand.grid(glbFeatsCategory = sort(unique(tmp_trnobs_df[, glbFeatsCategory])), 
+                              rspGrpVar = sort(unique(tmp_trnobs_df[, rspGrpVar])))
+        names(OOBGrd) <- c(glbFeatsCategory, rspGrpVar)
+        OOBGrd[, ".strata"] <- 0
+        for (ctg in sort(unique(tmp_trnobs_df[, glbFeatsCategory])))
+            for (rspGrp in sort(unique(tmp_trnobs_df[, rspGrpVar])))
+                OOBGrd[(OOBGrd[, glbFeatsCategory] == ctg   ) &
+                       (OOBGrd[, rspGrpVar       ] == rspGrp) , 
+                       ".strata"] <- obs_freq_df[obs_freq_df[, glbFeatsCategory] == ctg, 
+                                                 paste0(".strata.", rspGrp)]
+
         require(sampling)
         set.seed(glbObsTrnPartitionSeed)
         split_strata <- sampling::strata(tmp_trnobs_df, 
                                stratanames = c(rspGrpVar, glbFeatsCategory),
-                               size = OOB_strata_size[!is.na(OOB_strata_size)],
-                               #size = c(40, 81, 65, 54),                               
+                               size = OOBGrd[, ".strata"],
+                               #size = OOB_strata_size[!is.na(OOB_strata_size)],
+                               #size = c(223, 355,  13, 198, 315,  12),
                                method = "srswor")
+        # print(table(split_strata$Stratum))
         glbObsOOB <- getdata(tmp_trnobs_df, split_strata)[, names(glbObsTrn)]
         glbObsFit <- glbObsTrn[!glbObsTrn[, glbFeatsId] %in% 
                                         glbObsOOB[, glbFeatsId], ]

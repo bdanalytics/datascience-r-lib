@@ -2059,7 +2059,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		                                 rsp_var, rsp_var_out))
 		#print(thresholds_df)
 		# Avoid picking 0.0 as threshold
-		prob_threshold <- orderBy(~ -f.score -threshold, thresholds_df)[1, "threshold"]
+		prob_threshold <- orderBy(~ -f.score +threshold, thresholds_df)[1, "threshold"]
 # 		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
 # 					  prob_threshold, label))
 		# print(myplot_line(thresholds_df, "threshold", "f.score"))
@@ -2426,7 +2426,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	#print(mdl$bestTune)
 	if ((nrow(mdl$results) > 1) & (mdl$bestTune[1, 1] != "none")) {
 		# print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted"))
-	    print(ggplot(mdl, highBestTune = TRUE))
+	    print(ggplot(mdl, highlight = TRUE))
 		for (param in (params_vctr <- as.character(mdl_specs_lst[["tune.params.df"]][, "parameter"]))) {
 			if ((mdl$bestTune[1, param] == min(mdl$results[, param])) |
 				(mdl$bestTune[1, param] == max(mdl$results[, param])))
@@ -2449,10 +2449,10 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
         if (!is.null(obs_df))
     		models_df <- merge(models_df,
     		    mypredict_mdl(mdl, df = obs_df, rsp_var, label = obs,
-                            mdl_specs_lst[["trainControl.summaryFunction"]],
-                            mdl_specs_lst[["train.metric"]],
-                            mdl_specs_lst[["train.maximize"]],
-                            ret_type = "stats"),
+    		                  model_summaryFunction = mdl_specs_lst[["trainControl.summaryFunction"]],
+    		                  model_metric = mdl_specs_lst[["train.metric"]],
+    		                  model_metric_maximize = mdl_specs_lst[["train.maximize"]],
+                              ret_type = "stats"),
     		                   all.x = TRUE)
     }
 
