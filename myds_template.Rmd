@@ -295,10 +295,10 @@ glbFeatsDerive <- list();
     # numeric
 # Create feature based on record position/id in data   
 glbFeatsDerive[[".pos"]] <- list(
-    mapfn = function(.rnorm) { return(1:length(.rnorm)) }       
+    mapfn = function(raw1) { return(1:length(raw1)) }       
     , args = c(".rnorm"))    
 glbFeatsDerive[[".pos.y"]] <- list(
-    mapfn = function(.rnorm) { return(1:length(.rnorm)) }       
+    mapfn = function(raw1) { return(1:length(raw1)) }       
     , args = c(".rnorm"))    
 
 # Add logs of numerics that are not distributed normally
@@ -326,8 +326,7 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #                                         ifelse(elm < 20, "10-19", "20+")));
 #         return(relevel(as.factor(ret_vals), ref = "NA"))
 #     }
-#     mapfn = function(YOB) {
-#         raw <- 2016 - YOB 
+#     mapfn = function(raw1) { raw <- 2016 - raw1; 
 #         # raw[!is.na(raw) & raw >= 2010] <- NA
 #         raw[!is.na(raw) & (raw <= 15)] <- NA
 #         raw[!is.na(raw) & (raw >= 90)] <- NA        
@@ -353,6 +352,30 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #         return(retVal)
 #     }
 #     , args = c("FertilityRate", "Region"))
+
+# for (qsn in grep("Q12", glbFeatsExclude, fixed = TRUE, value = TRUE))    
+#     glbFeatsDerive[[paste0(qsn, ".fctr")]] <- list(
+#         mapfn = function(raw1) {
+#             raw1[raw1 %in% ""] <- "NA"
+#             rawVal <- unique(raw1)
+#             
+#             if (length(setdiff(rawVal, (expVal <- c("NA", "No", "Ys")))) == 0) {
+#                 raw1 <- gsub("Yes", "Ys", raw1, fixed = TRUE)
+#                 if (length(setdiff(rawVal, expVal)) > 0)
+#                     stop(qsn, " vals: ", paste0(rawVal, collapse = "|"), 
+#                          " does not match expectation: ", paste0(expVal, collapse = "|"))
+#             } else
+#             if (length(setdiff(rawVal, (expVal <- c("NA", "Private", "Public")))) == 0) {
+#                 raw1 <- gsub("Private", "Pt", raw1, fixed = TRUE)
+#                 raw1 <- gsub("Public" , "Pc", raw1, fixed = TRUE)                
+#                 if (length(setdiff(rawVal, expVal)) > 0)
+#                     stop(qsn, " vals: ", paste0(rawVal, collapse = "|"), 
+#                          " does not match expectation: ", paste0(expVal, collapse = "|"))
+#             }
+#             
+#             return(relevel(as.factor(raw1), ref = "NA"))
+#         }
+#         , args = c(qsn))
     
 #     mapfn = function(HOSPI.COST) { return(cut(HOSPI.COST, 5, breaks = c(0, 100000, 200000, 300000, 900000), labels = NULL)) }     
 #     mapfn = function(Rasmussen)  { return(ifelse(sign(Rasmussen) >= 0, 1, 0)) } 
@@ -1254,6 +1277,7 @@ for (new_feat in names(glbFeatsDerive)) {
     args_lst <- NULL 
     for (arg in glbFeatsDerive[[new_feat]]$args) 
         args_lst[[arg]] <- glbObsAll[, arg]
+    names(args_lst) <- paste("raw", seq(1:length(names(args_lst))), sep = "")
     glbObsAll[, new_feat] <- do.call(glbFeatsDerive[[new_feat]]$mapfn, args_lst)
     rm(args_lst)
 }
@@ -5751,6 +5775,10 @@ if (glb_is_classification) {
                                       stat=str_sub(key, -3)) %>% 
                         dplyr::select(-key) %>%
                         tidyr::spread(stat, value)
+    if (nrow(tmp_feats_df) == 1) {
+        # For some reason dplyr::summarise_each does not prefix result with id
+        ranges_all_df$id <- tmp_feats_df$id
+    }
     
 #     sav_ranges_trn_df <- ranges_trn_df; all.equal(sav_ranges_trn_df, ranges_trn_df)
 #     sav_ranges_new_df <- ranges_new_df; all.equal(sav_ranges_new_df, ranges_new_df)    
@@ -5771,6 +5799,12 @@ if (glb_is_classification) {
             unite_("stat.class", c("stat.vname", tmpClass), sep=".") %>% 
             dplyr::select(-key) %>%
             spread(stat.class, value)
+        
+        if (length(feats) == 1) {
+        # For some reason dplyr::summarise_each does not prefix result with id
+            ranges_df$id <- feats
+        }
+
         return(ranges_df)
     }
     rsp_var_out_OOB <- mygetPredictIds(glb_rsp_var, glbMdlSelId)$value
