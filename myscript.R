@@ -49,14 +49,74 @@ mydsp_chunk <- function(chunks_df) {
 
 mysavChunk <- function(envFilePfx, chunkLbl) {
     savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
-    savFile <- paste0(envFilePfx, chunkLbl, ".RData")
+    savFile <- paste0("data/", envFilePfx, chunkLbl, ".RData")
     print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
     save(list = savObjects, file = savFile)
 }
 
-myevlChunk <- function(chunkSpecsLst, envFilePfx) {
+myloadChunk <- function(envFilePfx, chunkLbl, keep = NULL) {
+    savFile <- paste0("data/", envFilePfx, chunkLbl, ".RData")
+    print(sprintf("myloadChunk: Loading file:%s", savFile))
+    tmpEnv <- new.env()
+    load(file = savFile, envir = tmpEnv, verbose = FALSE)
+    # print("myloadChunk: tmpEnv symbols:"); print(ls(tmpEnv))
+    for (syl in intersect(ls(tmpEnv), ls(.GlobalEnv))) {
+        # if (syl %in% c("glb_txt_terms_control")) {
+        #     tmpSyl <- get(syl, envir = tmpEnv    )
+        #     savSyl <- get(syl, envir = .GlobalEnv)
+        #     print(sprintf("myloadChunk: %s values: ", syl))
+        #     # print(sprintf("myloadChunk:   tmpEnv: ")); print(tmpSyl)
+        #     # print(sprintf("myloadChunk:   glbEnv: ")); print(savSyl)
+        #     for (elm in names(tmpSyl)) {
+        #         if (!mycheckIdentical(tmpSyl[[elm]], savSyl[[elm]])) {
+        #             print(sprintf("myloadChunk: %s; difference found in %s: ", syl, elm))
+        #             print(sprintf("myloadChunk:   tmpEnv: ")); print(tmpSyl[[elm]])
+        #             print(sprintf("myloadChunk:   glbEnv: ")); print(savSyl[[elm]])
+        #         }
+        #     }
+        # }
+
+        if (syl %in% c("glb_analytics_avl_objs", "glb_chunks_df", "glbOut")) # ignore diffs
+            next
+
+        if (!mycheckIdentical(get(syl, envir = tmpEnv),
+                              get(syl, envir = .GlobalEnv))) {
+            print(sprintf("myloadChunk: %s different: ", syl))
+            print(sprintf("myloadChunk:   curEnv: "))
+            print(get(syl, envir = .GlobalEnv))
+            if (is.null(keep) || !(syl %in% keep)) {
+                print(sprintf("myloadChunk:   dskEnv: kept"))
+                print(get(syl, envir = tmpEnv    ))
+                assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
+            } else {
+                print(sprintf("myloadChunk:   dskEnv: discarded"))
+                print(get(syl, envir = tmpEnv    ))
+            }
+        }
+    }
+
+    for (syl in (lodSyl <- setdiff(ls(tmpEnv), ls(.GlobalEnv)))) {
+        print(sprintf("myloadChunk:   loading from dskEnv: %s", syl))
+        assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
+    }
+}
+
+myevlChunk <- function(chunkSpecsLst, envFilePfx, ...) {
     if (!is.null(chunkSpecsLst$first)) {
-        stop("myevlChunk: not implemented yet")
+        # stop("myevlChunk: not implemented yet")
+        fstChunkIx <- match(chunkSpecsLst$first, chunkSpecsLst$labels, nomatch = -1)
+        thsChunkLabel <- knitr::opts_current$get(name = 'label')
+        thsChunkIx <- match(thsChunkLabel, chunkSpecsLst$labels, nomatch = -1)
+        if ((thsChunkIx == -1) || (fstChunkIx == -1))
+            stop("Unrecognized chunk label(s): ", thsChunkLabel, " or: ", chunkSpecsLst$last)
+        if (thsChunkIx < fstChunkIx)
+            return(FALSE)
+        if (thsChunkIx == fstChunkIx) {
+            myloadChunk(envFilePfx, chunkSpecsLst$labels[fstChunkIx - 1], ...)
+            return(TRUE)
+        }
+        if (thsChunkIx > fstChunkIx)
+            return(TRUE)
     }
     if (!is.null(chunkSpecsLst$last)) {
         lstChunkIx <- match(chunkSpecsLst$last, chunkSpecsLst$labels, nomatch = -1)
@@ -67,8 +127,9 @@ myevlChunk <- function(chunkSpecsLst, envFilePfx) {
         if (thsChunkIx <= lstChunkIx)
             return(TRUE)
         if (thsChunkIx == lstChunkIx + 1) {
+            # mysavChunk(envFilePfx, chunkSpecsLst$last)
             savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
-            savFile <- paste0(envFilePfx, chunkSpecsLst$last, ".RData")
+            savFile <- paste0("data/", envFilePfx, chunkSpecsLst$last, ".RData")
             print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
             save(list = savObjects, file = savFile)
             return(FALSE)

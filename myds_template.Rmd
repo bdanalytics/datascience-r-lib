@@ -552,7 +552,7 @@ if (length(glbFeatsText) > 0) {
 # cor(glb_post_stop_words_terms_mtrx_lst[[txtFeat]][glbObsAll$.lcn == "Fit", term_row_df$pos], glbObsTrn[, glb_rsp_var], use="pairwise.complete.obs")
 
 # To identify which stopped words are "close" to a txt term
-#sort(cluster_vars)
+#sort(glbFeatsCluster)
 
 # Text Processing Step: stemDocument
 # To identify stemmed txt terms
@@ -1110,7 +1110,7 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
-#mysavChunk(glbOut$pfx, glbChunks[["last"]])
+#mysavChunk(glbOut$pfx, glbChunks[["last"]]) # called from myevlChunk
 
 # Inspect max OOB FP
 #chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
@@ -1153,7 +1153,8 @@ glb_analytics_pn <- petrinet(name = "glb_analytics_pn",
 print(ggplot.petrinet(glb_analytics_pn) + coord_flip())
 glb_analytics_avl_objs <- NULL
 
-glb_chunks_df <- myadd_chunk(NULL, "import.data")
+glb_chunks_df <- myadd_chunk(NULL, 
+                             ifelse(is.null(glbChunks$first), "import.data", glbChunks$first))
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
@@ -3447,6 +3448,11 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
+# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keep = c("glbFeatsCategory","glb_dsp_cols"))}
+# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keep = c("glb_cluster"))}
+#myloadChunk(glbOut$pfx, glbChunks$labels[match("cluster.data", glbChunks$labels, nomatch = -1) - 1], keep = c("glb_cluster"))
+#keep = c("glbFeatsCategory","glb_dsp_cols")) # if glbFeatsCategory needs to be changed
+
 mycompute_entropy_df <- function(obs_df, entropy_var, by_var=NULL) {   
     require(lazyeval)
     require(dplyr)

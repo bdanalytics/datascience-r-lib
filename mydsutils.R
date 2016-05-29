@@ -284,7 +284,19 @@ myaggregate_numorlgcl <- function (df, by_names, func) {
 #                                                   select=-c(interval)),
 #                                            "date", sum)
 
-# same as all.equal() or identical() ?
+mycheckIdentical <- function(obj1, obj2) {
+    if (inherits(obj1, "function") && inherits(obj2, "function")) return(TRUE) else
+    if (inherits(obj1, "list"    ) && inherits(obj2, "list"    )) {
+        if (!identical(names(obj1), names(obj2))) return(FALSE) else {
+            for (elm in names(obj1))
+                if (!mycheckIdentical(obj1[[elm]], obj2[[elm]])) return(FALSE)
+            # All elems are identical
+            return(TRUE)
+        }
+    } else return(identical(obj1, obj2))
+}
+
+# same as all.equal() or identical() ? customized for data frames ?
 mycheck_identity <- function(obj1, obj2) {
 
 	if (class(obj1) == "data.frame") {
@@ -1728,12 +1740,16 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 	mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)
 	#print(mrg_obs_xtab_df)
 
+	# mrg_obs_xtab_df structure:
+	#   Actual Level 1, TN, FP
+	#   Actual Level 2, FN, TP
 	# This F-score formula ignores NAs in prediction.
 	#	FN should be FN + knt(actual == +ve, predicted == NA) ???
 	#	knt(actual == -ve, predicted == NA) may be ignored because that adds to TN which is
 	#		not used in f.score ???
 	#obs_f_score <- 2 * precision * recall / (precision + recall)
 	#obs_f_score <- (2 * TP) / ((2 * TP) + FP + FN)
+	stopifnot(sum(is.na(mrg_obs_xtab_df)) == 0)
 	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) /
 					((2 * mrg_obs_xtab_df[2,3]) +
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
@@ -2052,7 +2068,9 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 			     text.adj = c(-0.2,1.7))
 		}
 
-		thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.1))
+		# thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.01))
+		thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.05))
+		# thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.1))
 		thresholds_df$f.score <- sapply(1:nrow(thresholds_df), function(row_ix)
 		    mycompute_classifier_f.score(mdl, obs_df = df,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
