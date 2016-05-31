@@ -676,10 +676,10 @@ glbFctrMaxUniqVals <- 20 # default: 20
 glb_impute_na_data <- FALSE # or TRUE
 glb_mice_complete.seed <- 144 # or any integer
 
-glb_cluster <- FALSE # : default or TRUE
+glbFeatsCluster <- NULL # NULL: default or  c("<feat1>", "<feat2>")
 glb_cluster.seed <- 189 # or any integer
-glb_cluster_entropy_var <- NULL # c(glb_rsp_var, as.factor(cut(glb_rsp_var, 3)), default: NULL)
-glbFeatsTextClusterVarsExclude <- FALSE # default FALSE
+glbClusterEntropyVar <- NULL # c(glb_rsp_var, as.factor(cut(glb_rsp_var, 3)), default: NULL)
+glbFeatsClusterVarsExclude <- FALSE # default FALSE
 
 glb_interaction_only_feats <- NULL # : default or c(<parent_feat> = "<child_feat>")
 
@@ -1110,6 +1110,7 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
+glbChunks[["inpFilePathName"]] <- NULL # NULL: default or "data/Votes_Q_01_cnk_manage.missing.data.RData"
 #mysavChunk(glbOut$pfx, glbChunks[["last"]]) # called from myevlChunk
 
 # Inspect max OOB FP
@@ -3449,9 +3450,9 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
 # ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keep = c("glbFeatsCategory","glb_dsp_cols"))}
-# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keep = c("glb_cluster"))}
-#myloadChunk(glbOut$pfx, glbChunks$labels[match("cluster.data", glbChunks$labels, nomatch = -1) - 1], keep = c("glb_cluster"))
-#keep = c("glbFeatsCategory","glb_dsp_cols")) # if glbFeatsCategory needs to be changed
+# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c("glbFeatsCluster", "glbFeatsClusterVarsExclude"), dropSpec = c("glb_cluster", "glb_cluster_entropy_var", "glbFeatsTextClusterVarsExclude"))}
+#myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbFeatsCluster", "glbFeatsClusterVarsExclude"), dropSpec = c("glb_cluster", "glb_cluster_entropy_var", "glbFeatsTextClusterVarsExclude"))
+#keepSpec = c("glbFeatsCategory","glb_dsp_cols")) # if glbFeatsCategory needs to be changed
 
 mycompute_entropy_df <- function(obs_df, entropy_var, by_var=NULL) {   
     require(lazyeval)
@@ -3525,14 +3526,14 @@ if (glb_cluster) {
 #     glb_hash_lst <- hash(key=unique(glbObsAll$myCategory), 
 #                      values=1:length(unique(glbObsAll$myCategory)))
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
-    cluster_vars <- grep(paste0("[", 
+    glbFeatsCluster <- grep(paste0("[", 
                         toupper(paste0(substr(glbFeatsText, 1, 1), collapse = "")),
                                       "]\\.[PT]\\."), 
                                names(glbObsAll), value = TRUE)
     # Assign correlations with rsp_var as weights for cosine distance
     print("Clustering features: ")
     cluster_vars_df <- data.frame(abs.cor.y = abs(cor(
-                        glbObsAll[glbObsAll$.src == "Train", cluster_vars],
+                        glbObsAll[glbObsAll$.src == "Train", glbFeatsCluster],
             as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
                                     use = "pairwise.complete.obs")))
     print(tail(cluster_vars_df <- orderBy(~ abs.cor.y, 
@@ -3575,7 +3576,7 @@ if (glb_cluster) {
             ctgry_allobs_df[, glb_cluster_entropy_var] <- 
                 as.factor(ctgry_allobs_df[, glb_cluster_entropy_var])
         
-        #dstns_dist <- proxy::dist(ctgry_allobs_df[, cluster_vars], method = "cosine")
+        #dstns_dist <- proxy::dist(ctgry_allobs_df[, glbFeatsCluster], method = "cosine")
         dstns_dist <- proxy::dist(ctgry_allobs_df[, row.names(cluster_vars_df)], 
                                   method = "mywgtdcosine",
                                   weights = cluster_vars_df$abs.cor.y)
@@ -3593,7 +3594,7 @@ if (glb_cluster) {
 #         print(sprintf("row_ix: %d", row_ix)); print(sprintf("col_ix: %d", col_ix));
 #         print(dim(ctgry_allobs_df))
         print(ctgry_allobs_df[c(row_ix, col_ix), 
-            c(glbFeatsId, glb_cluster_entropy_var, glbFeatsCategory, glbFeatsText, cluster_vars)])
+            c(glbFeatsId, glb_cluster_entropy_var, glbFeatsCategory, glbFeatsText, glbFeatsCluster)])
     
         min_dstns_mtrx <- dstns_mtrx
         diag(min_dstns_mtrx) <- 1
@@ -3603,7 +3604,7 @@ if (glb_cluster) {
         col_ix <- which.min(min_dstns_mtrx[row_ix, ])
         print(ctgry_allobs_df[c(row_ix, col_ix), 
             c(glbFeatsId, glb_cluster_entropy_var, glbFeatsCategory, glbFeatsText,
-              cluster_vars)])
+              glbFeatsCluster)])
     
         set.seed(glb_cluster.seed)
         clusters <- hclust(dstns_dist, method = "ward.D2")
@@ -3705,7 +3706,7 @@ if (glb_cluster) {
                                                         paste0(glbFeatsCategory, ".fctr"))
             
     if (glbFeatsTextClusterVarsExclude)
-        glbFeatsExclude <- c(glbFeatsExclude, cluster_vars)
+        glbFeatsExclude <- c(glbFeatsExclude, glbFeatsCluster)
 }
 
 # Last call for data modifications 
@@ -4733,6 +4734,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
 fit.models_1_chunk_df <- 
     myadd_chunk(fit.models_1_chunk_df, "fit.models_1_preProc", major.inc = FALSE,
                 label.minor = "preProc")
+require(gdata)
 
 mdl_id <- orderBy(get_model_sel_frmla(), glb_models_df)[1, "id"]
 indepVar <- trim(unlist(strsplit(glb_models_df[glb_models_df$id == mdl_id,
@@ -5359,6 +5361,8 @@ glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
     }    
     
     if (glb_is_classification) {
+        require(lazyeval)
+        
         if (is.null(featsimp_df) || (nrow(featsimp_df) == 0))
             warning("No features in selected model are statistically important")
         else print(myplot_prediction_classification(df = obs_df, 

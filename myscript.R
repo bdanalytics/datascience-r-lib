@@ -54,12 +54,17 @@ mysavChunk <- function(envFilePfx, chunkLbl) {
     save(list = savObjects, file = savFile)
 }
 
-myloadChunk <- function(envFilePfx, chunkLbl, keep = NULL) {
-    savFile <- paste0("data/", envFilePfx, chunkLbl, ".RData")
-    print(sprintf("myloadChunk: Loading file:%s", savFile))
+myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
+    print(sprintf("myloadChunk: Loading file:%s", envFilePathName))
     tmpEnv <- new.env()
-    load(file = savFile, envir = tmpEnv, verbose = FALSE)
+    load(file = envFilePathName, envir = tmpEnv, verbose = FALSE)
     # print("myloadChunk: tmpEnv symbols:"); print(ls(tmpEnv))
+
+    for (syl in intersect(ls(tmpEnv), dropSpec)) {
+        print(sprintf("myloadChunk:   discarding %s...", syl))
+        rm(list = c(syl), envir = tmpEnv)
+    }
+
     for (syl in intersect(ls(tmpEnv), ls(.GlobalEnv))) {
         # if (syl %in% c("glb_txt_terms_control")) {
         #     tmpSyl <- get(syl, envir = tmpEnv    )
@@ -84,7 +89,7 @@ myloadChunk <- function(envFilePfx, chunkLbl, keep = NULL) {
             print(sprintf("myloadChunk: %s different: ", syl))
             print(sprintf("myloadChunk:   curEnv: "))
             print(get(syl, envir = .GlobalEnv))
-            if (is.null(keep) || !(syl %in% keep)) {
+            if (is.null(keepSpec) || !(syl %in% keepSpec)) {
                 print(sprintf("myloadChunk:   dskEnv: kept"))
                 print(get(syl, envir = tmpEnv    ))
                 assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
@@ -112,7 +117,7 @@ myevlChunk <- function(chunkSpecsLst, envFilePfx, ...) {
         if (thsChunkIx < fstChunkIx)
             return(FALSE)
         if (thsChunkIx == fstChunkIx) {
-            myloadChunk(envFilePfx, chunkSpecsLst$labels[fstChunkIx - 1], ...)
+            myloadChunk(chunkSpecsLst$inpFilePathName, ...)
             return(TRUE)
         }
         if (thsChunkIx > fstChunkIx)

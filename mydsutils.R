@@ -1463,6 +1463,49 @@ myget_vectorized_obs_df <- function(obs_df, rsp_var, indep_vars) {
     return(vctobs_df)
 }
 
+## 05.5.0   cluster obs
+mygetCategoryEntropy <- function(obs_df, entropy_var, by_var=NULL) {
+    require(lazyeval)
+    require(dplyr)
+    require(tidyr)
+
+    if (is.null(by_var)) {
+        by_var <- ".default"
+        obs_df$.default <- as.factor(".default")
+    }
+
+    if (!any(grepl(".clusterid", names(obs_df), fixed=TRUE)))
+        obs_df$.clusterid <- 1
+
+    cluster_df <- obs_df %>%
+        count_(c(by_var, ".clusterid", entropy_var)) %>%
+        dplyr::filter(n > 0) %>%
+        dplyr::filter_(interp(~(!is.na(var)), var=as.name(entropy_var))) # %>%
+        # This doesnt work with column names that have period(s)
+        # unite_(paste0(by_var, ".clusterid"),
+        #        c(interp(by_var), ".clusterid")) %>%
+
+    cluster_df <- as.data.frame(cluster_df)
+    cluster_df[, paste0(by_var, ".clusterid")] <- paste(as.vector(cluster_df[, by_var]),
+                                                        cluster_df[, ".clusterid"],
+                                                        sep = "_")
+    cluster_df <- cluster_df %>%
+        spread_(interp(entropy_var), "n", fill = 0)
+
+    #     head(cluster_df)
+    #     sum(cluster_df$n)
+    entropyVal <- as.character(unique(obs_df[, entropy_var]))
+    entropyVal <- entropyVal[!is.na(entropyVal)]
+    tmp.entropy <- sapply(1:nrow(cluster_df),
+                          function(row) entropy(as.numeric(cluster_df[row, entropyVal]),
+                                                method = "ML"))
+    tmp.knt <- sapply(1:nrow(cluster_df),
+                      function(row) sum(as.numeric(cluster_df[row, entropyVal])))
+    cluster_df$.entropy <- tmp.entropy; cluster_df$.knt <- tmp.knt
+    #print(cluster_df)
+    return(cluster_df)
+}
+
 ## 05.5.1	add back in key features even though they might have been eliminated
 ## 05.5.2   cv of significance
 ## 05.6     scale / normalize selected features for data distribution requirements in various models
