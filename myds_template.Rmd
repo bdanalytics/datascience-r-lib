@@ -1110,7 +1110,7 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
-glbChunks[["inpFilePathName"]] <- NULL # NULL: default or "data/Votes_Q_01_cnk_manage.missing.data.RData"
+glbChunks[["inpFilePathName"]] <- NULL # NULL: default or "data/<prvScriptName>_<lstChunkLbl>.RData"
 #mysavChunk(glbOut$pfx, glbChunks[["last"]]) # called from myevlChunk
 
 # Inspect max OOB FP
@@ -3454,39 +3454,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
 #myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbFeatsCluster", "glbFeatsClusterVarsExclude"), dropSpec = c("glb_cluster", "glb_cluster_entropy_var", "glbFeatsTextClusterVarsExclude"))
 #keepSpec = c("glbFeatsCategory","glb_dsp_cols")) # if glbFeatsCategory needs to be changed
 
-mycompute_entropy_df <- function(obs_df, entropy_var, by_var=NULL) {   
-    require(lazyeval)
-    require(dplyr)
-    require(tidyr)
-
-    if (is.null(by_var)) {
-        by_var <- ".default"
-        obs_df$.default <- as.factor(".default") 
-    }
-    
-    if (!any(grepl(".clusterid", names(obs_df), fixed=TRUE)))
-        obs_df$.clusterid <- 1
-        
-    cluster_df <- obs_df %>%
-            count_(c(by_var, ".clusterid", entropy_var)) %>%
-            dplyr::filter(n > 0) %>%
-            dplyr::filter_(interp(~(!is.na(var)), var=as.name(entropy_var))) %>%
-            unite_(paste0(by_var, ".clusterid"),
-                   c(interp(by_var), ".clusterid")) %>%
-            spread_(interp(entropy_var), "n", fill=0) 
-
-#     head(cluster_df)
-#     sum(cluster_df$n)
-    tmp.entropy <- sapply(1:nrow(cluster_df),
-            function(row) entropy(as.numeric(cluster_df[row, -1]), method = "ML"))
-    tmp.knt <- sapply(1:nrow(cluster_df),
-                    function(row) sum(as.numeric(cluster_df[row, -1])))
-    cluster_df$.entropy <- tmp.entropy; cluster_df$.knt <- tmp.knt
-    #print(cluster_df)
-    return(cluster_df)
-}
-    
-if (glb_cluster) {
+if (!is.null(glbFeatsCluster)) {
     require(proxy)
     #require(hash)
     require(dynamicTreeCut)
@@ -3526,14 +3494,11 @@ if (glb_cluster) {
 #     glb_hash_lst <- hash(key=unique(glbObsAll$myCategory), 
 #                      values=1:length(unique(glbObsAll$myCategory)))
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
-    glbFeatsCluster <- grep(paste0("[", 
-                        toupper(paste0(substr(glbFeatsText, 1, 1), collapse = "")),
-                                      "]\\.[PT]\\."), 
-                               names(glbObsAll), value = TRUE)
+
     # Assign correlations with rsp_var as weights for cosine distance
     print("Clustering features: ")
     cluster_vars_df <- data.frame(abs.cor.y = abs(cor(
-                        glbObsAll[glbObsAll$.src == "Train", glbFeatsCluster],
+                        data.matrix(glbObsAll[glbObsAll$.src == "Train", glbFeatsCluster]),
             as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
                                     use = "pairwise.complete.obs")))
     print(tail(cluster_vars_df <- orderBy(~ abs.cor.y, 
@@ -3543,12 +3508,16 @@ if (glb_cluster) {
             as.numeric(glbObsAll[glbObsAll$.src == "Train", glb_rsp_var]),
             use = "pairwise.complete.obs")))
     
+    if (is.null(glbClusterEntropyVar))
+        glbClusterEntropyVar <- glb_rsp_var
+    print(sprintf("  Clustering entropy measure: %s", glbClusterEntropyVar))
+    
     print(sprintf("glbObsAll Entropy: %0.4f", 
-        allobs_ent <- entropy(table(glbObsAll[, glb_cluster_entropy_var]),
+        allobs_ent <- entropy(table(glbObsAll[, glbClusterEntropyVar]),
                               method="ML")))
     
-    print(category_df <- mycompute_entropy_df(obs_df=glbObsAll,
-                                             entropy_var=glb_cluster_entropy_var,
+    print(category_df <- mygetCategoryEntropy(obs_df=glbObsAll,
+                                             entropy_var=glbClusterEntropyVar,
                                              by_var=glbFeatsCategory))
     print(sprintf("glbObsAll$%s Entropy: %0.4f (%0.4f pct)",
                     glbFeatsCategory,
@@ -3572,12 +3541,12 @@ if (glb_cluster) {
 # if (grep(grp, levels(grp_ids)) != 10) next        
         print(sprintf("Category: %s", grp))
         ctgry_allobs_df <- glbObsAll[glbObsAll[, glbFeatsCategory] == grp, ]
-        if (!inherits(ctgry_allobs_df[, glb_cluster_entropy_var], "factor"))
-            ctgry_allobs_df[, glb_cluster_entropy_var] <- 
-                as.factor(ctgry_allobs_df[, glb_cluster_entropy_var])
+        if (!inherits(ctgry_allobs_df[, glbClusterEntropyVar], "factor"))
+            ctgry_allobs_df[, glbClusterEntropyVar] <- 
+                as.factor(ctgry_allobs_df[, glbClusterEntropyVar])
         
         #dstns_dist <- proxy::dist(ctgry_allobs_df[, glbFeatsCluster], method = "cosine")
-        dstns_dist <- proxy::dist(ctgry_allobs_df[, row.names(cluster_vars_df)], 
+        dstns_dist <- proxy::dist(data.matrix(ctgry_allobs_df[, row.names(cluster_vars_df)]), 
                                   method = "mywgtdcosine",
                                   weights = cluster_vars_df$abs.cor.y)
         # Custom distance functions return a crossdist object
@@ -3594,7 +3563,8 @@ if (glb_cluster) {
 #         print(sprintf("row_ix: %d", row_ix)); print(sprintf("col_ix: %d", col_ix));
 #         print(dim(ctgry_allobs_df))
         print(ctgry_allobs_df[c(row_ix, col_ix), 
-            c(glbFeatsId, glb_cluster_entropy_var, glbFeatsCategory, glbFeatsText, glbFeatsCluster)])
+            c(glbFeatsId, glbClusterEntropyVar, glbFeatsCategory, names(glbFeatsText),
+              glbFeatsCluster)])
     
         min_dstns_mtrx <- dstns_mtrx
         diag(min_dstns_mtrx) <- 1
@@ -3603,7 +3573,7 @@ if (glb_cluster) {
         row_ix <- ceiling(which.min(min_dstns_mtrx) / ncol(min_dstns_mtrx))
         col_ix <- which.min(min_dstns_mtrx[row_ix, ])
         print(ctgry_allobs_df[c(row_ix, col_ix), 
-            c(glbFeatsId, glb_cluster_entropy_var, glbFeatsCategory, glbFeatsText,
+            c(glbFeatsId, glbClusterEntropyVar, glbFeatsCategory, names(glbFeatsText),
               glbFeatsCluster)])
     
         set.seed(glb_cluster.seed)
@@ -3637,10 +3607,10 @@ if (glb_cluster) {
 #                 geom_point(data = clustersDD$labels, 
 #                           aes_string(x = "x", y = "y", color = "color")))
 #         myplclust(clusters, lab=ctgry_allobs_df[, glbFeatsId], 
-#                   lab.col=unclass(ctgry_allobs_df[, glb_cluster_entropy_var]))
+#                   lab.col=unclass(ctgry_allobs_df[, glbClusterEntropyVar]))
 
         opt_minclustersize_df <- data.frame(minclustersize = nrow(ctgry_allobs_df), 
-            entropy = entropy(table(ctgry_allobs_df[, glb_cluster_entropy_var]),
+            entropy = entropy(table(ctgry_allobs_df[, glbClusterEntropyVar]),
                               method = "ML"))
         for (minclustersize in 
              as.integer(seq(nrow(ctgry_allobs_df) / 2, nrow(ctgry_allobs_df) / 10, 
@@ -3650,8 +3620,8 @@ if (glb_cluster) {
             # Unassigned groups are labeled 0; the largest group has label 1
             clusterGroups[clusterGroups == 0] <- 1
             ctgry_allobs_df$.clusterid <- clusterGroups
-            ctgry_clstrs_df <- mycompute_entropy_df(ctgry_allobs_df,
-                                                    glb_cluster_entropy_var)
+            ctgry_clstrs_df <- mygetCategoryEntropy(ctgry_allobs_df,
+                                                    glbClusterEntropyVar)
             opt_minclustersize_df <- rbind(opt_minclustersize_df, 
                                            data.frame(minclustersize = minclustersize,
                 entropy = weighted.mean(ctgry_clstrs_df$.entropy, ctgry_clstrs_df$.knt)))
@@ -3673,10 +3643,10 @@ if (glb_cluster) {
                                        method = "tree",
                                        deepSplit = 0)
         # Unassigned groups are labeled 0; the largest group has label 1
-        table(clusterGroups, ctgry_allobs_df[, glb_cluster_entropy_var], 
+        table(clusterGroups, ctgry_allobs_df[, glbClusterEntropyVar], 
               useNA = "ifany")   
         clusterGroups[clusterGroups == 0] <- 1
-        table(clusterGroups, ctgry_allobs_df[, glb_cluster_entropy_var], useNA = "ifany") 
+        table(clusterGroups, ctgry_allobs_df[, glbClusterEntropyVar], useNA = "ifany") 
         glbObsAll[glbObsAll[, glbFeatsCategory] == grp,]$.clusterid <-
             clusterGroups
         
@@ -3685,8 +3655,8 @@ if (glb_cluster) {
     dev.off()
     #all.equal(savObsAll_clusterid, glbObsAll$.clusterid)
     
-    print(cluster_df <- mycompute_entropy_df(obs_df=glbObsAll,
-                                             entropy_var=glb_cluster_entropy_var,
+    print(cluster_df <- mygetCategoryEntropy(obs_df=glbObsAll,
+                                             entropy_var=glbClusterEntropyVar,
                                              by_var=glbFeatsCategory))
     print(sprintf("glbObsAll$%s$.clusterid Entropy: %0.4f (%0.4f pct)",
                     glbFeatsCategory,
@@ -3705,7 +3675,7 @@ if (glb_cluster) {
             ifelse(grepl("\\.fctr", glbFeatsCategory), glbFeatsCategory, 
                                                         paste0(glbFeatsCategory, ".fctr"))
             
-    if (glbFeatsTextClusterVarsExclude)
+    if (glbFeatsClusterVarsExclude)
         glbFeatsExclude <- c(glbFeatsExclude, glbFeatsCluster)
 }
 
@@ -4035,7 +4005,7 @@ print(subset(glb_feats_df, nzv, select = -id))
 
 tmp_allobs_df <- 
     glbObsAll[, union(setdiff(names(glbObsAll), subset(glb_feats_df, nzv)$id),
-                      c(glbFeatsCategory, glb_cluster_entropy_var))]
+                      c(glbFeatsCategory, glbClusterEntropyVar))]
 glbObsTrn <- subset(tmp_allobs_df, .src == "Train")
 glbObsNew <- subset(tmp_allobs_df, .src == "Test")
 
@@ -4064,12 +4034,12 @@ row.names(not_nrml_feats_df) <- not_nrml_feats_df$id
 #pltTrnObs <- glbObsTrn[, c("D.npnct05.log", ".rnorm")]
 pltTrnObs <- glbObsTrn[, c(union(".rnorm",
                         not_nrml_feats_df$id[1:min(5, nrow(not_nrml_feats_df))]),
-                            glb_cluster_entropy_var), FALSE]
-if (is.null(glb_cluster_entropy_var))
+                            glbClusterEntropyVar), FALSE]
+if (is.null(glbClusterEntropyVar))
     gp <- myplot_violin(df = pltTrnObs, ycol_names = names(pltTrnObs)) else
     gp <- myplot_violin(pltTrnObs, 
-                    setdiff(names(pltTrnObs), glb_cluster_entropy_var), 
-                    xcol_name = glb_cluster_entropy_var)
+                    setdiff(names(pltTrnObs), glbClusterEntropyVar), 
+                    xcol_name = glbClusterEntropyVar)
 if ("variable" %in% names(pltTrnObs))
     gp <- gp + facet_wrap(~variable, scales = "free")
 print(gp)

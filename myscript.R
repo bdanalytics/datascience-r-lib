@@ -115,14 +115,15 @@ myevlChunk <- function(chunkSpecsLst, envFilePfx, ...) {
         if ((thsChunkIx == -1) || (fstChunkIx == -1))
             stop("Unrecognized chunk label(s): ", thsChunkLabel, " or: ", chunkSpecsLst$last)
         if (thsChunkIx < fstChunkIx)
-            return(FALSE)
+            firstFilter <- FALSE
         if (thsChunkIx == fstChunkIx) {
             myloadChunk(chunkSpecsLst$inpFilePathName, ...)
-            return(TRUE)
+            firstFilter <- TRUE
         }
         if (thsChunkIx > fstChunkIx)
-            return(TRUE)
-    }
+            firstFilter <- TRUE
+    } else firstFilter <- TRUE
+
     if (!is.null(chunkSpecsLst$last)) {
         lstChunkIx <- match(chunkSpecsLst$last, chunkSpecsLst$labels, nomatch = -1)
         thsChunkLabel <- knitr::opts_current$get(name = 'label')
@@ -130,18 +131,23 @@ myevlChunk <- function(chunkSpecsLst, envFilePfx, ...) {
         if ((thsChunkIx == -1) || (lstChunkIx == -1))
             stop("Unrecognized chunk label(s): ", thsChunkLabel, " or: ", chunkSpecsLst$last)
         if (thsChunkIx <= lstChunkIx)
-            return(TRUE)
+            lastFilter <- TRUE
+            # return(TRUE)
         if (thsChunkIx == lstChunkIx + 1) {
             # mysavChunk(envFilePfx, chunkSpecsLst$last)
             savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
             savFile <- paste0("data/", envFilePfx, chunkSpecsLst$last, ".RData")
             print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
             save(list = savObjects, file = savFile)
-            return(FALSE)
+            lastFilter <- FALSE
+            # return(FALSE)
         }
         if (thsChunkIx > lstChunkIx + 1)
-            return(FALSE)
-    }
+            lastFilter <- FALSE
+            # return(FALSE)
+    } else lastFilter <- TRUE
+
+    return(firstFilter && lastFilter)
 }
 
 myplt_chunk <- function(chunks_df) {
