@@ -1728,8 +1728,12 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 
 	#	Create a dummy matrix of 0s with actual outcomes
 	#	& merge in appropriate predicted outcomes cols
-	mrg_obs_xtab_df <- orderBy(reformulate(actual_var),
-								mycreate_tbl_df(obs_df, actual_var)[, 1, FALSE])
+	#	orderBy messes up when levels(fctr) is not the same order as sort(as.character(levels(fctr)))
+	# mrg_obs_xtab_df <- orderBy(reformulate(actual_var),
+	# 							mycreate_tbl_df(obs_df, actual_var)[, 1, FALSE])
+	# mrg_obs_xtab_df <- mycreate_tbl_df(obs_df, actual_var)[, 1, FALSE]
+	mrg_obs_xtab_df <- data.frame(as.character(levels(obs_df[, actual_var])))
+	names(mrg_obs_xtab_df) <- actual_var
 	for (val in unique(mrg_obs_xtab_df[, 1]))
 		mrg_obs_xtab_df[, paste(predct_var, val, sep=".")] <- 0
 	#print(mrg_obs_xtab_df)
@@ -1743,13 +1747,23 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
 	#print(obs_xtab_df)
 
-	for (col_ix in 2:ncol(obs_xtab_df))
-		mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[,
-			-which(names(mrg_obs_xtab_df) == names(obs_xtab_df)[col_ix])],
-								 obs_xtab_df[, c(1, col_ix)], all.x = TRUE)
+	# stopifnot(identical(mrg_obs_xtab_df[, actual_var], as.character(obs_xtab_df[, actual_var])))
+	stopifnot(identical(as.character(mrg_obs_xtab_df[, actual_var]),
+	                    as.character(obs_xtab_df[, actual_var])))
 
-	mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
-	mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0
+	for (col_ix in 2:ncol(mrg_obs_xtab_df))
+	    if (names(mrg_obs_xtab_df[col_ix]) %in% names(obs_xtab_df))
+	        mrg_obs_xtab_df[, names(mrg_obs_xtab_df[col_ix])] <-
+	            obs_xtab_df[, names(mrg_obs_xtab_df[col_ix])]
+
+	# merge messes up the sort order in levels(factor) vs. as.character(levels(factor))
+	# for (col_ix in 2:ncol(obs_xtab_df))
+	# 	mrg_obs_xtab_df <- merge(mrg_obs_xtab_df[,
+	# 		-which(names(mrg_obs_xtab_df) == names(obs_xtab_df)[col_ix])],
+	# 							 obs_xtab_df[, c(1, col_ix)], all.x = TRUE)
+
+	# mrg_obs_xtab_df <- mrg_obs_xtab_df[, sort(names(mrg_obs_xtab_df))]
+	# mrg_obs_xtab_df[is.na(mrg_obs_xtab_df)] <- 0
 # 	print(mrg_obs_xtab_df)
 	return(mrg_obs_xtab_df)
 }
@@ -2074,6 +2088,8 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 							model_summaryFunction=NULL, model_metric=NULL,
 							model_metric_maximize=NULL,
 							ret_type="stats") {
+    require(caret)
+
 	if (!(ret_type %in% c("stats", "raw", "prob")))
 		stop("ret_type: ", ret_type, " not supported")
 
@@ -2119,12 +2135,23 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
 		                                 rsp_var, rsp_var_out))
 		#print(thresholds_df)
-		# Avoid picking 0.0 as threshold
-		prob_threshold <- orderBy(~ -f.score +threshold, thresholds_df)[1, "threshold"]
+		# Avoid picking 0.0 / 1.0 as threshold
+		maxfScoreDf <- thresholds_df[thresholds_df$f.score == max(thresholds_df$f.score), ]
+		if (nrow(maxfScoreDf) == 1) prob_threshold <- maxfScoreDf$threshold else {
+		    # if all thresholds are <= 0.5, pick max
+		    if (all(maxfScoreDf$threshold <= 0.5)) prob_threshold <- max(maxfScoreDf$threshold) else
+		    # if all thresholds are > 0.5, pick min
+		    if (all(maxfScoreDf$threshold >  0.5)) prob_threshold <- min(maxfScoreDf$threshold) else {
+    		    print("mypredict_mdl: maxfScoreDf:"); print(maxfScoreDf)
+    		    stop("mypredict_mdl: what should be done ???")
+		    }
+		}
+		# prob_threshold <- orderBy(~ -f.score +threshold, thresholds_df)[1, "threshold"]
 # 		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
 # 					  prob_threshold, label))
 		# print(myplot_line(thresholds_df, "threshold", "f.score"))
 		print(myplot_line(thresholds_df, "threshold", "f.score") +
+		          geom_point() +
 		          geom_point(data = subset(thresholds_df, threshold == prob_threshold),
 		                     mapping = aes(x = threshold, y = f.score),
 		                     shape = 5, color = "red", size = 4))

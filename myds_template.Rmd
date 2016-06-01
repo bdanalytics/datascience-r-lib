@@ -185,6 +185,7 @@ glb_map_rsp_raw_to_var <- NULL
 #     return(log(1 + raw))
 #     return(log10(raw)) 
 #     return(exp(-raw / 2))
+# chk ref value against frequencies vs. alpha sort order
 #     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
 #     as.factor(paste0("B", raw))
 #     as.factor(gsub(" ", "\\.", raw))    
@@ -3982,6 +3983,9 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "select.features", major.inc = TRUE)
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r select.features, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
+#```{r select.features, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c(NULL), dropSpec = c(NULL))}
+#myloadChunk(glbChunks$inpFilePathName, keepSpec = c(NULL), dropSpec = c(NULL))
+
 #stop(here"); glb2Sav(); glbObsAll <- savObsAll
 glb_feats_df <- myselect_features(entity_df = glbObsTrn, 
                                   exclude_vars_as_features = glbFeatsExclude, 
