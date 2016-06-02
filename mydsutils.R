@@ -1460,6 +1460,9 @@ myget_vectorized_obs_df <- function(obs_df, rsp_var, indep_vars) {
                             model.matrix(reformulate(c(0, fctr_vars)), vctobs_df))
     # Because predictors is a function for rfe
     #predictors_vctr <- setdiff(names(vctobs_df), rsp_var)
+
+    # vctobs_df is a matrix -> shd be a data.frame ???
+    # first col is rsp_var which is returned as "V1" when converted into data.frame
     return(vctobs_df)
 }
 
@@ -2273,6 +2276,17 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 	if (ret_type == "raw") return(df[, rsp_var_out])
 }
 
+mygetMdlId <- function(mdlSpecs) return(
+    paste(mdlSpecs[["id.prefix"]],
+          mdlSpecs[["train.preProcess"]],
+          plyr::revalue(mdlSpecs[["trainControl.method"]], c(
+              "none" = "",
+              "repeatedcv" = "rcv"),
+              warn_missing = FALSE),
+          mdlSpecs[["train.method"]],
+          sep = "#")
+)
+
 myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
     require(caret)
 #     if (packageVersion("caret") != "6.0.57")
@@ -2329,14 +2343,15 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
 
     # change id.prefix to mdlFamily
     # Build id to access specs by id
-    retSpecs[["id"]] <- paste(retSpecs[["id.prefix"]],
-                                   retSpecs[["train.preProcess"]],
-                                   plyr::revalue(retSpecs[["trainControl.method"]], c(
-                                       "none" = "",
-                                       "repeatedcv" = "rcv"),
-                                       warn_missing = FALSE),
-                                   retSpecs[["train.method"]],
-                                   sep = "#")
+    # retSpecs[["id"]] <- paste(retSpecs[["id.prefix"]],
+    #                                retSpecs[["train.preProcess"]],
+    #                                plyr::revalue(retSpecs[["trainControl.method"]], c(
+    #                                    "none" = "",
+    #                                    "repeatedcv" = "rcv"),
+    #                                    warn_missing = FALSE),
+    #                                retSpecs[["train.method"]],
+    #                                sep = "#")
+    retSpecs[["id"]] <- mygetMdlId(retSpecs)
 
     if ((!is.null(allowParallelSpecs <- inpSpecs[["trainControl.allowParallel"]])) &&
         (!is.null(spec <- allowParallelSpecs[[unlist(retSpecs["id"])]])))
@@ -2518,13 +2533,16 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 
 	# preProcess method %in% c("pca", "range") train crashes if a column has no variance (might result from a dummy var)
 	if (!is.null(mdl_specs_lst[["train.preProcess"]]) &&
-	    grepl("(ica|pca|range)", mdl_specs_lst[["train.preProcess"]])) {
-    	vctr_fit_df <- myget_vectorized_obs_df(fit_df, rsp_var = rsp_var, indepVar = indepVar)
+	    grepl("(ica|pca)", mdl_specs_lst[["train.preProcess"]])) {
+    	vctr_fit_df <- myget_vectorized_obs_df(fit_df, rsp_var = rsp_var, indep_vars = indepVar)
     	unqlen_cols <- sapply(names(vctr_fit_df), function(col)
     	                                            length(unique(vctr_fit_df[, col])))
     	if (length(problem_cols <- unqlen_cols[unqlen_cols <= 1]) > 0) {
-    	    warning(paste0("myfit_mdl: preProcess method: range currently does not work for columns with no variance: ", paste0(names(problem_cols), collapse=", ")), immediate.=TRUE)
-    	    return(NULL)
+    	    warning(paste0("myfit_mdl: preProcess method: ",
+    	                   "range currently does not work for columns with no variance: ",
+    	                   paste0(names(problem_cols), collapse=", ")), immediate.=TRUE)
+    	    fit_df <- fit_df[, setdiff(names(fit_df), names(problem_cols))]
+    	    # return(NULL)
 #     	    indepVar <- setdiff(names(vctr_fit_df), c(rsp_var, names(problem_cols)))
 #     	    fit_df <- vctr_fit_df[, c(rsp_var, indepVar)]
     	}
