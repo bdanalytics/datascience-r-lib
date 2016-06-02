@@ -1768,35 +1768,42 @@ mycompute_confusion_df <- function(obs_df, actual_var, predct_var) {
 	return(mrg_obs_xtab_df)
 }
 
+mygetThresholdConfusionDf <- function(mdl, obs_df, proba_threshold,
+                                      rsp_var, rsp_var_out) {
+    if ((class(obs_df[, rsp_var]) != "factor") |
+        (length(levels(obs_df[, rsp_var])) != 2))
+        stop("expecting a factor with two levels:", rsp_var)
+    obs_df[, rsp_var_out] <-
+        factor(levels(obs_df[, rsp_var])[
+            (obs_df[, paste0(rsp_var_out, ".prob")] >=
+                 proba_threshold) * 1 + 1], levels(obs_df[, rsp_var]))
+
+    #	Create a dummy matrix of 0s with actual outcomes
+    #	& merge in appropriate predicted outcomes cols
+    # 	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var),
+    # 								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
+    # 	for (val in unique(mrg_obs_xtab_df[, 1]))
+    # 		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
+    # 	#print(mrg_obs_xtab_df)
+    #
+    # 	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
+    # 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
+    # 	#print(obs_xtab_df)
+    #
+    # 	for (col_ix in 2:ncol(obs_xtab_df))
+    # 		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <-
+    # 			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
+    mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)
+    #print(mrg_obs_xtab_df)
+
+    return(mrg_obs_xtab_df)
+}
+
 mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 										rsp_var, rsp_var_out) {
 
-	if ((class(obs_df[, rsp_var]) != "factor") |
-		(length(levels(obs_df[, rsp_var])) != 2))
-		stop("expecting a factor with two levels:", rsp_var)
-	obs_df[, rsp_var_out] <-
-		factor(levels(obs_df[, rsp_var])[
-			(obs_df[, paste0(rsp_var_out, ".prob")] >=
-				proba_threshold) * 1 + 1], levels(obs_df[, rsp_var]))
-
-	#	Create a dummy matrix of 0s with actual outcomes
-	#	& merge in appropriate predicted outcomes cols
-# 	mrg_obs_xtab_df <- orderBy(reformulate(rsp_var),
-# 								mycreate_tbl_df(obs_df, rsp_var)[, 1, FALSE])
-# 	for (val in unique(mrg_obs_xtab_df[, 1]))
-# 		mrg_obs_xtab_df[, paste(rsp_var_out, val, sep=".")] <- 0
-# 	#print(mrg_obs_xtab_df)
-#
-# 	obs_xtab_df <- mycreate_xtab(obs_df, c(rsp_var, rsp_var_out))
-# 	obs_xtab_df[is.na(obs_xtab_df)] <- 0
-# 	#print(obs_xtab_df)
-#
-# 	for (col_ix in 2:ncol(obs_xtab_df))
-# 		mrg_obs_xtab_df[, names(obs_xtab_df)[col_ix]] <-
-# 			obs_xtab_df[, names(obs_xtab_df)[col_ix]]
-	mrg_obs_xtab_df <- mycompute_confusion_df(obs_df, rsp_var, rsp_var_out)
-	#print(mrg_obs_xtab_df)
-
+    mrg_obs_xtab_df <- mygetThresholdConfusionDf(mdl, obs_df, proba_threshold,
+                                                 rsp_var, rsp_var_out)
 	# mrg_obs_xtab_df structure:
 	#   Actual Level 1, TN, FP
 	#   Actual Level 2, FN, TP
@@ -1810,6 +1817,21 @@ mycompute_classifier_f.score <- function(mdl, obs_df, proba_threshold,
 	return(f.score.obs <- (2 * mrg_obs_xtab_df[2,3]) /
 					((2 * mrg_obs_xtab_df[2,3]) +
 					mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
+}
+
+mygetClassifierAccuracy <- function(mdl, obs_df, proba_threshold,
+                                         rsp_var, rsp_var_out) {
+
+    mrg_obs_xtab_df <- mygetThresholdConfusionDf(mdl, obs_df, proba_threshold,
+                                                 rsp_var, rsp_var_out)
+    # mrg_obs_xtab_df structure:
+    #   Actual Level 1, TN, FP
+    #   Actual Level 2, FN, TP
+    #accuracy <- (TN + TP) / ((TN + TP) + FP + FN)
+    stopifnot(sum(is.na(mrg_obs_xtab_df)) == 0)
+    return(f.score.obs <- (mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) /
+               ((mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) +
+                    mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
 }
 
 mycbind_df <- function(df1, df2) {
@@ -2124,7 +2146,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		ROCRperf <- performance(ROCRpred, "tpr", "fpr")
 		if (length(ROCRperf@y.values[[1]]) > 2) {
 			plot(ROCRperf, colorize = TRUE, print.cutoffs.at = seq(0, 1, 0.1),
-			     text.adj = c(-0.2,1.7))
+			     text.adj = c(-0.2,1.7), main = paste(mdl$.myId, label, sep = ":"))
 		}
 
 		# thresholds_df <- data.frame(threshold = seq(0.0, 1.0, 0.01))
@@ -2134,27 +2156,51 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		    mycompute_classifier_f.score(mdl, obs_df = df,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
 		                                 rsp_var, rsp_var_out))
+		thresholds_df$accuracy <- sapply(1:nrow(thresholds_df), function(row_ix)
+		    mygetClassifierAccuracy(mdl, obs_df = df,
+		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
+		                                 rsp_var, rsp_var_out))
+
 		#print(thresholds_df)
 		# Avoid picking 0.0 / 1.0 as threshold
-		maxfScoreDf <- thresholds_df[thresholds_df$f.score == max(thresholds_df$f.score), ]
-		if (nrow(maxfScoreDf) == 1) prob_threshold <- maxfScoreDf$threshold else {
+		#   f.score should be selected if glbMdlMetric == 'fScore' ???
+# 		maxfScoreDf <- thresholds_df[thresholds_df$f.score == max(thresholds_df$f.score), ]
+# 		if (nrow(maxfScoreDf) == 1) prob_threshold <- maxfScoreDf$threshold else {
+# 		    # if all thresholds are <= 0.5, pick max
+# 		    if (all(maxfScoreDf$threshold <= 0.5)) prob_threshold <- max(maxfScoreDf$threshold) else
+# 		    # if all thresholds are > 0.5, pick min
+# 		    if (all(maxfScoreDf$threshold >  0.5)) prob_threshold <- min(maxfScoreDf$threshold) else {
+#     		    print("mypredict_mdl: maxfScoreDf:"); print(maxfScoreDf)
+#     		    stop("mypredict_mdl: what should be done ???")
+# 		    }
+# 		}
+
+		metric <- "accuracy"
+		maxMetricDf <- thresholds_df[thresholds_df[, metric] == max(thresholds_df[, metric]), ]
+		if (nrow(maxMetricDf) == 1) prob_threshold <- maxMetricDf$threshold else {
 		    # if all thresholds are <= 0.5, pick max
-		    if (all(maxfScoreDf$threshold <= 0.5)) prob_threshold <- max(maxfScoreDf$threshold) else
+		    if (all(maxMetricDf$threshold <  0.5)) prob_threshold <- max(maxMetricDf$threshold) else
 		    # if all thresholds are > 0.5, pick min
-		    if (all(maxfScoreDf$threshold >  0.5)) prob_threshold <- min(maxfScoreDf$threshold) else {
-    		    print("mypredict_mdl: maxfScoreDf:"); print(maxfScoreDf)
-    		    stop("mypredict_mdl: what should be done ???")
+		    if (all(maxMetricDf$threshold >= 0.5)) prob_threshold <- min(maxMetricDf$threshold) else {
+		            print("mypredict_mdl: maxMetricDf:"); print(maxMetricDf)
+		            stop("mypredict_mdl: what should be done ???")
 		    }
 		}
 		# prob_threshold <- orderBy(~ -f.score +threshold, thresholds_df)[1, "threshold"]
 # 		print(sprintf("Classifier Probability Threshold: %0.4f to maximize f.score.%s",
 # 					  prob_threshold, label))
-		# print(myplot_line(thresholds_df, "threshold", "f.score"))
-		print(myplot_line(thresholds_df, "threshold", "f.score") +
-		          geom_point() +
+		# print(myplot_line(thresholds_df, "threshold", c("f.score")) +
+		#           geom_point() +
+		#           geom_point(data = subset(thresholds_df, threshold == prob_threshold),
+		#                      mapping = aes(x = threshold, y = f.score),
+		#                      shape = 5, color = "red", size = 4) +
+		#           ggtitle(paste(mdl$.myId, label, sep = ":")))
+		print(myplot_line(thresholds_df, "threshold", c("f.score", "accuracy")) +
 		          geom_point(data = subset(thresholds_df, threshold == prob_threshold),
-		                     mapping = aes(x = threshold, y = f.score),
-		                     shape = 5, color = "red", size = 4))
+		                     mapping = aes_string(x = "threshold", y = metric),
+		                     shape = 5, color = "black", size = 4) +
+		          ggtitle(paste(mdl$.myId, label, sep = ":")))
+
 		stats_df[, paste0("opt.prob.threshold.", label)] <- prob_threshold
 
 		df[, rsp_var_out] <-

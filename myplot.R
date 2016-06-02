@@ -254,7 +254,8 @@ myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL,
         else df$xcol <- df[, xcol_name]
         df$ycol <- df[, ycol_names]
         g <- ggplot(df, aes(x=xcol, y=ycol))
-        g <- g + geom_line(colour="blue") + xlab(xcol_name) + ylab(ycol_names)
+        g <- g + geom_line(colour="blue") + xlab(xcol_name) + ylab(ycol_names) +
+                geom_point()
     } else {
         require(reshape2)
         id.vars <- xcol_name
@@ -263,7 +264,8 @@ myplot_line <- function(df, xcol_name, ycol_names, xlabel_formatter=NULL,
         mltd_df <- melt(df, id=id.vars, measure=ycol_names)
         #myprint_df(mltd_df)
         g <- ggplot(mltd_df, aes_string(x=xcol_name))
-        g <- g + geom_line(aes(y=value, colour=variable))
+        g <- g + geom_line(aes(y = value, colour = variable)) +
+                geom_point(aes(y = value, colour = variable))
     }
 
     if (!(is.null(facet_row_colnames)) | !(is.null(facet_col_colnames))) {
