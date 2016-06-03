@@ -88,14 +88,17 @@ myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
                               get(syl, envir = .GlobalEnv))) {
             print(sprintf("myloadChunk: %s different: ", syl))
             print(sprintf("myloadChunk:   curEnv: "))
-            print(get(syl, envir = .GlobalEnv))
+            if (!is.null(sylNms <- names(get(syl, envir = .GlobalEnv)))) print(sylNms) else
+                print(get(syl, envir = .GlobalEnv))
             if (is.null(keepSpec) || !(syl %in% keepSpec)) {
                 print(sprintf("myloadChunk:   dskEnv: kept"))
-                print(get(syl, envir = tmpEnv    ))
+                if (!is.null(sylNms <- names(get(syl, envir = tmpEnv)))) print(sylNms) else
+                    print(get(syl, envir = tmpEnv    ))
                 assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
             } else {
                 print(sprintf("myloadChunk:   dskEnv: discarded"))
-                print(get(syl, envir = tmpEnv    ))
+                if (!is.null(sylNms <- names(get(syl, envir = tmpEnv)))) print(sylNms) else
+                    print(get(syl, envir = tmpEnv    ))
             }
         }
     }

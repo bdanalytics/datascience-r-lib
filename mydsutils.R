@@ -2380,7 +2380,12 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indepVar <- indepVar
 
     startTm <- proc.time()["elapsed"]
-    print(sprintf("myfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
+    if ((mdl_specs_lst[["id"]] %in% glb_models_df$id) &&
+        (mdl_specs_lst[["id"]] %in% names(glb_models_lst))) {
+        print(sprintf("skipping fitting model: %s", mdl_specs_lst[["id"]]))
+        return(NULL)
+    }
+    print(sprintf("\nmyfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
     print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
 
     if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
@@ -2572,7 +2577,10 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 
 	# Make this assignment earlier than at the end, to facilitate debugging of the model
 	mdl$.myId <- mdl_specs_lst[["id"]]
-	models_lst <- glb_models_lst; models_lst[[mdl_specs_lst[["id"]]]] <- mdl;
+	models_lst <- glb_models_lst
+	models_lst[[mdl_specs_lst[["id"]]]] <- mdl
+	# to save disk space; don't know who / what uses trainingData
+	models_lst[[mdl_specs_lst[["id"]]]]$trainingData <- NULL
 	glb_models_lst <<- models_lst
 
 	#print(mdl$bestTune)

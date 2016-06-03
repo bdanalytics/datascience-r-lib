@@ -114,12 +114,14 @@ rm(list = ls())
 set.seed(12345)
 options(stringsAsFactors = FALSE)
 source("~/Dropbox/datascience/R/mycaret.R")
-source("~/Dropbox/datascience/R/mydsutils.R")
 source("~/Dropbox/datascience/R/mypetrinet.R")
 source("~/Dropbox/datascience/R/myplclust.R")
 source("~/Dropbox/datascience/R/myplot.R")
 source("~/Dropbox/datascience/R/myscript.R")
 source("~/Dropbox/datascience/R/mytm.R")
+if (is.null(knitr::opts_current$get(name = 'label'))) # Running in IDE
+    debugSource("~/Dropbox/datascience/R/mydsutils.R") else
+    source("~/Dropbox/datascience/R/mydsutils.R")    
 # Gather all package requirements here
 suppressPackageStartupMessages(require(doMC))
 glbCores <- 6 # of cores on machine - 2
@@ -3466,7 +3468,6 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
 ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
-# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keep = c("glbFeatsCategory","glb_dsp_cols"))}
 # ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c("glbFeatsCluster", "glbFeatsClusterVarsExclude"), dropSpec = c("glb_cluster", "glb_cluster_entropy_var", "glbFeatsTextClusterVarsExclude"))}
 #myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbFeatsCluster", "glbFeatsClusterVarsExclude"), dropSpec = c("glb_cluster", "glb_cluster_entropy_var", "glbFeatsTextClusterVarsExclude"))
 #keepSpec = c("glbFeatsCategory","glb_dsp_cols")) # if glbFeatsCategory needs to be changed
@@ -4181,7 +4182,7 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc=TRUE)
 fit.models_0_chunk_df <- myadd_chunk(NULL, "fit.models_0_bgn", label.minor = "setup")
 # load(paste0(glbOut$pfx, "dsk.RData"))
 
-get_model_sel_frmla <- function() {
+glbgetModelSelectFormula <- function() {
     model_evl_terms <- c(NULL)
     # min.aic.fit might not be avl
     lclMdlEvlCriteria <- 
@@ -4195,13 +4196,13 @@ get_model_sel_frmla <- function() {
     return(model_sel_frmla)
 }
 
-get_dsp_models_df <- function() {
+glbgetDisplayModelsDf <- function() {
     dsp_models_cols <- c("id", 
                     glbMdlMetricsEval[glbMdlMetricsEval %in% names(glb_models_df)],
                     grep("opt.", names(glb_models_df), fixed = TRUE, value = TRUE)) 
     dsp_models_df <- 
-        #orderBy(get_model_sel_frmla(), glb_models_df)[, c("id", glbMdlMetricsEval)]
-        orderBy(get_model_sel_frmla(), glb_models_df)[, dsp_models_cols]    
+        #orderBy(glbgetModelSelectFormula(), glb_models_df)[, c("id", glbMdlMetricsEval)]
+        orderBy(glbgetModelSelectFormula(), glb_models_df)[, dsp_models_cols]    
     nCvMdl <- sapply(glb_models_lst, function(mdl) nrow(mdl$results))
     nParams <- sapply(glb_models_lst, function(mdl) ifelse(mdl$method == "custom", 0, 
         nrow(subset(modelLookup(mdl$method), parameter != "parameter"))))
@@ -4235,7 +4236,7 @@ get_dsp_models_df <- function() {
         row.names(dsp_models_df) <- dsp_models_df$id
     return(dsp_models_df)
 }
-#get_dsp_models_df()
+#glbgetDisplayModelsDf()
 
 if (glb_is_classification && glb_is_binomial && 
         (length(unique(glbObsFit[, glb_rsp_var])) < 2))
@@ -4562,6 +4563,9 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 ```
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
+#```{r fit.models_1, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c(NULL), dropSpec = c(NULL))}
+#myloadChunk(glbChunks$inpFilePathName, keepSpec = c(NULL), dropSpec = c(NULL))
+
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
 # refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
 
