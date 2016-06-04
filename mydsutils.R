@@ -2364,17 +2364,56 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
 mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
     seeds <- vector(mode = "list", length = seeds_lst_len)
     start_multiplier <- tail(myget_primes(seeds_lst_len + 2), 1)
-    for (i in 1:(seeds_lst_len - 1)) {
+    for (i in 1:(seeds_lst_len)) {
         #print(sprintf("setting seeds for i: %d", i))
         seeds[[i]] <- tail(seq( 1001 + start_multiplier * ((i + 1) ^ 3),
                                 1001 + start_multiplier * ((i + 1) ^ 4),
                                 by = start_multiplier), seeds_elmnt_lst_len)
+        while (length(seeds[[i]]) < seeds_elmnt_lst_len)
+            seeds[[i]] = c(seeds[[i]], max(seeds[[i]]) + start_multiplier)
     }
     ## For the last element:
     seeds[[length(seeds)]] <- 997
     return(seeds)
 }
 #mygen_seeds(seeds_lst_len=(glb_rcv_n_folds * glb_rcv_n_repeats) + 1, seeds_elmnt_lst_len=9)
+
+mydisplayOutliers <- function(mdl, lclObsFit) {
+    stop("mydisplayOutliers: not implemented yet")
+# influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
+#mdlId <- "All.X##rcv#glm"; obs_df <- fitobs_df; fitobs_df <- glbObsFit
+#mdlId <- "RFE.X.glm"; obs_df <- fitobs_df
+#mdlId <- "Final.glm"; obs_df <- trnobs_df
+#mdlId <- "CSM2.X.glm"; obs_df <- fitobs_df
+#print(outliers <- car::outlierTest(glb_models_lst[[mdlId]]$finalModel))
+#mdlIdFamily <- myparseMdlId(mdlId)$family; obs_df <- dplyr::filter_(obs_df, interp(~(!(var %in% glbObsFitOutliers[[mdlIdFamily]])), var = as.name(glbFeatsId))); model_diags_df <- cbind(obs_df, data.frame(.rstudent=stats::rstudent(glb_models_lst[[mdlId]]$finalModel)), data.frame(.dffits=stats::dffits(glb_models_lst[[mdlId]]$finalModel)), data.frame(.hatvalues=stats::hatvalues(glb_models_lst[[mdlId]]$finalModel)));print(summary(model_diags_df[, c(".rstudent",".dffits",".hatvalues")])); table(cut(model_diags_df$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
+
+#print(subset(model_diags_df, is.na(.rstudent))[, glbFeatsId])
+#print(model_diags_df[which.max(model_diags_df$.rstudent), ])
+#print(subset(model_diags_df, is.na(.dffits))[, glbFeatsId])
+#print(model_diags_df[which.min(model_diags_df$.dffits), ])
+#print(subset(model_diags_df, .hatvalues > 0.99)[, glbFeatsId])
+#dffits_df <- merge(dffits_df, outliers_df, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
+#dffits_df <- merge(dffits_df, glbObsFit, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
+#subset(dffits_df, !is.na(.Bonf.p))
+
+    #mdlId <- "CSM.X.glm"; vars <- myextract_actual_feats(row.names(orderBy(reformulate(c("-", paste0(mdlId, ".imp"))), myget_feats_imp(glb_models_lst[[mdlId]]))));
+    #model_diags_df <- glb_get_predictions(model_diags_df, mdlId, glb_rsp_var)
+    #obs_ix <- row.names(model_diags_df) %in% names(outliers$rstudent)[1]
+    #obs_ix <- which(is.na(model_diags_df$.rstudent))
+    #obs_ix <- which(is.na(model_diags_df$.dffits))
+    #myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, paste0(glb_rsp_var, mdlId), vars[1:min(20, length(vars))])], obs_ix=obs_ix, id_var=glbFeatsId, category_var=glbFeatsCategory)
+
+    #model_diags_df[row.names(model_diags_df) %in% names(outliers$rstudent)[c(1:2)], ]
+    #ctgry_diags_df <- model_diags_df[model_diags_df[, glbFeatsCategory] %in% c("Unknown#0"), ]
+    #myplot_parcoord(obs_df=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
+    #table(glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), "startprice.log10.cut.fctr"])
+    #glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), c(glbFeatsId, "startprice")]
+
+    # No outliers & .dffits == NaN
+    #myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:10])], obs_ix=seq(1:nrow(model_diags_df))[is.na(model_diags_df$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
+
+}
 
 myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indepVar <- indepVar
@@ -2594,6 +2633,8 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 		}
 	}
 	myprint_mdl(mdl)
+	if (mdl_specs_lst[["train.method"]] == "glm")
+	    mydisplayOutliers(mdl, fit_df)
 
     #models_df$n.fit <- nrow(fit_df)
 	models_df$max.nTuningRuns <- nrow(mdl$results)

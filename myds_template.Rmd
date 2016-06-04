@@ -707,39 +707,6 @@ glbObsTrnOutliers[["Final"]] <- union(glbObsFitOutliers[["All.X"]],
                                 c(NULL
                                 ))
 
-# influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
-#mdlId <- "All.X##rcv#glm"; obs_df <- fitobs_df
-#mdlId <- "RFE.X.glm"; obs_df <- fitobs_df
-#mdlId <- "Final.glm"; obs_df <- trnobs_df
-#mdlId <- "CSM2.X.glm"; obs_df <- fitobs_df
-#print(outliers <- car::outlierTest(glb_models_lst[[mdlId]]$finalModel))
-#mdlIdFamily <- paste0(head(unlist(str_split(mdlId, "\\.")), -1), collapse="."); obs_df <- dplyr::filter_(obs_df, interp(~(!(var %in% glbObsFitOutliers[[mdlIdFamily]])), var = as.name(glbFeatsId))); model_diags_df <- cbind(obs_df, data.frame(.rstudent=stats::rstudent(glb_models_lst[[mdlId]]$finalModel)), data.frame(.dffits=stats::dffits(glb_models_lst[[mdlId]]$finalModel)), data.frame(.hatvalues=stats::hatvalues(glb_models_lst[[mdlId]]$finalModel)));print(summary(model_diags_df[, c(".rstudent",".dffits",".hatvalues")])); table(cut(model_diags_df$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
-
-#print(subset(model_diags_df, is.na(.rstudent))[, glbFeatsId])
-#print(model_diags_df[which.max(model_diags_df$.rstudent), ])
-#print(subset(model_diags_df, is.na(.dffits))[, glbFeatsId])
-#print(model_diags_df[which.min(model_diags_df$.dffits), ])
-#print(subset(model_diags_df, .hatvalues > 0.99)[, glbFeatsId])
-#dffits_df <- merge(dffits_df, outliers_df, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
-#dffits_df <- merge(dffits_df, glbObsFit, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
-#subset(dffits_df, !is.na(.Bonf.p))
-
-#mdlId <- "CSM.X.glm"; vars <- myextract_actual_feats(row.names(orderBy(reformulate(c("-", paste0(mdlId, ".imp"))), myget_feats_imp(glb_models_lst[[mdlId]])))); 
-#model_diags_df <- glb_get_predictions(model_diags_df, mdlId, glb_rsp_var)
-#obs_ix <- row.names(model_diags_df) %in% names(outliers$rstudent)[1]
-#obs_ix <- which(is.na(model_diags_df$.rstudent))
-#obs_ix <- which(is.na(model_diags_df$.dffits))
-#myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, paste0(glb_rsp_var, mdlId), vars[1:min(20, length(vars))])], obs_ix=obs_ix, id_var=glbFeatsId, category_var=glbFeatsCategory)
-
-#model_diags_df[row.names(model_diags_df) %in% names(outliers$rstudent)[c(1:2)], ]
-#ctgry_diags_df <- model_diags_df[model_diags_df[, glbFeatsCategory] %in% c("Unknown#0"), ]
-#myplot_parcoord(obs_df=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
-#table(glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), "startprice.log10.cut.fctr"])
-#glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), c(glbFeatsId, "startprice")]
-
-# No outliers & .dffits == NaN
-#myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:10])], obs_ix=seq(1:nrow(model_diags_df))[is.na(model_diags_df$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
-
 # Modify mdlId to (build & extract) "<FamilyId>#<Fit|Trn>#<caretMethod>#<preProc1.preProc2>#<samplingMethod>"
 glb_models_lst <- list(); glb_models_df <- data.frame()
 
@@ -795,15 +762,21 @@ if (glb_is_regression) {
         )
 
 glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
-# family: Choose from c("RFE.X", "CSM.X", "All.X", "Best.Interact")
+# family: Choose from c("RFE.X", "Csm.X", "All.X", "Best.Interact") %*% c(NUll, ".NOr", "Inc")
+#   RFE = "Recursive Feature Elimination"
+#   Csm = CuStoM
+#   NOr = No OutlieRs
+#   Inc = INteraCt
 #   methods: Choose from c(NULL, <method>, glbMdlMethods) 
 #glbMdlFamilies[["RFE.X"]] <- c("glmnet", "glm") # non-NULL vector is mandatory
-if (glb_is_classification && !glb_is_binomial)
+if (glb_is_classification && !glb_is_binomial) {
     # glm does not work for multinomial
-    glbMdlFamilies[["All.X"]] <- c("glmnet") else    
-    glbMdlFamilies[["All.X"]] <- c("glmnet", "glm")
-
-#glbMdlFamilies[["Best.Interact"]] <- "glmnet" # non-NULL vector is mandatory
+    glbMdlFamilies[["All.X"]] <- c("glmnet") 
+} else {
+    glbMdlFamilies[["All.X"]]     <- c("glmnet", "glm")
+}
+# glbMdlFamilies[["All.X.Inc"]] <- c("glmnet")
+# glbMdlFamilies[["RFE.X"]] <- c("glmnet")
 
 # Check if interaction features make RFE better
 # glbMdlFamilies[["CSM.X"]] <- setdiff(glbMdlMethods, c("lda", "lda2")) # crashing due to category:.clusterid ??? #c("glmnet", "glm") # non-NULL list is mandatory
@@ -813,7 +786,7 @@ if (glb_is_classification && !glb_is_binomial)
 # dAFeats.CSM.X %<d-% c(NULL
 #     # Interaction feats up to varImp(RFE.X.glmnet) >= 50
 #     , <comma-separated-features-vector>
-#     , setdiff(myextract_actual_feats(predictors(rfe_fit_results)), c(NULL
+#     , setdiff(myextract_actual_feats(predictors(glbRFEResults)), c(NULL
 #                , <comma-separated-features-vector>
 #                                                                       ))    
 #                                   )
@@ -821,6 +794,7 @@ if (glb_is_classification && !glb_is_binomial)
 
 glbMdlFamilies[["Final"]] <- c(NULL) # NULL vector acceptable # c("glmnet", "glm")
 
+# change this to glbMdlBlockParallel <- c(<mdl_id>) or NULL : default
 glbMdlAllowParallel <- list()
 #glbMdlAllowParallel[["Final##rcv#glmnet"]] <- FALSE
 
@@ -927,7 +901,9 @@ glbMdlPreprocMethods <- NULL # : default or list(
 #                                               c("knnImpute", "bagImpute", "medianImpute")),
 #                                     # NULL))
 #                                     c("nzv.spatialSign")))    
-# )    
+# )
+# glbMdlPreprocMethods[["RFE.X"]] <- list("glmnet" = union(unlist(glbMdlPreprocMethods[["All.X"]]),
+#                                                     "nzv.pca.spatialSign"))    
 
 # Baseline prediction model feature(s)
 glb_Baseline_mdl_var <- NULL # or c("<feat>")
@@ -4066,68 +4042,6 @@ if ("variable" %in% names(pltTrnObs))
 print(gp)
 #myplot_histogram(pltTrnObs, "D.npnct11.log", fill_col_name="sold", show_stats = TRUE)
 
-# Need to create an option for allowParallel ???
-myrun_rfe <- function(obs_df, indepVar, sizes = NULL) {
-    rfe_obs_df <- myget_vectorized_obs_df(obs_df, glb_rsp_var, indepVar)
-    predictors_vctr <- setdiff(names(rfe_obs_df), glb_rsp_var)
-    
-    if (glb_is_regression)  rfeFuncs <- lmFuncs else {    
-        rfeFuncs <- ldaFuncs
-        
-        # Delete non-variant columns
-        predictors_unqLen <- sapply(predictors_vctr, function(col)
-                                                length(unique(rfe_obs_df[, col])))
-        predictors_vctr <- predictors_vctr[predictors_unqLen > 1]
-        # Delete freqRatio >= 291
-        #   plagiarized from caret:::nzv
-        predictors_freqRatio <- 
-            apply(rfe_obs_df[, predictors_vctr, FALSE], 2, function(data) {
-                t <- table(data[!is.na(data)])
-                if (length(t) <= 1) {
-                    return(0)
-                }
-                w <- which.max(t)
-                return(max(t, na.rm = TRUE)/max(t[-w], na.rm = TRUE))
-            })
-        predictors_vctr <- predictors_vctr[predictors_freqRatio < 172]
-    }                        
-    
-    if (is.null(sizes))
-        sizes <- tail(2 ^ (1:as.integer(log2(length(predictors_vctr)))), 5)
-    
-    rfe_control <- rfeControl(functions = rfeFuncs, method = "repeatedcv",
-                             number = glb_rcv_n_folds, repeats = glb_rcv_n_repeats,
-                              verbose = TRUE, returnResamp = "all",
-        seeds = mygen_seeds(seeds_lst_len = 
-                                (glb_rcv_n_folds * glb_rcv_n_repeats) + 1,
-                            seeds_elmnt_lst_len = (length(sizes) + 1))
-, allowParallel = FALSE
-                            )
-    set.seed(113)
-    rfe_results <- rfe(rfe_obs_df[, predictors_vctr, FALSE], 
-                       rfe_obs_df[, glb_rsp_var],
-                       sizes = sizes, 
-                       # metric = unlist(strsplit(glbMdlMetricsEval, "[.]"))[2],
-#         maximize = ifelse(unlist(strsplit(glbMdlMetricsEval, "[.]"))[1] == "max",
-#                                        TRUE, FALSE),
-                       rfeControl = rfe_control)
-    print(rfe_results)
-    print(predictors(rfe_results))
-    # print(plot(rfe_results, type=c("g", "o")))
-    # print(plot(rfe_results))
-    print(ggplot(rfe_results))
-
-    return(rfe_results)
-}
-
-#stop(here"); glb2Sav()
-# shd .clusterid.fctr be excluded from this ? or include encoding of glbFeatsCategory:.clusterid.fctr ?
-if (grepl("RFE\\.X", names(glbMdlFamilies))) {
-    indepVar <- mygetIndepVar(glb_feats_df)
-    rfe_fit_results <- myrun_rfe(obs_df = glbObsFit, indepVar = indepVar, 
-                                 sizes = glbRFESizes[["RFE.X"]])
-}
-
 # print(all.equal(rfe_results[-which(names(rfe_results) == "times")], 
 #                 sav_rfe_results[-which(names(sav_rfe_results) == "times")]))
 
@@ -4563,8 +4477,8 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 ```
 
 ```{r fit.models_1, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
-#```{r fit.models_1, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c(NULL), dropSpec = c(NULL))}
-#myloadChunk(glbChunks$inpFilePathName, keepSpec = c(NULL), dropSpec = c(NULL))
+#```{r fit.models_1, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c("glbMdlFamilies", "glbRFESizes", "glbMdlAllowParallel","glbMdlPreprocMethods"), dropSpec = c(NULL))}
+#myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbMdlFamilies", "glbRFESizes", "glbMdlAllowParallel","glbMdlPreprocMethods"), dropSpec = c(NULL)); glb2Sav()
 
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
 # refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
@@ -4581,7 +4495,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
     if (grepl("\\.Interact", mdl_id_pfx)) {
         if (is.null(topindep_var) && is.null(interact_vars)) {
         #   select best glmnet model upto now
-            dsp_models_df <- orderBy(model_sel_frmla <- get_model_sel_frmla(),
+            dsp_models_df <- orderBy(model_sel_frmla <- glbgetModelSelectFormula(),
                                      glb_models_df)
             dsp_models_df <- subset(dsp_models_df, 
                                     grepl(".glmnet", id, fixed = TRUE))
@@ -4731,7 +4645,7 @@ fit.models_1_chunk_df <-
 require(gdata)
 
 # if model should be selected automatically / by default
-# mdl_id <- orderBy(get_model_sel_frmla(), glb_models_df)[1, "id"]
+# mdl_id <- orderBy(glbgetModelSelectFormula(), glb_models_df)[1, "id"]
 
 for (mdlFamily in names(glbMdlPreprocMethods))
     for (mdlSmpMethod in c("repeatedcv"))
@@ -4891,7 +4805,8 @@ for (mdlFamily in names(glbMdlPreprocMethods))
 #     print("rpart_sel_wlm_mdl"); prp(rpart_sel_wlm_mdl)
 # 
 
-print(glb_models_df)
+print(glb_models_df[order(glb_models_df$min.elapsedtime.everything), 
+                    c("min.elapsedtime.everything"), FALSE])
 
 rm(ret_lst)
 fit.models_1_chunk_df <- 
@@ -4904,6 +4819,8 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 fit.models_2_chunk_df <- 
     myadd_chunk(NULL, "fit.models_2_bgn", label.minor = "setup")
 
+require(reshape2)
+
 plt_models_df <- glb_models_df[, -grep("SD|Upper|Lower", names(glb_models_df))]
 for (var in grep("^min.", names(plt_models_df), value=TRUE)) {
     plt_models_df[, sub("min.", "inv.", var)] <- 
@@ -4911,7 +4828,7 @@ for (var in grep("^min.", names(plt_models_df), value=TRUE)) {
         1.0 / plt_models_df[, var]
     plt_models_df <- plt_models_df[ , -grep(var, names(plt_models_df))]
 }
-print(plt_models_df)
+# print(plt_models_df)
 # print(myplot_radar(radar_inp_df=plt_models_df))
 # print(myplot_radar(radar_inp_df=subset(plt_models_df, 
 #         !(mdl_id %in% grep("random|MFO", plt_models_df$id, value=TRUE)))))
@@ -5024,9 +4941,9 @@ dsp_models_cols <- c("id",
                     grep("opt.", names(glb_models_df), fixed = TRUE, value = TRUE)) 
 # if (glb_is_classification && glb_is_binomial) 
 #     dsp_models_cols <- c(dsp_models_cols, "opt.prob.threshold.OOB")
-print(dsp_models_df <- orderBy(get_model_sel_frmla(), glb_models_df)[, dsp_models_cols])
+print(dsp_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)[, dsp_models_cols])
 # print(myplot_radar(radar_inp_df = dsp_models_df))
-print("Metrics used for model selection:"); print(get_model_sel_frmla())
+print("Metrics used for model selection:"); print(glbgetModelSelectFormula())
 print(sprintf("Best model id: %s", dsp_models_df[1, "id"]))
 
 glb_get_predictions <- function(df, mdl_id, rsp_var, prob_threshold_def=NULL, verbose=FALSE) {
@@ -5193,7 +5110,7 @@ if (!is.null(glb_mdl_ensemble)) {
         stop("Ensemble models not implemented yet for multinomial classification")
     
     mygetEnsembleAutoMdlIds <- function() {
-        tmp_models_df <- orderBy(get_model_sel_frmla(), glb_models_df)
+        tmp_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)
         row.names(tmp_models_df) <- tmp_models_df$id
         mdl_threshold_pos <- 
             min(which(grepl("MFO|Random|Baseline", tmp_models_df$id))) - 1
@@ -5287,14 +5204,18 @@ if (!is.null(glb_mdl_ensemble)) {
                 fit_df = glbObsFit, OOB_df = glbObsOOB)
         }
     }
-    dsp_models_df <- get_dsp_models_df()
+    dsp_models_df <- glbgetDisplayModelsDf()
 }
 
 if (is.null(glbMdlSelId)) 
     glbMdlSelId <- dsp_models_df[1, "id"] else 
     print(sprintf("User specified selection: %s", glbMdlSelId))   
     
-myprint_mdl(glb_sel_mdl <- glb_models_lst[[glbMdlSelId]])
+# knitr crashes sometimes with plot.glmnet
+if (!(is.null(knitr::opts_current$get(name = 'label'))) &&
+    (myparseMdlId(glbMdlSelId)$alg == "glmnet"))
+    print(glb_sel_mdl <- glb_models_lst[[glbMdlSelId]]) else
+    myprint_mdl(glb_sel_mdl <- glb_models_lst[[glbMdlSelId]])
  
 # From here to save(), this should all be in one function
 #   these are executed in the same seq twice more:
@@ -5979,7 +5900,7 @@ if (glb_is_classification && glb_is_binomial)
                         "opt.prob.threshold.OOB"])
 print(sprintf("glbMdlSelId: %s", glbMdlSelId))
 print(sprintf("glbMdlFinId: %s", glbMdlFinId))
-print(subset(get_dsp_models_df(), select = -id))
+print(subset(glbgetDisplayModelsDf(), select = -id))
 
 if (glb_is_regression) {
     print(sprintf("%s OOB RMSE: %0.4f", glbMdlSelId,

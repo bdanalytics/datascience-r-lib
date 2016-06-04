@@ -86,6 +86,7 @@ myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
 
         if (!mycheckIdentical(get(syl, envir = tmpEnv),
                               get(syl, envir = .GlobalEnv))) {
+            print("")
             print(sprintf("myloadChunk: %s different: ", syl))
             print(sprintf("myloadChunk:   curEnv: "))
             if (!is.null(sylNms <- names(get(syl, envir = .GlobalEnv)))) print(sylNms) else
@@ -103,6 +104,7 @@ myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
         }
     }
 
+    print("")
     for (syl in (lodSyl <- setdiff(ls(tmpEnv), ls(.GlobalEnv)))) {
         print(sprintf("myloadChunk:   loading from dskEnv: %s", syl))
         assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
