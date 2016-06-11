@@ -293,6 +293,7 @@ mypltModelStats <- function(df, measure, dim = NULL, scaleXFn = NULL, highLightI
     if (is.null(dim))
         dim <- setdiff(names(df), measure)
 
+    stopifnot(length(setdiff(c(measure, dim), names(df))) == 0)
     df <- df[, c(measure, dim)]
 
     pltDf <- tidyr::gather_(df, 'key', 'value', gather_cols = measure)

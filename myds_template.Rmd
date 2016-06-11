@@ -7,7 +7,7 @@ author: "bdanalytics"
 output:
     html_document:
         keep_md: yes
-        pandoc_args: ["+RTS", "-K64M", "-RTS"]
+        pandoc_args: ["+RTS", "-K256M", "-RTS"]
 
 # output:
 #   pdf_document:
@@ -124,7 +124,7 @@ if (is.null(knitr::opts_current$get(name = 'label'))) # Running in IDE
     source("~/Dropbox/datascience/R/mydsutils.R")    
 # Gather all package requirements here
 suppressPackageStartupMessages(require(doMC))
-glbCores <- 6 # of cores on machine - 2
+glbCores <- 10 # of cores on machine - 2
 registerDoMC(glbCores) 
 
 suppressPackageStartupMessages(require(caret))
@@ -762,7 +762,7 @@ if (glb_is_regression) {
         )
 
 glbMdlFamilies <- list(); glb_mdl_feats_lst <- list()
-# family: Choose from c("RFE.X", "Csm.X", "All.X", "Best.Interact") %*% c(NUll, ".NOr", "Inc")
+# family: Choose from c("RFE.X", "Csm.X", "All.X", "Best.Interact") %*% c(NUll, ".NOr", ".Inc")
 #   RFE = "Recursive Feature Elimination"
 #   Csm = CuStoM
 #   NOr = No OutlieRs
@@ -775,8 +775,7 @@ if (glb_is_classification && !glb_is_binomial) {
 } else {
     glbMdlFamilies[["All.X"]]     <- c("glmnet", "glm")
 }
-# glbMdlFamilies[["All.X.Inc"]] <- c("glmnet")
-# glbMdlFamilies[["RFE.X"]] <- c("glmnet")
+#glbMdlFamilies[["All.X.Inc"]] <- glbMdlFamilies[["All.X"]] # value not used
 
 # Check if interaction features make RFE better
 # glbMdlFamilies[["CSM.X"]] <- setdiff(glbMdlMethods, c("lda", "lda2")) # crashing due to category:.clusterid ??? #c("glmnet", "glm") # non-NULL list is mandatory
@@ -801,10 +800,10 @@ glbMdlAllowParallel <- list()
 # Check if tuning parameters make fit better; make it mdlFamily customizable ?
 glbMdlTuneParams <- data.frame()
 # When glmnet crashes at model$grid with error: ???
-glmnetTuneParams <- rbind(data.frame()
-                        ,data.frame(parameter = "alpha",  vals = "0.100 0.325 0.550 0.775 1.000")
-                        ,data.frame(parameter = "lambda", vals = "9.342e-02")    
-                        )
+# glmnetTuneParams <- rbind(data.frame()
+#                         ,data.frame(parameter = "alpha",  vals = "0.100 0.325 0.550 0.775 1.000")
+#                         ,data.frame(parameter = "lambda", vals = "9.342e-02")    
+#                         )
 # glbMdlTuneParams <- myrbind_df(glbMdlTuneParams,
 #                                cbind(data.frame(mdlId = "<mdlId>"),
 #                                      glmnetTuneParams))
@@ -814,10 +813,10 @@ glmnetTuneParams <- rbind(data.frame()
 
     #bagEarth
     #   degree=1 [2] 3; nprune=64 128 256 512 [1024]; RMSE=0.6486663 (up)
-# glbMdlTuneParams <- myrbind_df(glbMdlTuneParams, rbind(data.frame()
-#     ,data.frame(method = "bagEarth", parameter = "nprune", vals = "256")
-#     ,data.frame(method = "bagEarth", parameter = "degree", vals = "2")    
-# ))
+# bagEarthTuneParams <- rbind(data.frame()
+#                         ,data.frame(parameter = "degree", vals = "1")
+#                         ,data.frame(parameter = "nprune", vals = "256")
+#                         )
 
     #earth 
     #   degree=[1]; nprune=2  [9] 17 25 33; RMSE=0.1334478
@@ -934,17 +933,21 @@ glb_clf_proba_threshold <- NULL # 0.5
 
 # Model selection criteria
 if (glb_is_regression)
-    glbMdlMetricsEval <- c("min.RMSE.OOB", "max.R.sq.OOB", "max.Adj.R.sq.fit", "min.RMSE.fit")
+    glbMdlMetricsEval <- c("min.RMSE.OOB", "max.R.sq.OOB", "min.elapsedtime.everything",
+                           "max.Adj.R.sq.fit", "min.RMSE.fit")
     #glbMdlMetricsEval <- c("min.RMSE.fit", "max.R.sq.fit", "max.Adj.R.sq.fit")    
 if (glb_is_classification) {
     if (glb_is_binomial)
         glbMdlMetricsEval <- 
-            c("max.Accuracy.OOB", "max.AUCROCR.OOB", "max.AUCpROC.OOB", "min.aic.fit", "max.Accuracy.fit") else        
-        glbMdlMetricsEval <- c("max.Accuracy.OOB", "max.Kappa.OOB")
+            c("max.Accuracy.OOB", "max.AUCROCR.OOB", "max.AUCpROC.OOB",
+              "min.elapsedtime.everything", 
+              # "min.aic.fit", 
+              "max.Accuracy.fit") else        
+        glbMdlMetricsEval <- c("max.Accuracy.OOB", "max.Kappa.OOB", "min.elapsedtime.everything")
 }
 
 # select from NULL [no ensemble models], "auto" [all models better than MFO or Baseline], c(mdl_ids in glb_models_lst) [Typically top-rated models in auto]
-glb_mdl_ensemble <- NULL
+glbMdlEnsemble <- "auto"
 #     "%<d-% setdiff(mygetEnsembleAutoMdlIds(), 'CSM.X.rf')" 
 #     c(<comma-separated-mdlIds>
 #      )
@@ -1725,6 +1728,8 @@ dsp_chisq.test <- function(...) {
 # print(table(glbObsAll$NewsDesk, glbObsAll$SectionName, glbObsAll$SubsectionName))
 
 # glbObsAll$myCategory.fctr <- as.factor(glbObsAll$myCategory)
+
+rm(pltObsSmp)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "transform.data", major.inc = FALSE)
 ```
 
@@ -1925,6 +1930,7 @@ if (length(glbFeatsDateTime) > 0) {
 }
 #rm(last1, last10, last100)
 
+rm(pltObsAll)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.image", major.inc = FALSE)
 ```
 
@@ -3339,6 +3345,8 @@ mytokenize3grams <- content_transformer(function(x) {
                     major.inc = TRUE)
 }
 
+rm(tmp_allobs_df)
+rm(tmp_trnobs_df)
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "extract.features.string", major.inc = FALSE)
 ```
 
@@ -3681,6 +3689,7 @@ if (!is.null(glbFeatsCluster)) {
 glbObsTrn <- subset(glbObsAll, .src == "Train")
 glbObsNew <- subset(glbObsAll, .src == "Test")
 
+rm(dstns_mtrx); rm(min_dstns_mtrx); 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc = TRUE)
 ```
 
@@ -4448,24 +4457,27 @@ if (length(int_feats <- setdiff(setdiff(unique(glb_feats_df$cor.high.X), NA),
 }    
 
 # Low.cor.X
-fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
-                        paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
-                                     label.minor = "glmnet")
-indepVar <- mygetIndepVar(glb_feats_df)
-ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-            id.prefix = "Low.cor.X", 
-            type = glb_model_type, 
-            tune.df = glbMdlTuneParams,        
-            trainControl.method = "repeatedcv",
-            trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
-            trainControl.classProbs = glb_is_classification,
-            trainControl.summaryFunction = glbMdlMetricSummaryFn,
-            trainControl.allowParallel = glbMdlAllowParallel,
-            train.metric = glbMdlMetricSummary, 
-            train.maximize = glbMdlMetricMaximize,    
-            train.method = "glmnet")),
-        indepVar = indepVar, rsp_var = glb_rsp_var, 
-        fit_df = glbObsFit, OOB_df = glbObsOOB)
+stop("here: Low.cor.X features not implemented correctly")
+if (length() {
+    fit.models_0_chunk_df <- myadd_chunk(fit.models_0_chunk_df, 
+                            paste0("fit.models_0_", "Low.cor.X"), major.inc = FALSE,
+                                         label.minor = "glmnet")
+    indepVar <- mygetIndepVar(glb_feats_df)
+    ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+                id.prefix = "Low.cor.X", 
+                type = glb_model_type, 
+                tune.df = glbMdlTuneParams,        
+                trainControl.method = "repeatedcv",
+                trainControl.number = glb_rcv_n_folds, trainControl.repeats = glb_rcv_n_repeats,
+                trainControl.classProbs = glb_is_classification,
+                trainControl.summaryFunction = glbMdlMetricSummaryFn,
+                trainControl.allowParallel = glbMdlAllowParallel,
+                train.metric = glbMdlMetricSummary, 
+                train.maximize = glbMdlMetricMaximize,    
+                train.method = "glmnet")),
+            indepVar = indepVar, rsp_var = glb_rsp_var, 
+            fit_df = glbObsFit, OOB_df = glbObsOOB)
+}
 
 fit.models_0_chunk_df <- 
     myadd_chunk(fit.models_0_chunk_df, "fit.models_0_end", major.inc = FALSE,
@@ -4481,32 +4493,106 @@ glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 #myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbMdlFamilies", "glbRFESizes", "glbMdlAllowParallel","glbMdlPreprocMethods"), dropSpec = c(NULL)); glb2Sav()
 
 fit.models_1_chunk_df <- myadd_chunk(NULL, "fit.models_1_bgn", label.minor = "setup")
+
+# Need to create an option for allowParallel ???
+myrun_rfe <- function(obs_df, indepVar, sizes = NULL) {
+    rfe_obs_df <- myget_vectorized_obs_df(obs_df, glb_rsp_var, indepVar)
+    predictors_vctr <- setdiff(names(rfe_obs_df), glb_rsp_var)
+    
+    if (glb_is_regression)  rfeFuncs <- lmFuncs else {    
+        rfeFuncs <- ldaFuncs
+        
+        # Delete non-variant columns
+        predictors_unqLen <- sapply(predictors_vctr, function(col)
+                                                length(unique(rfe_obs_df[, col])))
+        predictors_vctr <- predictors_vctr[predictors_unqLen > 1]
+        # Delete freqRatio >= 291
+        #   plagiarized from caret:::nzv
+        predictors_freqRatio <- 
+            apply(rfe_obs_df[, predictors_vctr, FALSE], 2, function(data) {
+                t <- table(data[!is.na(data)])
+                if (length(t) <= 1) {
+                    return(0)
+                }
+                w <- which.max(t)
+                return(max(t, na.rm = TRUE)/max(t[-w], na.rm = TRUE))
+            })
+        predictors_vctr <- predictors_vctr[predictors_freqRatio < 172]
+    }                        
+    
+    if (is.null(sizes))
+        sizes <- tail(2 ^ (1:as.integer(log2(length(predictors_vctr)))), 5)
+    
+    set.seed(113)
+    rfe_control <- rfeControl(functions = rfeFuncs, method = "repeatedcv",
+                             number = glb_rcv_n_folds, repeats = glb_rcv_n_repeats,
+                              verbose = TRUE, returnResamp = "all",
+                    seeds = mygen_seeds(seeds_lst_len = (glb_rcv_n_folds * glb_rcv_n_repeats) + 1,
+                                        seeds_elmnt_lst_len = length(sizes) + 1), 
+                            allowParallel = FALSE)
+    set.seed(113)
+    rfe_results <- rfe(rfe_obs_df[, predictors_vctr, FALSE], 
+                       rfe_obs_df[, glb_rsp_var],
+                       sizes = sizes, 
+                       # metric = unlist(strsplit(glbMdlMetricsEval, "[.]"))[2],
+#         maximize = ifelse(unlist(strsplit(glbMdlMetricsEval, "[.]"))[1] == "max",
+#                                        TRUE, FALSE),
+                       rfeControl = rfe_control)
+    print(rfe_results)
+    print(predictors(rfe_results))
+    # print(plot(rfe_results, type=c("g", "o")))
+    # print(plot(rfe_results))
+    print(ggplot(rfe_results))
+
+    return(rfe_results)
+}
+
+#stop(here"); glb2Sav()
+# shd .clusterid.fctr be excluded from this ? or include encoding of glbFeatsCategory:.clusterid.fctr ?
+if ((any(grepl("RFE.X", names(glbMdlFamilies), fixed = TRUE))) &&
+    is.null(glbRFEResults)) {
+    indepVar <- mygetIndepVar(glb_feats_df)
+    glbRFEResults <- myrun_rfe(obs_df = glbObsFit, indepVar = indepVar, 
+                                 sizes = glbRFESizes[["RFE.X"]])
+}
+
 # refactor code for outliers / ensure all model runs exclude outliers in this chunk ???
 
 #stop(here"); glb2Sav(); all.equal(glb_models_df, sav_models_df)
-topindep_var <- NULL; interact_vars <- NULL;
 for (mdl_id_pfx in names(glbMdlFamilies)) {
+# for (mdl_id_pfx in names(glbMdlFamilies)[2]) {    
     fit.models_1_chunk_df <- 
         myadd_chunk(fit.models_1_chunk_df, paste0("fit.models_1_", mdl_id_pfx),
                     major.inc = FALSE, label.minor = "setup")
 
-    indepVar <- NULL;
+    indepVar <- NULL; topindep_var <- NULL; interact_vars <- NULL; 
+    thsPreproc <- NULL;
 
-    if (grepl("\\.Interact", mdl_id_pfx)) {
+    if (grepl("\\.Inc", mdl_id_pfx)) {
         if (is.null(topindep_var) && is.null(interact_vars)) {
-        #   select best glmnet model upto now
+        #   select best root#!pca#?#? model upto now
             dsp_models_df <- orderBy(model_sel_frmla <- glbgetModelSelectFormula(),
                                      glb_models_df)
-            dsp_models_df <- subset(dsp_models_df, 
-                                    grepl(".glmnet", id, fixed = TRUE))
+            thsRootFamily <- gsub(".Inc", "", mdl_id_pfx, fixed = TRUE)
+            dsp_models_df <- dsp_models_df[sapply(dsp_models_df$id, 
+                                        function(id) myparseMdlId(id)$family == thsRootFamily), ]
+            dsp_models_df <- dsp_models_df[sapply(dsp_models_df$id, 
+                                        function(id) !(grepl("pca", myparseMdlId(id)$preProcess))), ]
+            # dsp_models_df <- dsp_models_df[sapply(dsp_models_df$id, 
+            #                             function(id) myparseMdlId(id)$alg    == "glmnet"     ), ]
+            # dsp_models_df <- subset(dsp_models_df, 
+            #                         (myparseMdlId(id)$family == thsRootFamily) & 
+            #                         (myparseMdlId(id)$alg    == "glmnet"))
+            stopifnot(nrow(dsp_models_df) > 0)
             bst_mdl_id <- dsp_models_df$id[1]
-            mdl_id_pfx <- 
-                paste(c(head(unlist(strsplit(bst_mdl_id, "[.]")), -1), "Interact"),
-                      collapse=".")
+            thsPreproc <- myparseMdlId(bst_mdl_id)$preProcess
+            # mdl_id_pfx <- 
+            #     paste(c(head(unlist(strsplit(bst_mdl_id, "[.]")), -1), "Interact"),
+            #           collapse=".")
         #   select important features
             if (is.null(bst_featsimp_df <- 
                         myget_feats_importance(glb_models_lst[[bst_mdl_id]]))) {
-                warning("Base model for RFE.Interact: ", bst_mdl_id, 
+                warning("Root model for ", mdl_id_pfx, " : ", bst_mdl_id, 
                         " has no important features")
                 next
             }    
@@ -4538,15 +4624,6 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
                 interact_vars <- 
                     interact_vars[!grepl(topindep_var, interact_vars, fixed=TRUE)]
             }
-            ### bid0_sp only
-#             interact_vars <- c(
-#     "biddable", "D.ratio.sum.TfIdf.wrds.n", "D.TfIdf.sum.stem.stop.Ratio", "D.sum.TfIdf",
-#     "D.TfIdf.sum.post.stop", "D.TfIdf.sum.post.stem", "D.ratio.wrds.stop.n.wrds.n", "D.chrs.uppr.n.log",
-#     "D.chrs.n.log", "color.fctr"
-#     # , "condition.fctr", "prdl.my.descr.fctr"
-#                                 )
-#            interact_vars <- setdiff(interact_vars, c("startprice.dgt2.is9", "color.fctr"))
-            ###
             indepVar <- myextract_actual_feats(row.names(bst_featsimp_df))
             indepVar <- setdiff(indepVar, topindep_var)
             if (length(interact_vars) > 0) {
@@ -4563,7 +4640,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
         indepVar <- glb_mdl_feats_lst[[mdl_id_pfx]]
 
     if (is.null(indepVar) && grepl("RFE\\.", mdl_id_pfx))
-        indepVar <- myextract_actual_feats(predictors(rfe_fit_results))
+        indepVar <- myextract_actual_feats(predictors(glbRFEResults))
     
     if (is.null(indepVar))
         indepVar <- mygetIndepVar(glb_feats_df)
@@ -4575,14 +4652,14 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
 
     indepVar <- myadjustInteractionFeats(glb_feats_df, indepVar)
     
-    if (grepl("\\.Interact", mdl_id_pfx)) { 
-        # if (method != tail(unlist(strsplit(bst_mdl_id, "[.]")), 1)) next
-        if (is.null(glbMdlFamilies[[mdl_id_pfx]])) {
-            if (!is.null(glbMdlFamilies[["Best.Interact"]]))
-                glbMdlFamilies[[mdl_id_pfx]] <-
-                    glbMdlFamilies[["Best.Interact"]]
-        }
-    }
+    # if (grepl("\\.Interact", mdl_id_pfx)) { 
+    #     # if (method != tail(unlist(strsplit(bst_mdl_id, "[.]")), 1)) next
+    #     if (is.null(glbMdlFamilies[[mdl_id_pfx]])) {
+    #         if (!is.null(glbMdlFamilies[["Best.Interact"]]))
+    #             glbMdlFamilies[[mdl_id_pfx]] <-
+    #                 glbMdlFamilies[["Best.Interact"]]
+    #     }
+    # }
     
     if (!is.null(glbObsFitOutliers[[mdl_id_pfx]])) {
         fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
@@ -4591,6 +4668,7 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
         print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
     } else fitobs_df <- glbObsFit
 
+    if (grepl("\\.Inc", mdl_id_pfx)) mdl_methods <- myparseMdlId(bst_mdl_id)$alg else
     if (is.null(glbMdlFamilies[[mdl_id_pfx]]))
         mdl_methods <- glbMdlMethods else
         mdl_methods <- glbMdlFamilies[[mdl_id_pfx]]    
@@ -4620,7 +4698,8 @@ for (mdl_id_pfx in names(glbMdlFamilies)) {
             trainControl.allowParallel = glbMdlAllowParallel,            
             train.metric = glbMdlMetricSummary, 
             train.maximize = glbMdlMetricMaximize,    
-            train.method = method)),
+            train.method = method,
+            train.preProcess = thsPreproc)),
             indepVar = indepVar, rsp_var = glb_rsp_var, 
             fit_df = fitobs_df, OOB_df = glbObsOOB)
         
@@ -4644,46 +4723,41 @@ fit.models_1_chunk_df <-
                 label.minor = "preProc")
 require(gdata)
 
-# if model should be selected automatically / by default
-# mdl_id <- orderBy(glbgetModelSelectFormula(), glb_models_df)[1, "id"]
+# Base Model for preProc should be selected automatically for each family
+bstMdlDf <- orderBy(glbgetModelSelectFormula(), glb_models_df)
+print(head(bstMdlDf, 5))
+bstMdlId <- bstMdlDf[1, "id"]
+bstMdlIdComponents <- myparseMdlId(bstMdlId)
 
-for (mdlFamily in names(glbMdlPreprocMethods))
-    for (mdlSmpMethod in c("repeatedcv"))
-        for (mdlAlgMethod in names(glbMdlPreprocMethods[[mdlFamily]])) {
-            thsMdlParentId <- myinit_mdl_specs_lst(mdl_specs_lst = list(
-                       "id.prefix" = mdlFamily,
-                "train.preProcess" = NULL,
-             "trainControl.method" = mdlSmpMethod,
-                    "train.method" = mdlAlgMethod))$id
-            
-            indepVar <- trim(unlist(strsplit(glb_models_df[glb_models_df$id == thsMdlParentId,
-                                                                  "feats"], "[,]")))
-            if (!is.null(glbObsFitOutliers[[mdlFamily]])) {
-                fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
-                                                 glbObsFitOutliers[[mdlFamily]]), ]
-                    print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
-                    print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
-            } else fitobs_df <- glbObsFit
-            
-            for (mdlPrepr in glbMdlPreprocMethods[[mdlFamily]][[mdlAlgMethod]]) {
-            # for (mdlPrepr in glbMdlPreprocMethods[[mdlFamily]][[mdlAlgMethod]][-(1:13)]) {
-                ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
-                        id.prefix = mdlFamily, 
-                        type = glb_model_type, tune.df = glbMdlTuneParams,
-                        trainControl.method = mdlSmpMethod,
-                        trainControl.number = glb_rcv_n_folds,
-                        trainControl.repeats = glb_rcv_n_repeats,
-                        trainControl.classProbs = glb_is_classification,
-                        trainControl.summaryFunction = glbMdlMetricSummaryFn,
-                        trainControl.allowParallel = glbMdlAllowParallel,                        
-                        train.metric = glbMdlMetricSummary, 
-                        train.maximize = glbMdlMetricMaximize,    
-                        train.method = mdlAlgMethod, 
-                        train.preProcess = mdlPrepr)),
-                        indepVar = indepVar, rsp_var = glb_rsp_var, 
-                        fit_df = fitobs_df, OOB_df = glbObsOOB)
-            }            
-        }
+# if (bstMdlIdComponents$preProcess == "") {
+#     indepVar <- trim(unlist(strsplit(glb_models_df[glb_models_df$id == bstMdlId,
+#                                                    "feats"], "[,]")))
+#     if (!is.null(glbObsFitOutliers[[bstMdlIdComponents$family]])) {
+#         fitobs_df <- glbObsFit[!(glbObsFit[, glbFeatsId] %in%
+#                                      glbObsFitOutliers[[bstMdlIdComponents$family]]), ]
+#         print(sprintf("Outliers removed: %d", nrow(glbObsFit) - nrow(fitobs_df)))
+#         print(setdiff(glbObsFit[, glbFeatsId], fitobs_df[, glbFeatsId]))
+#     } else fitobs_df <- glbObsFit
+#     
+#     for (mdlPrepr in glbMdlPreprocMethods[[mdlFamily]][[mdlAlgMethod]]) {
+#         # for (mdlPrepr in glbMdlPreprocMethods[[mdlFamily]][[mdlAlgMethod]][-(1:13)]) {
+#         ret_lst <- myfit_mdl(mdl_specs_lst = myinit_mdl_specs_lst(mdl_specs_lst = list(
+#             id.prefix = bstMdlIdComponents$family, 
+#             type = glb_model_type, tune.df = glbMdlTuneParams,
+#             trainControl.method = bstMdlIdComponents$resample,
+#             trainControl.number = glb_rcv_n_folds,
+#             trainControl.repeats = glb_rcv_n_repeats,
+#             trainControl.classProbs = glb_is_classification,
+#             trainControl.summaryFunction = glbMdlMetricSummaryFn,
+#             trainControl.allowParallel = glbMdlAllowParallel,                        
+#             train.metric = glbMdlMetricSummary, 
+#             train.maximize = glbMdlMetricMaximize,    
+#             train.method = bstMdlIdComponents$alg, 
+#             train.preProcess = mdlPrepr)),
+#             indepVar = indepVar, rsp_var = glb_rsp_var, 
+#             fit_df = fitobs_df, OOB_df = glbObsOOB)
+#     }            
+# }
     
     # If (All|RFE).X.glm is less accurate than Low.Cor.X.glm
     #   check NA coefficients & filter appropriate terms in indepVar
@@ -4815,7 +4889,10 @@ fit.models_1_chunk_df <-
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "fit.models", major.inc = FALSE)
 ```
 
-```{r fit.models_2, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
+ ```{r fit.models_2, cache=FALSE, fig.height=10, fig.width=15, eval=myevlChunk(glbChunks, glbOut$pfx)}
+#```{r fit.models_2, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c("glbMdlAllowParallel", "glbMdlEnsemble", "glbMdlMetricsEval", "glbMdlTuneParams"), dropSpec = c(NULL))}
+#myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbMdlAllowParallel", "glbMdlEnsemble", "glbMdlMetricsEval", "glbMdlTuneParams"), dropSpec = c(NULL)); glb2Sav()
+
 fit.models_2_chunk_df <- 
     myadd_chunk(NULL, "fit.models_2_bgn", label.minor = "setup")
 
@@ -5260,6 +5337,23 @@ glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
     #     if (!all(is.na(featsimp_df$feat.interact)))
     #         stop("not implemented yet")
         rsp_var_out <- mygetPredictIds(glb_rsp_var, mdl_id)$value
+        if (grepl("pca", myparseMdlId(mdl_id)$preProc, fixed = TRUE)) {
+            indepVar <- unlist(strsplit(glb_models_df[glb_models_df$id == mdl_id, "feats"], ","))
+            vectorizedObsMtx <- myget_vectorized_obs_df(obs_df, rsp_var = glb_rsp_var, 
+                indep_vars = indepVar)
+            if (!inherits(vectorizedObsMtx, "matrix")) {
+                vectorizedObsMtx[, glb_rsp_var] <- as.numeric(vectorizedObsMtx[, glb_rsp_var])
+                vectorizedObsMtx <- as.matrix(vectorizedObsMtx)
+            }    
+            rotationMtx <- glb_models_lst[[mdl_id]]$preProcess$rotation
+            pcaobs_df <- as.data.frame(vectorizedObsMtx[, dimnames(rotationMtx)[[1]]] %*%
+                                           rotationMtx)
+            # pcaobs_df[, glb_rsp_var] <- obs_df[, glb_rsp_var]
+            # pcaobs_df[, rsp_var_out] <- obs_df[, rsp_var_out]
+            # pcaobs_df[, glbFeatsId]  <- obs_df[, glbFeatsId]            
+            obs_df <- cbind(obs_df, pcaobs_df)
+        }    
+        
         for (var in featsimp_df$feat) {
             plot_df <- melt(obs_df, id.vars = var, 
                             measure.vars = c(glb_rsp_var, rsp_var_out))
@@ -5288,8 +5382,8 @@ glb_analytics_diag_plots <- function(obs_df, mdl_id, prob_threshold=NULL) {
         require(lazyeval)
         
         if (is.null(featsimp_df) || (nrow(featsimp_df) == 0))
-            warning("No features in selected model are statistically important")
-        else print(myplot_prediction_classification(df = obs_df, 
+            warning("No features in selected model are statistically important") else
+            print(myplot_prediction_classification(df = obs_df, 
                                 feat_x = ifelse(nrow(featsimp_df) > 1, 
                                                 featsimp_df$feat[2], ".rownames"),
                                                feat_y = featsimp_df$feat[1],
@@ -5370,8 +5464,7 @@ if (!is.null(glbMdlFinId) && (glbMdlFinId %in% names(glb_models_lst))) {
     glb_fin_mdl <- glb_models_lst[[glbMdlFinId]]
 } else 
 # if (nrow(glbObsFit) + length(glbObsFitOutliers) == nrow(glbObsTrn))
-if (!all(is.na(glbObsNew[, glb_rsp_var])))
-{    
+if (!all(is.na(glbObsNew[, glb_rsp_var]))) {    
     warning("Final model same as glbMdlSelId")
     glbMdlFinId <- paste0("Final.", glbMdlSelId)
     glb_fin_mdl <- glb_sel_mdl
@@ -5380,19 +5473,18 @@ if (!all(is.na(glbObsNew[, glb_rsp_var])))
     mdlDf$id <- glbMdlFinId
     glb_models_df <- rbind(glb_models_df, mdlDf)
 } else {    
-            if (grepl("RFE\\.X", names(glbMdlFamilies))) {
-                indepVar <- mygetIndepVar(glb_feats_df)
-                rfe_trn_results <- 
-                    myrun_rfe(glbObsTrn, indepVar, glbRFESizes[["Final"]])
-                if (!isTRUE(all.equal(sort(predictors(rfe_trn_results)),
-                                      sort(predictors(rfe_fit_results))))) {
-                    print("Diffs predictors(rfe_trn_results) vs. predictors(rfe_fit_results):")
-                    print(setdiff(predictors(rfe_trn_results), predictors(rfe_fit_results)))
-                    print("Diffs predictors(rfe_fit_results) vs. predictors(rfe_trn_results):")
-                    print(setdiff(predictors(rfe_fit_results), predictors(rfe_trn_results)))
-            }
+    if (myparseMdlId(glbMdlSelId)$family == "RFE.X") {
+        indepVar <- mygetIndepVar(glb_feats_df)
+        trnRFEResults <- 
+            myrun_rfe(glbObsTrn, indepVar, glbRFESizes[["Final"]])
+        if (!isTRUE(all.equal(sort(predictors(trnRFEResults)),
+                              sort(predictors(glbRFEResults))))) {
+            print("Diffs predictors(trnRFEResults) vs. predictors(glbRFEResults):")
+            print(setdiff(predictors(trnRFEResults), predictors(glbRFEResults)))
+            print("Diffs predictors(glbRFEResults) vs. predictors(trnRFEResults):")
+            print(setdiff(predictors(glbRFEResults), predictors(trnRFEResults)))
         }
-    # }    
+    }
 
     if (grepl("Ensemble", glbMdlSelId)) {
         # Find which models are relevant
@@ -5406,7 +5498,7 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                                collapse = ".")
             if (grepl("RFE\\.X\\.", mdlIdPfx)) 
                 mdlIndepVars <- myadjustInteractionFeats(glb_feats_df, myextract_actual_feats(
-                    predictors(rfe_trn_results))) else
+                    predictors(trnRFEResults))) else
                 mdlIndepVars <- trim(unlist(
             strsplit(glb_models_df[glb_models_df$id == mdl_id, "feats"], "[,]")))
             ret_lst <- 
@@ -5453,7 +5545,8 @@ gsub(mygetPredictIds(glb_rsp_var)$value, "", row.names(mdlimp_df), fixed = TRUE)
                                     row.names(mdlimp_df))
     } else 
     if (grepl("RFE.X", glbMdlSelId, fixed = TRUE)) {
-        indepVar <- myextract_actual_feats(predictors(rfe_trn_results))
+        # indepVar <- myextract_actual_feats(predictors(trnRFEResults))
+        indepVar <- myextract_actual_feats(predictors(glbRFEResults))        
     } else indepVar <- 
                 trim(unlist(strsplit(glb_models_df[glb_models_df$id ==
                                                    glbMdlSelId

@@ -1456,13 +1456,12 @@ myget_vectorized_obs_df <- function(obs_df, rsp_var, indep_vars) {
     if (length(fctr_vars) > 0)
         vctobs_df <- cbind(vctobs_df[, -grep(gsub(".", "\\.",
                                 paste0(unique(unlist(strsplit(fctr_vars, "[:]"))), collapse="|"),
-                                                    fixed=TRUE), names(vctobs_df))],
+                                                    fixed=TRUE), names(vctobs_df)), FALSE],
                             model.matrix(reformulate(c(0, fctr_vars)), vctobs_df))
     # Because predictors is a function for rfe
     #predictors_vctr <- setdiff(names(vctobs_df), rsp_var)
 
-    # vctobs_df is a matrix -> shd be a data.frame ???
-    # first col is rsp_var which is returned as "V1" when converted into data.frame
+    # first col is rsp_var which might be converted as a character if it is a factor ???
     return(vctobs_df)
 }
 
@@ -1530,6 +1529,9 @@ mygetCategoryEntropy <- function(obs_df, entropy_var, by_var=NULL) {
 ## 08.	    fit models
 
 myadjustInteractionFeats <- function(featsDf, vars_vctr) {
+	if (!("interaction.feat" %in% names(featsDf)))
+		return(vars_vctr)
+
     for (feat in subset(featsDf, !is.na(interaction.feat))$id)
         if (feat %in% vars_vctr)
             vars_vctr <- union(setdiff(vars_vctr, feat),
@@ -1555,7 +1557,13 @@ myprint_mdl <- function(mdl) {
         if (is.list(x) && all(c("x", "y") %in% names(x)))
             plot(lcl_mdl, ask=FALSE)
 
-        print(summary(lcl_mdl))
+        # print(summary(lcl_mdl))
+        for (elt in names(lcl_mdl)) {
+            if (!(elt %in% c("fit", "summary", "call", "x"))) {
+                print(sprintf("myprint_mdl: %s:", elt))
+                print(lcl_mdl[[elt]])
+            }
+        }
         return(TRUE)
     }
 
@@ -1697,9 +1705,22 @@ myprint_mdl <- function(mdl) {
     	return(TRUE)
     }
 
-        plot(lcl_mdl, ask=FALSE)
-    	print(summary(lcl_mdl))
-    	return(TRUE)
+    if (inherits(lcl_mdl, "svm")) {
+        # varImpDf <- varImp(mdl)$importance
+        # varImpDf$meanClassImp <- rowMeans(varImpDf, na.rm = TRUE)
+        # varImpDf$feat <- row.names(varImpDf)
+        # varImpDf <- dplyr::arrange(varImpDf, desc(meanClassImp))
+        # plot(lcl_mdl, data = mdl$trainingData,
+        #      formula = reformulate(varImpDf$feat[1], varImpDf$feat[2]),
+        #      fill = FALSE, # fill = TRUE does not work if varImpDf$feat[1 or 2] is a factor
+        #      ask = FALSE)
+        print(summary(lcl_mdl))
+        return(TRUE)
+    }
+
+    plot(lcl_mdl, ask = FALSE)
+    print(summary(lcl_mdl))
+    return(TRUE)
 
 #    stop("not implemented yet: ", class(lcl_mdl))
 
@@ -2186,7 +2207,11 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		    # if all thresholds are > 0.5, pick min
 		    if (all(maxMetricDf$threshold >= 0.5)) prob_threshold <- min(maxMetricDf$threshold) else {
 		            print("mypredict_mdl: maxMetricDf:"); print(maxMetricDf)
-		            stop("mypredict_mdl: what should be done ???")
+		            #stop("mypredict_mdl: what should be done ???")
+		            # pick threshold closest to 0.5
+		            maxMetricDf$threshold.dff.abs <- abs(0.5 - maxMetricDf$threshold)
+		            maxMetricDf <- dplyr::arrange(maxMetricDf, threshold.dff.abs)
+		            prob_threshold <- maxMetricDf$threshold[1]
 		    }
 		}
 		# prob_threshold <- orderBy(~ -f.score +threshold, thresholds_df)[1, "threshold"]
@@ -2313,6 +2338,10 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
                 gsub("last.item", spec, names(mdl_specs_lst), fixed = TRUE)
         }
 
+        if ((spec == "train.preProcess") && (!is.null(mdl_specs_lst[[spec]])) &&
+            (mdl_specs_lst[[spec]] == ""))
+            mdl_specs_lst[[spec]] <- NULL
+
         if ((spec == "trainControl.number") && is.null(mdl_specs_lst[[spec]]))
             mdl_specs_lst[[spec]] <-
                 ifelse(!is.null(mdl_specs_lst[["train.preProcess"]]) &&
@@ -2341,22 +2370,18 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
 
     retSpecs <- mdl_specs_lst
 
-    # change id.prefix to mdlFamily
-    # Build id to access specs by id
-    # retSpecs[["id"]] <- paste(retSpecs[["id.prefix"]],
-    #                                retSpecs[["train.preProcess"]],
-    #                                plyr::revalue(retSpecs[["trainControl.method"]], c(
-    #                                    "none" = "",
-    #                                    "repeatedcv" = "rcv"),
-    #                                    warn_missing = FALSE),
-    #                                retSpecs[["train.method"]],
-    #                                sep = "#")
     retSpecs[["id"]] <- mygetMdlId(retSpecs)
 
     if ((!is.null(allowParallelSpecs <- inpSpecs[["trainControl.allowParallel"]])) &&
         (!is.null(spec <- allowParallelSpecs[[unlist(retSpecs["id"])]])))
         retSpecs[["trainControl.allowParallel"]] <- as.logical(spec) else
         retSpecs[["trainControl.allowParallel"]] <- TRUE
+
+    # Model specific customizations
+    if (retSpecs[["train.method"]] == "rf") {
+        # cv does not generate better results
+        retSpecs[["trainControl.method"]] <- "none"
+    }
 
     return(retSpecs)
 }
@@ -2379,39 +2404,45 @@ mygen_seeds <- function(seeds_lst_len, seeds_elmnt_lst_len) {
 #mygen_seeds(seeds_lst_len=(glb_rcv_n_folds * glb_rcv_n_repeats) + 1, seeds_elmnt_lst_len=9)
 
 mydisplayOutliers <- function(mdl, lclObsFit) {
-    stop("mydisplayOutliers: not implemented yet")
-# influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
-#mdlId <- "All.X##rcv#glm"; obs_df <- fitobs_df; fitobs_df <- glbObsFit
-#mdlId <- "RFE.X.glm"; obs_df <- fitobs_df
-#mdlId <- "Final.glm"; obs_df <- trnobs_df
-#mdlId <- "CSM2.X.glm"; obs_df <- fitobs_df
-#print(outliers <- car::outlierTest(glb_models_lst[[mdlId]]$finalModel))
-#mdlIdFamily <- myparseMdlId(mdlId)$family; obs_df <- dplyr::filter_(obs_df, interp(~(!(var %in% glbObsFitOutliers[[mdlIdFamily]])), var = as.name(glbFeatsId))); model_diags_df <- cbind(obs_df, data.frame(.rstudent=stats::rstudent(glb_models_lst[[mdlId]]$finalModel)), data.frame(.dffits=stats::dffits(glb_models_lst[[mdlId]]$finalModel)), data.frame(.hatvalues=stats::hatvalues(glb_models_lst[[mdlId]]$finalModel)));print(summary(model_diags_df[, c(".rstudent",".dffits",".hatvalues")])); table(cut(model_diags_df$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
+    # stop("mydisplayOutliers: not implemented yet")
 
-#print(subset(model_diags_df, is.na(.rstudent))[, glbFeatsId])
-#print(model_diags_df[which.max(model_diags_df$.rstudent), ])
-#print(subset(model_diags_df, is.na(.dffits))[, glbFeatsId])
-#print(model_diags_df[which.min(model_diags_df$.dffits), ])
-#print(subset(model_diags_df, .hatvalues > 0.99)[, glbFeatsId])
+    # influence.measures: car::outlier; rstudent; dffits; hatvalues; dfbeta; dfbetas
+    print("mydisplayOutliers: ")
+    print(outliers <- car::outlierTest(mdl$finalModel))
+
+    diagnostics <- cbind(lclObsFit,
+                         data.frame(.rstudent  = stats::rstudent(mdl$finalModel)),
+                         data.frame(.dffits    = stats::dffits(mdl$finalModel)),
+                         data.frame(.hatvalues = stats::hatvalues(mdl$finalModel)))
+    print("")
+    print(summary(diagnostics[, c(".rstudent",".dffits",".hatvalues")]))
+
+    # table(cut(diagnostics$.hatvalues, breaks=c(0.00, 0.98, 0.99, 1.00)))
+
+#print(subset(diagnostics, is.na(.rstudent))[, glbFeatsId])
+#print(diagnostics[which.max(diagnostics$.rstudent), ])
+#print(subset(diagnostics, is.na(.dffits))[, glbFeatsId])
+#print(diagnostics[which.min(diagnostics$.dffits), ])
+#print(subset(diagnostics, .hatvalues > 0.99)[, glbFeatsId])
 #dffits_df <- merge(dffits_df, outliers_df, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
 #dffits_df <- merge(dffits_df, glbObsFit, by="row.names", all.x=TRUE); row.names(dffits_df) <- dffits_df$Row.names; dffits_df <- subset(dffits_df, select=-Row.names)
 #subset(dffits_df, !is.na(.Bonf.p))
 
     #mdlId <- "CSM.X.glm"; vars <- myextract_actual_feats(row.names(orderBy(reformulate(c("-", paste0(mdlId, ".imp"))), myget_feats_imp(glb_models_lst[[mdlId]]))));
-    #model_diags_df <- glb_get_predictions(model_diags_df, mdlId, glb_rsp_var)
-    #obs_ix <- row.names(model_diags_df) %in% names(outliers$rstudent)[1]
-    #obs_ix <- which(is.na(model_diags_df$.rstudent))
-    #obs_ix <- which(is.na(model_diags_df$.dffits))
-    #myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, paste0(glb_rsp_var, mdlId), vars[1:min(20, length(vars))])], obs_ix=obs_ix, id_var=glbFeatsId, category_var=glbFeatsCategory)
+    #diagnostics <- glb_get_predictions(diagnostics, mdlId, glb_rsp_var)
+    #obs_ix <- row.names(diagnostics) %in% names(outliers$rstudent)[1]
+    #obs_ix <- which(is.na(diagnostics$.rstudent))
+    #obs_ix <- which(is.na(diagnostics$.dffits))
+    #myplot_parcoord(lclObsFit=diagnostics[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, paste0(glb_rsp_var, mdlId), vars[1:min(20, length(vars))])], obs_ix=obs_ix, id_var=glbFeatsId, category_var=glbFeatsCategory)
 
-    #model_diags_df[row.names(model_diags_df) %in% names(outliers$rstudent)[c(1:2)], ]
-    #ctgry_diags_df <- model_diags_df[model_diags_df[, glbFeatsCategory] %in% c("Unknown#0"), ]
-    #myplot_parcoord(obs_df=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
-    #table(glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), "startprice.log10.cut.fctr"])
-    #glbObsFit[model_diags_df[, glbFeatsCategory] %in% c("iPad1#1"), c(glbFeatsId, "startprice")]
+    #diagnostics[row.names(diagnostics) %in% names(outliers$rstudent)[c(1:2)], ]
+    #ctgry_diags_df <- diagnostics[diagnostics[, glbFeatsCategory] %in% c("Unknown#0"), ]
+    #myplot_parcoord(lclObsFit=ctgry_diags_df[, c(glbFeatsId, glbFeatsCategory, ".rstudent", ".dffits", ".hatvalues", glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:20])], obs_ix=row.names(ctgry_diags_df) %in% names(outliers$rstudent)[1], id_var=glbFeatsId, category_var=glbFeatsCategory)
+    #table(glbObsFit[diagnostics[, glbFeatsCategory] %in% c("iPad1#1"), "startprice.log10.cut.fctr"])
+    #glbObsFit[diagnostics[, glbFeatsCategory] %in% c("iPad1#1"), c(glbFeatsId, "startprice")]
 
     # No outliers & .dffits == NaN
-    #myplot_parcoord(obs_df=model_diags_df[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:10])], obs_ix=seq(1:nrow(model_diags_df))[is.na(model_diags_df$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
+    #myplot_parcoord(lclObsFit=diagnostics[, c(glbFeatsId, glbFeatsCategory, glb_rsp_var, "startprice.log10.predict.RFE.X.glmnet", indepVar[1:10])], obs_ix=seq(1:nrow(diagnostics))[is.na(diagnostics$.dffits)], id_var=glbFeatsId, category_var=glbFeatsCategory)
 
 }
 
@@ -2419,13 +2450,15 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
     #spec_indepVar <- indepVar
 
     startTm <- proc.time()["elapsed"]
-    if ((mdl_specs_lst[["id"]] %in% glb_models_df$id) &&
-        (mdl_specs_lst[["id"]] %in% names(glb_models_lst))) {
+    # if ((mdl_specs_lst[["id"]] %in% glb_models_df$id) &&
+    #     (mdl_specs_lst[["id"]] %in% names(glb_models_lst))) {
+    if (mdl_specs_lst[["id"]] %in% glb_models_df$id) {
         print(sprintf("skipping fitting model: %s", mdl_specs_lst[["id"]]))
         return(NULL)
     }
-    print(sprintf("\nmyfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
-    print(sprintf("fitting model: %s", mdl_specs_lst[["id"]]))
+    print(sprintf("myfit_mdl: enter: %f secs", proc.time()["elapsed"] - startTm))
+    print(sprintf("myfit_mdl: fitting model: %s", mdl_specs_lst[["id"]]))
+    # stop("my breakpoint kludge:")
 
     if (!(mdl_specs_lst[["type"]] %in% c("regression", "classification")))
         stop("unsupported model type: ", mdl_specs_lst[["type"]])
@@ -2503,9 +2536,18 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
         # cv is not useful for these algorithms
         for (alg in c("bag", "bagEarth", "rf")) {
             #grep(alg, names(getModelInfo()), ignore.case=TRUE, value=TRUE)
-            if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE))
-                mdl_specs_lst[["trainControl.method"]] <-
-                	if (is.null(OOB_df)) "none" else "oob"
+            if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE)) {
+                if (is.null(OOB_df)) {
+                    mdl_specs_lst[["trainControl.method"]] <- "none"
+                    stopifnot(grepl("Final\\.", myparseMdlId(mdl_specs_lst$id)$family))
+                    if (is.null(mdl_specs_lst$train.tuneGrid)) {
+                        # gather bestTune specs from the base model
+                        baseMdlId <- sub("Final\\.", "", mdl_specs_lst$id)
+                        stopifnot(!is.null(glb_models_lst[[baseMdlId]]))
+                        mdl_specs_lst$train.tuneGrid <- glb_models_lst[[baseMdlId]]$bestTune
+                    }
+                } else mdl_specs_lst[["trainControl.method"]] <- "oob"
+            }
         }
     }
 
@@ -2524,6 +2566,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
                                    nnet    = mdl_specs_lst[["train.tuneLength"]] ^ 2,
                                    avNNet  = mdl_specs_lst[["train.tuneLength"]] ^ 2,
 
+                                svmLinear2 = mdl_specs_lst[["train.tuneLength"]] ^ 2,
                                    svmPoly = mdl_specs_lst[["train.tuneLength"]] ^ 2 * 3,
 
                                    dummy   = mdl_specs_lst[["train.tuneLength"]])
@@ -2602,8 +2645,8 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 
 	print(sprintf("myfit_mdl: setup complete: %f secs", proc.time()["elapsed"] - startTm))
 	set.seed(111)
+	# reformulate(".", response=rsp_var) # does not handle interaction var specs
 	mdl <- train(reformulate(sort(indepVar), response=rsp_var), data=fit_df
-	#mdl <- train(reformulate(".", response=rsp_var), data=fit_df # does not handle interaction var specs
 				 , method=mdl_specs_lst[["train.method"]]
 				 , preProcess=mdl_specs_lst[["train.preProcess"]]
 				 , metric=mdl_specs_lst[["train.metric"]]
@@ -2618,20 +2661,23 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	mdl$.myId <- mdl_specs_lst[["id"]]
 	models_lst <- glb_models_lst
 	models_lst[[mdl_specs_lst[["id"]]]] <- mdl
-	# to save disk space; don't know who / what uses trainingData
-	models_lst[[mdl_specs_lst[["id"]]]]$trainingData <- NULL
+	# to save disk space
+	models_lst[[mdl_specs_lst[["id"]]]]$pred         <- NULL
+	# models_lst[[mdl_specs_lst[["id"]]]]$trainingData <- NULL # used by varImp
 	glb_models_lst <<- models_lst
 
 	#print(mdl$bestTune)
 	if ((nrow(mdl$results) > 1) & (mdl$bestTune[1, 1] != "none")) {
 		# print(ggplot(mdl) + geom_vline(xintercept=mdl$bestTune[1, 1], linetype="dotted"))
 	    print(ggplot(mdl, highlight = TRUE))
-		for (param in (params_vctr <- as.character(mdl_specs_lst[["tune.params.df"]][, "parameter"]))) {
+		for (param in
+		     # (params_vctr <- as.character(mdl_specs_lst[["tune.params.df"]][, "parameter"]))) {
+		     (params_vctr <- names(mdl$bestTune))) {
 			if ((mdl$bestTune[1, param] == min(mdl$results[, param])) |
 				(mdl$bestTune[1, param] == max(mdl$results[, param])))
 				warning("model's bestTune found at an extreme of tuneGrid for parameter: ", param)
 		}
-	}
+	} else print(mdl$bestTune) # might be needed later to fit "Final" models
 	myprint_mdl(mdl)
 	if (mdl_specs_lst[["train.method"]] == "glm")
 	    mydisplayOutliers(mdl, fit_df)
@@ -2680,6 +2726,31 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
         all_models_df <- models_df
     row.names(all_models_df) <- all_models_df$id
 	glb_models_df <<- all_models_df
+
+	# Prep for ensemble models; can't keep all models in glb_models_lst
+	if (!is.null(OOB_df)) { # not "Final" model(s)
+	    pdnObsTrn <- glb_get_predictions(df = glbObsTrn,
+	                                     mdl_id = models_df$id,
+	                                     rsp_var = rsp_var,
+	                                     prob_threshold_def = models_df$opt.prob.threshold.OOB)
+	    pdnObsTrn <- pdnObsTrn[, c(glbFeatsId, unlist(mygetPredictIds(glb_rsp_var, models_df$id)))]
+	    write.csv(pdnObsTrn,
+	              paste0("predictions/", models_df$id, "_Trn.csv"),
+	              row.names = FALSE)
+	}
+
+	# Keep only the best OOB for each family or "Final" models in glb_models_lst
+	allMdlId <- names(glb_models_lst)
+	nonfnlMdlId <- allMdlId[!grepl("Final", allMdlId)]
+	if (length(nonfnlMdlId) > 1) {
+        # stop("myfit_mdl: not implemented yet")
+	    fml_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)
+	    thsFamily <- myparseMdlId(models_df$id)$family
+	    fml_models_df <- fml_models_df[sapply(fml_models_df$id,
+	                                          function(id) myparseMdlId(id)$family == thsFamily), ]
+	    for (mdlId in fml_models_df[-1, "id"])
+	        glb_models_lst[[mdlId]] <<- NULL
+	}
 
 	print(sprintf("myfit_mdl: exit: %f secs", proc.time()["elapsed"] - startTm))
     return(list("model" = mdl, "models_df" = models_df))

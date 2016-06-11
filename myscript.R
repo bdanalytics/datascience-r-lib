@@ -48,16 +48,31 @@ mydsp_chunk <- function(chunks_df) {
 #mydsp_chunk(glb_chunks_df)
 
 mysavChunk <- function(envFilePfx, chunkLbl) {
-    savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), "glbChunks")
+    savObjects <- setdiff(grep("glb", ls(envir = globalenv()), value = TRUE), c(NULL
+        , "glbChunks" # to hone in on duration of chunks in this specific run/chard
+        # , "glb_models_lst" # gets bloody damn big ! save the "best" or Final model(s) only
+        ))
     savFile <- paste0("data/", envFilePfx, chunkLbl, ".RData")
-    print(sprintf("Saving file:%s; Objects:%s", savFile, paste0(savObjects, collapse = ",")))
+    print(sprintf("mysavChunk: saving objects:%s",
+                  paste0(savObjects, collapse = ",")))
+    print(sprintf("mysavChunk:   to file:%s", savFile))
     save(list = savObjects, file = savFile)
+
+    print("")
+    print("mysavChunk: largest 5 objects:")
+    print(tail(sort(sapply(savObjects,
+                           function(obj) object.size(get(obj, envir = .GlobalEnv)))), 5))
 }
 
 myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
+    # keepSpec is used to override what's on disk
+    # dropSepc primarily used only glbVars change names
+    # Ensure that keepSpec & dropSpec are character vectors with elements having a prefix of "glb"
     print(sprintf("myloadChunk: Loading file:%s", envFilePathName))
+    startTm <- proc.time()["elapsed"]
+
     tmpEnv <- new.env()
-    load(file = envFilePathName, envir = tmpEnv, verbose = FALSE)
+    load(file = envFilePathName, envir = tmpEnv, verbose = TRUE)
     # print("myloadChunk: tmpEnv symbols:"); print(ls(tmpEnv))
 
     for (syl in intersect(ls(tmpEnv), dropSpec)) {
@@ -109,6 +124,14 @@ myloadChunk <- function(envFilePathName, keepSpec = NULL, dropSpec = NULL) {
         print(sprintf("myloadChunk:   loading from dskEnv: %s", syl))
         assign(syl, get(syl, envir = tmpEnv    ), envir = .GlobalEnv)
     }
+
+    print("")
+    print("Largest 5 objects:")
+    print(tail(sort(sapply(ls(envir = .GlobalEnv),
+                           function(obj) object.size(get(obj, envir = .GlobalEnv)))), 5))
+
+    print(sprintf("myloadChunk: duration: %f secs",
+                  proc.time()["elapsed"] - startTm))
 }
 
 myevlChunk <- function(chunkSpecsLst, envFilePfx, ...) {
