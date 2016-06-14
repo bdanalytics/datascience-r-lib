@@ -1242,6 +1242,42 @@ myimputeMissingData <- function(inpObs, miceSeed = 144) {
 ## 04.	    partition data
 ## 04.1	    simple shuffle sample
 ## 04.2     stratified shuffle sample
+
+myget_category_stats <- function(obs_df, mdl_id, label) {
+    require(dplyr)
+    require(lazyeval)
+
+    predct_var_name <- mygetPredictIds(glb_rsp_var, mdl_id)$value
+    predct_error_var_name <- mygetPredictIds(glb_rsp_var, mdl_id)$err.abs
+
+    if (!predct_var_name %in% names(obs_df))
+        obs_df <- glb_get_predictions(obs_df, mdl_id, glb_rsp_var)
+
+    tmp_obs_df <- obs_df[, c(glbFeatsCategory, glb_rsp_var,
+                             predct_var_name, predct_error_var_name)]
+    #     tmp_obs_df <- obs_df %>%
+    #         dplyr::select_(glbFeatsCategory, glb_rsp_var, predct_var_name, predct_error_var_name)
+    #dplyr::rename(startprice.log10.predict.RFE.X.glmnet.err=error_abs_OOB)
+    names(tmp_obs_df)[length(names(tmp_obs_df))] <- paste0("err.abs.", label)
+
+    ret_ctgry_df <- tmp_obs_df %>%
+        dplyr::group_by_(glbFeatsCategory) %>%
+        dplyr::summarise_(#interp(~sum(abs(var)), var=as.name(glb_rsp_var)),
+            interp(~sum(var), var=as.name(paste0("err.abs.", label))),
+            interp(~mean(var), var=as.name(paste0("err.abs.", label))),
+            interp(~n()))
+    names(ret_ctgry_df) <- c(glbFeatsCategory,
+                             #paste0(glb_rsp_var, ".abs.", label, ".sum"),
+                             paste0("err.abs.", label, ".sum"),
+                             paste0("err.abs.", label, ".mean"),
+                             paste0(".n.", label))
+    ret_ctgry_df <- dplyr::ungroup(ret_ctgry_df)
+    #colSums(ret_ctgry_df[, -grep(glbFeatsCategory, names(ret_ctgry_df))])
+
+    return(ret_ctgry_df)
+}
+#print(colSums((ctgry_df <- myget_category_stats(obs_df=glbObsFit, mdl_id="", label="fit"))[, -grep(glbFeatsCategory, names(ctgry_df))]))
+
 mypartition_data <- function(more_stratify_vars=NULL) {
     print(" "); print(sprintf("nrow(obs_df): %s", format(nrow(obs_df), big.mark=',')))
     if (missing(more_stratify_vars)) {
@@ -2616,7 +2652,8 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
     }
 
 	# varImp crashes for bayesglm if char/string features are present in fit_df
-	fit_df <- fit_df[, c(rsp_var, sort(unique(unlist(strsplit(indepVar, "[:\\*]")))))]
+	fit_df <- fit_df[, c(rsp_var,
+	                     setdiff(sort(unique(unlist(strsplit(indepVar, "[`:\\*]")))), c("")))]
 
 	# preProcess method %in% c("pca", "range") train crashes if a column has no variance (might result from a dummy var)
 	if (!is.null(mdl_specs_lst[["train.preProcess"]]) &&
@@ -2739,16 +2776,21 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	              row.names = FALSE)
 	}
 
-	# Keep only the best OOB for each family or "Final" models in glb_models_lst
-	allMdlId <- names(glb_models_lst)
-	nonfnlMdlId <- allMdlId[!grepl("Final", allMdlId)]
-	if (length(nonfnlMdlId) > 1) {
+	# Keep only the best OOB (non pca) for each family or "Final" models in glb_models_lst
+	#   non pca models are needed to seach for .Inc famiy
+	# Some myfit_mdl crashes leave a stump in glb_models_lst
+	#   so, nullify all models in glb_models_lst that are not in glb_models_df
+	chkMdlId <- names(glb_models_lst)[!grepl("(Final|pca)", names(glb_models_lst))]
+	if (length(chkMdlId) > 1) {
         # stop("myfit_mdl: not implemented yet")
 	    fml_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)
 	    thsFamily <- myparseMdlId(models_df$id)$family
 	    fml_models_df <- fml_models_df[sapply(fml_models_df$id,
 	                                          function(id) myparseMdlId(id)$family == thsFamily), ]
-	    for (mdlId in fml_models_df[-1, "id"])
+	    chkMdlId <- chkMdlId[sapply(chkMdlId,
+	                                function(id) myparseMdlId(id)$family == thsFamily)]
+	    discardIds <- intersect(fml_models_df[-1, "id"], chkMdlId)
+	    for (mdlId in intersect(names(glb_models_lst), discardIds))
 	        glb_models_lst[[mdlId]] <<- NULL
 	}
 
