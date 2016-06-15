@@ -796,12 +796,13 @@ if (glb_is_classification && !glb_is_binomial) {
 
 glbMdlFamilies[["Final"]] <- c(NULL) # NULL vector acceptable # c("glmnet", "glm")
 
-# change this to glbMdlBlockParallel <- c(<mdl_id>) or NULL : default
-glbMdlAllowParallel <- list()
-#glbMdlAllowParallel[["Final##rcv#glmnet"]] <- FALSE
+glbMdlSequential <- c(NULL
+                      #, "All.X#zv.pca#rcv#glmnet"
+                      )
 
 # Check if tuning parameters make fit better; make it mdlFamily customizable ?
 glbMdlTuneParams <- data.frame()
+
 # When glmnet crashes at model$grid with error: ???
 # AllX__rcv_glmnetTuneParams <- rbind(data.frame()
 #                         ,data.frame(parameter = "alpha",  vals = "0.100 0.325 0.550 0.775 1.000")
@@ -3468,13 +3469,14 @@ mycheck_problem_data(glbObsAll, featsExclude = glbFeatsExclude,
                      fctrMaxUniqVals = glbFctrMaxUniqVals, terminate = TRUE)
 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "cluster.data", major.inc = TRUE)
+if (!is.null(glbChunks$first) && (glbChunks$first == "cluster.data") &&
+    (is.null(knitr::opts_current$get(name = 'label')))) # not knitting
+    myloadChunk(glbChunks$inpFilePathName, keepSpec = c("glbMdlTuneParams","glbMdlEnsemble"),
+                dropSpec = c(NULL))
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
-# ```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c(NULL), dropSpec = c(NULL))}
-#myloadChunk(glbChunks$inpFilePathName, keepSpec = c(NULL), dropSpec = c(NULL))
-
+```{r cluster.data, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c("glbMdlTuneParams","glbMdlEnsemble"), dropSpec = c(NULL))}
 if (!is.null(glbFeatsCluster)) {
     require(proxy)
     #require(hash)
@@ -3711,10 +3713,14 @@ glbObsNew <- subset(glbObsAll, .src == "Test")
 
 rm(dstns_mtrx); rm(min_dstns_mtrx); 
 glb_chunks_df <- myadd_chunk(glb_chunks_df, "partition.data.training", major.inc = TRUE)
+if (!is.null(glbChunks$first) && (glbChunks$first == "partition.data.training") &&
+    (is.null(knitr::opts_current$get(name = 'label')))) # not knitting
+    myloadChunk(glbChunks$inpFilePathName, keepSpec = c(NULL), dropSpec = c(NULL))
 ```
 
 ## Step ``r mydsp_chunk(glb_chunks_df)``
-```{r partition.data.training, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx)}
+```{r partition.data.training, cache=FALSE, echo=FALSE, eval=myevlChunk(glbChunks, glbOut$pfx, keepSpec = c(NULL), dropSpec = c(NULL))}
+
 startTm = proc.time()["elapsed"]
 print(sprintf("partition.data.training chunk: setup: elapsed: %0.2f secs",
                       as.numeric(proc.time()["elapsed"]) - startTm))
@@ -5764,9 +5770,9 @@ if (!all(is.na(glbObsNew[, glb_rsp_var]))) {
         # indepVar <- myextract_actual_feats(predictors(trnRFEResults))
         mdlIndepVar <- myextract_actual_feats(predictors(glbRFEResults))        
     } else mdlIndepVar <- 
-                trim(unlist(strsplit(glb_models_df[glb_models_df$id ==
+                unlist(strsplit(glb_models_df[glb_models_df$id ==
                                                    glbMdlSelId
-                                                   , "feats"], "[,]")))
+                                                   , "feats"], "[,]"))
         
     # if (!is.null(glbMdlPreprocMethods) &&
     #     ((match_pos <- regexpr(gsub(".", "\\.", 
@@ -5778,10 +5784,10 @@ if (!all(is.na(glbObsNew[, glb_rsp_var]))) {
     
     # mdl_id_pfx <- ifelse(grepl("Ensemble", glbMdlSelId),
     #                                "Final.Ensemble", "Final")
-    thsMdlId <- paste0("Final.", glbMdlSelId)
-    thsMdlIdComponents <- myparseMdlId(thsMdlId)
-    # mdl_id_pfx <- paste("Final", myparseMdlId(glbMdlSelId)$family, sep = ".")
-    mdl_id_pfx <- thsMdlIdComponents$family
+    # thsMdlId <- paste0("Final.", glbMdlSelId)
+    # thsMdlIdComponents <- myparseMdlId(thsMdlId)
+    # # mdl_id_pfx <- paste("Final", myparseMdlId(glbMdlSelId)$family, sep = ".")
+    mdl_id_pfx <- paste0("Final.", myparseMdlId(glbMdlSelId)$family)
     
     trnobs_df <- glbObsTrn 
     if (!is.null(glbObsTrnOutliers[[mdl_id_pfx]])) {
@@ -5795,17 +5801,23 @@ if (!all(is.na(glbObsNew[, glb_rsp_var]))) {
         
     thsSpc <- myinit_mdl_specs_lst(mdl_specs_lst = list(
         id.prefix = mdl_id_pfx, 
-        type = glb_model_type, tune.df = glbMdlTuneParams,
-        trainControl.method = thsMdlIdComponents$resample,
-        trainControl.number = glb_rcv_n_folds,
-        trainControl.repeats = glb_rcv_n_repeats,
+        type = glb_model_type, 
+        trainControl.method = "none",
+        # trainControl.number = 1,
+        # trainControl.repeats = 1,
         trainControl.classProbs = glb_is_classification,
         trainControl.summaryFunction = glbMdlMetricSummaryFn,
         trainControl.allowParallel = glbMdlAllowParallel,
         train.metric = glbMdlMetricSummary, 
         train.maximize = glbMdlMetricMaximize,    
-        train.method = thsMdlIdComponents$alg,
-        train.preProcess = thsMdlIdComponents$preProcess))
+        train.method = myparseMdlId(glbMdlSelId)$alg,
+        train.preProcess = myparseMdlId(glbMdlSelId)$preProcess))
+    
+    # inherit tune.df from glb_sel_mdl
+    thsSpc$tune.df <- cbind(data.frame(mdlId = thsSpc$id), 
+                            glb_sel_mdl$bestTune %>% 
+                               tidyr::gather(key = parameter, value = value) %>% 
+                                dplyr::mutate(vals = as.character(value)))
 
     glbMdlFinId <- thsSpc$id
     if (!(grepl("Ensemble", glbMdlSelId)))

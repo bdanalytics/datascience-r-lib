@@ -1889,9 +1889,24 @@ mygetClassifierAccuracy <- function(mdl, obs_df, proba_threshold,
     #   Actual Level 2, FN, TP
     #accuracy <- (TN + TP) / ((TN + TP) + FP + FN)
     stopifnot(sum(is.na(mrg_obs_xtab_df)) == 0)
-    return(f.score.obs <- (mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) /
+    return(accuracy <- (mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) /
                ((mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) +
                     mrg_obs_xtab_df[1,3] + mrg_obs_xtab_df[2,2]))
+}
+
+mygetClassifierGScore <- function(mdl, obs_df, proba_threshold,
+                                    rsp_var, rsp_var_out) {
+
+    mrg_obs_xtab_df <- mygetThresholdConfusionDf(mdl, obs_df, proba_threshold,
+                                                 rsp_var, rsp_var_out)
+    # mrg_obs_xtab_df structure:
+    #   Actual Level 1, TN, FP
+    #   Actual Level 2, FN, TP
+    #g.score <- sqrt((TN / (TN + FP)) * (TP / (TP + FN)))
+    stopifnot(sum(is.na(mrg_obs_xtab_df)) == 0)
+    return(g.score <-
+               sqrt((mrg_obs_xtab_df[1,2] / (mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[1,3])) *
+                    (mrg_obs_xtab_df[2,3] / (mrg_obs_xtab_df[2,3] + mrg_obs_xtab_df[2,2]))))
 }
 
 mycbind_df <- function(df1, df2) {
@@ -2220,6 +2235,10 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		    mygetClassifierAccuracy(mdl, obs_df = df,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
 		                                 rsp_var, rsp_var_out))
+		thresholds_df$g.score <- sapply(1:nrow(thresholds_df), function(row_ix)
+		    mygetClassifierGScore(mdl, obs_df = df,
+		                            proba_threshold = thresholds_df[row_ix, "threshold"],
+		                            rsp_var, rsp_var_out))
 
 		#print(thresholds_df)
 		# Avoid picking 0.0 / 1.0 as threshold
@@ -2259,7 +2278,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		#                      mapping = aes(x = threshold, y = f.score),
 		#                      shape = 5, color = "red", size = 4) +
 		#           ggtitle(paste(mdl$.myId, label, sep = ":")))
-		print(myplot_line(thresholds_df, "threshold", c("f.score", "accuracy")) +
+		print(myplot_line(thresholds_df, "threshold", c("accuracy", "f.score", "g.score")) +
 		          geom_point(data = subset(thresholds_df, threshold == prob_threshold),
 		                     mapping = aes_string(x = "threshold", y = metric),
 		                     shape = 5, color = "black", size = 4) +
@@ -2362,7 +2381,7 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
                    # trainControl params
         "trainControl.method", "trainControl.number", "trainControl.repeats",
         "trainControl.classProbs", "trainControl.summaryFunction",
-        #"trainControl.allowParallel",
+        #"trainControl.blockParallel",
                    # train params
                    "train.method", "train.metric", "train.maximize")) {
     #     function specs ()
@@ -2392,7 +2411,7 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
         if ((spec == "trainControl.summaryFunction") &&
             is.null(mdl_specs_lst[[spec]]))
             mdl_specs_lst[[spec]] <- defaultSummary
-#         if ((spec == "trainControl.allowParallel") && is.null(mdl_specs_lst[[spec]]))
+#         if ((spec == "trainControl.blockParallel") && is.null(mdl_specs_lst[[spec]]))
 #             mdl_specs_lst[[spec]] <- TRUE
 
         if ((spec == "train.metric") && is.null(mdl_specs_lst[[spec]]))
@@ -2408,10 +2427,13 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
 
     retSpecs[["id"]] <- mygetMdlId(retSpecs)
 
-    if ((!is.null(allowParallelSpecs <- inpSpecs[["trainControl.allowParallel"]])) &&
-        (!is.null(spec <- allowParallelSpecs[[unlist(retSpecs["id"])]])))
-        retSpecs[["trainControl.allowParallel"]] <- as.logical(spec) else
-        retSpecs[["trainControl.allowParallel"]] <- TRUE
+    # if ((!is.null(blockParallelSpecs <- inpSpecs[["trainControl.blockParallel"]])) &&
+    #     (!is.null(spec <- blockParallelSpecs[[unlist(retSpecs["id"])]])))
+    #     retSpecs[["trainControl.blockParallel"]] <- as.logical(spec) else
+    #     retSpecs[["trainControl.blockParallel"]] <- TRUE
+    if (!is.null(blockParallelSpecs <- inpSpecs[["trainControl.blockParallel"]]))
+        retSpecs[["trainControl.allowParallel"]] <-
+            !(retSpecs$id %in% inpSpecs$trainControl.blockParallel)
 
     # Model specific customizations
     if (retSpecs[["train.method"]] == "rf") {
@@ -2636,7 +2658,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	    verboseIter = TRUE, returnResamp = "all", savePredictions = TRUE,
         summaryFunction = mdl_specs_lst[["trainControl.summaryFunction"]],
 	    seeds = seeds,
-	    allowParallel = mdl_specs_lst[["trainControl.allowParallel"]])
+	    allowParallel = mdl_specs_lst$trainControl.allowParallel)
 
     # Need to figure out how to handle glb_featsimp_df; has PC1:PCn as feature names
     #     if (!inherits(mdl_specs_lst[["train.method"]], "list") && (mdl_specs_lst[["train.method"]] == "rf")) {
@@ -2785,8 +2807,9 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
         # stop("myfit_mdl: not implemented yet")
 	    fml_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)
 	    thsFamily <- myparseMdlId(models_df$id)$family
-	    fml_models_df <- fml_models_df[sapply(fml_models_df$id,
-	                                          function(id) myparseMdlId(id)$family == thsFamily), ]
+	    fml_models_df <- fml_models_df[sapply(fml_models_df$id, function(id)
+	                                        (myparseMdlId(id)$family == thsFamily) &&
+	                                        (!grepl("pca", myparseMdlId(id)$preProcess))), ]
 	    chkMdlId <- chkMdlId[sapply(chkMdlId,
 	                                function(id) myparseMdlId(id)$family == thsFamily)]
 	    discardIds <- intersect(fml_models_df[-1, "id"], chkMdlId)
