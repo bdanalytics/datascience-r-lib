@@ -1329,15 +1329,217 @@ mypartition_data <- function(more_stratify_vars=NULL) {
 
     return(list(inTrain=inTrain, inValidate=inValidate, inTest=inTest))
 }
-# mypartition_data_lst <- mypartition_data(more_stratify_vars="user_name")
-# keep_cols <- c(feats_df$feature, response_varname, id_varnames)
-# train_df <- obs_df[mypartition_data_lst$inTrain, keep_cols]
-# validate_df <- obs_df[mypartition_data_lst$inValidate, keep_cols]
-# test_df <- obs_df[mypartition_data_lst$inTest, keep_cols]
 
-# all.equal(train_save_df, train_df)
-# setdiff(union(names(train_save_df), names(train_df)), intersect(names(train_save_df), names(train_df)))
+require(proxy)
 
+# mywgtdcosine_dist <- function(x, y = NULL, pairwise = FALSE, weights = NULL) {
+#     stopifnot(!pairwise)
+#
+#     if (!inherits(x, "matrix"))
+#         x <- as.matrix(x)
+#     if (!is.null(y) && !inherits(y, "matrix"))
+#         y <- as.matrix(y)
+#
+#     if (is.null(weights))
+#         weights <- rep(1, ncol(x))
+#
+#     wgtsx <- matrix(rep(weights / sum(weights), nrow(x)), nrow = nrow(x),
+#                     byrow = TRUE)
+#     wgtdx <- x * wgtsx
+#
+#     wgtdxsqsum <- as.matrix(rowSums((x ^ 2) * wgtsx), byrow=FALSE)
+#     denom <- sqrt(wgtdxsqsum %*% t(wgtdxsqsum))
+#
+#     ret_mtrx <- 1 - ((sum(weights) ^ 1) * (wgtdx %*% t(wgtdx)) / denom)
+#     ret_mtrx[is.nan(ret_mtrx)] <- 1
+#     diag(ret_mtrx) <- NA
+#     return(ret_mtrx)
+# }
+# print(1 / mywgtdcosine_dist(x[9, ], y[2, ], weights=ftrWgt))
+
+mywgtCosineSimilarity <- function(x, y = NULL, weights = NULL) {
+    # return(as.dist(1 - x %*% t(x) / (sqrt(rowSums(x ^ 2) %*% t(rowSums(x ^ 2))))))
+
+    if (!(inherits(x, "matrix"))) x <- as.matrix(x)
+
+    if (is.null(y)) y <- x
+    if (!(inherits(y, "matrix"))) y <- as.matrix(y)
+
+    if (is.null(weights)) weights <- rep(1, dim(x)[2])
+    stopifnot(dim(x)[2] == dim(y)[2])
+    stopifnot(dim(x)[2] == length(weights))
+
+    # Force +ve #s since dist = 1 - simil & simil can be -ve if x / y is -ve
+    stopifnot(min(x, na.rm = TRUE) > 0)
+    stopifnot(min(y, na.rm = TRUE) > 0)
+
+    # i = components (columns) of w, x, y vectors (rows)
+    # (sum w[i]*x[i]*y[i]) / sqrt[(sum w[i]*x[i]^2)*(sum w[i]*y[i]^2)].
+    # similar to (X %*% W %*% YT) / sqrt[(X ^ 2 %*% W) * (Y ^ 2 %*% W)T]
+    #   where W is a diagonal matrix of w
+    # The following lines should work but right now the results seem more like distances
+    #   After this works, benchmark against the parallel vector multiplication code below
+    # W = matrix(0, nrow = length(weights), ncol = length(weights))
+    # diag(W) <- weights
+    # smlMtx <- (x %*% W %*% t(y)) / sqrt(sum((x ^ 2) %*% W, na.rm = TRUE) *
+    #                                     sum((y ^ 2) %*% W, na.rm = TRUE))
+
+    # dim(x) == [19, 106]; dim(y) == [101, 106]
+    #  y parallel: 42.5530 secs
+    # No parallel: 42.3290 secs
+    # xy parallel: 23.3990 secs
+    #  x parallel: 23.444000, 23.0060 secs
+    # dim(x) == [21, 106]; dim(y) == [101, 106]
+    #  x parallel; size: 1 : 24.962 secs
+    # xy parallel; size: 1 : 24.845 secs
+    crossSml <-
+        # foreach(rowIx = 1:dim(x)[1], .combine = c) %do% {
+        foreach(rowIx = 1:dim(x)[1], .combine = c) %dopar% {
+            wgtXSqSum <- weights %*% t(x[rowIx, , drop = FALSE] ^ 2)
+            wgtX <- weights * x[rowIx, ]
+            # foreach(colIx = 1:dim(y)[1], .combine = c) %do% {
+            foreach(colIx = 1:dim(y)[1], .combine = c) %dopar% {
+                wgtYSqSum <- weights %*% t(y[colIx, , drop = FALSE] ^ 2)
+                sum(wgtX * y[colIx, ], na.rm = TRUE) / sqrt(wgtXSqSum * wgtYSqSum)
+            }
+        }
+
+    smlMtx <- matrix(crossSml, nrow = dim(x)[1], ncol = dim(y)[1], byrow = TRUE,
+                     dimnames = list(dimnames(x)[[1]], dimnames(y)[[1]]))
+
+    # return(as.dist(1 - smlMtx))
+    # return(1 - smlMtx)
+    return(smlMtx)
+}
+# pr_DB$delete_entry("mywgtCosine")
+if (!pr_DB$entry_exists("mywgtCosine")) {
+    pr_DB$set_entry(FUN = mywgtCosineSimilarity, names = c("mywgtCosine"))
+    pr_DB$modify_entry(names = "mywgtCosine", type = "metric", loop = FALSE, distance = FALSE,
+                       convert = "pr_simil2dist")
+}
+# print(as.matrix(proxy::dist(x[1:3, ], method = "cosine")))
+# print(as.matrix(proxy::dist(x[1:3, ], method = "mywgtdcosine")))
+# # print(as.matrix(mywgtCosineDistance(x[1:3, ])))
+# print(as.matrix(proxy::dist(x[1:3, ], method = "mywgtCosine")))
+#
+# print(as.matrix(proxy::dist(x[1:3, ], method = "mywgtdcosine", weights = weights)))
+# # print(as.matrix(mywgtCosineDistance(x[1:3, ], weights = weights)))
+# print(as.matrix(proxy::dist(x[1:3, ], method = "mywgtCosine", weights = weights)))
+#
+# print(as.matrix(proxy::dist(x, y, method = "cosine")))
+# # print(as.matrix(mywgtCosineDistance(x, y)))
+# print(as.matrix(proxy::dist(x, y, method = "mywgtCosine")))
+# print(as.matrix(proxy::dist(x, y, method = "mywgtCosine", weights = weights)))
+
+# mywgtCosineDistance <- function(x, y = NULL, weights = NULL) {
+#     # return(as.dist(1 - x %*% t(x) / (sqrt(rowSums(x ^ 2) %*% t(rowSums(x ^ 2))))))
+#
+#     if (!(inherits(x, "matrix"))) x <- as.matrix(x)
+#
+#     if (is.null(y)) y <- x
+#     if (!(inherits(y, "matrix"))) y <- as.matrix(y)
+#
+#     if (is.null(weights)) weights <- rep(1, dim(x)[2])
+#     stopifnot(dim(x)[2] == dim(y)[2])
+#     stopifnot(dim(x)[2] == length(weights))
+#
+#     # i = components (columns) of w, x, y vectors (rows)
+#     # (sum w[i]*x[i]*y[i]) / sqrt[(sum w[i]*x[i]^2)*(sum w[i]*y[i]^2)].
+#
+#     crossSml <-
+#         foreach(rowIx = 1:dim(x)[1], .combine = c) %do% {
+#             foreach(colIx = 1:dim(y)[1], .combine = c) %do% {
+#                 numerator <-
+#                     foreach(wgtIx = 1:length(weights), .combine = c) %do% {
+#                         weights[wgtIx] * x[rowIx, wgtIx] * y[colIx, wgtIx]
+#                     }
+#                 wgtXSq <-
+#                     foreach(wgtIx = 1:length(weights), .combine = c) %do% {
+#                         weights[wgtIx] * x[rowIx, wgtIx] ^ 2
+#                     }
+#                 wgtYSq <-
+#                     foreach(wgtIx = 1:length(weights), .combine = c) %do% {
+#                         weights[wgtIx] * y[colIx, wgtIx] ^ 2
+#                     }
+#                 sum(numerator, na.rm = TRUE) /
+#                     sqrt(sum(wgtXSq, na.rm = TRUE) * sum(wgtYSq, na.rm = TRUE))
+#             }
+#         }
+#
+#
+#     smlMtx <- matrix(crossSml, nrow = dim(x)[1], ncol = dim(y)[1], byrow = TRUE,
+#                      dimnames = list(dimnames(x)[[1]], dimnames(y)[[1]]))
+#
+#     # return(as.dist(1 - smlMtx))
+#     return(1 - smlMtx)
+# }
+
+mygetMatrixSimilarity <- function(x, y = NULL, weights = NULL) {
+    require(proxy)
+    stopifnot(pr_DB$entry_exists("mywgtCosine"))
+
+    # dim(x) == [21, 106]; dim(y) == [101, 106]
+    #  y parallel no: 24.8450, 25.3370 secs
+    #  y parallel ys: 15.1890, 15.0170 secs
+    startTm <- proc.time()["elapsed"]
+
+    # yDf <- foreach(obsIx = c(1:nrow(y)), .combine = rbind) %do% {
+    metrics = c("correlation", "cosine")
+    if (!is.null(weights)) metrics = c(metrics, "mywgtCosine")
+    xDf <- foreach(metric = metrics, .combine = cbind) %dopar% {
+        if (metric != "mywgtCosine")
+            xmDf <- data.frame(method = rowMeans(as.matrix(proxy::simil(x, y, method = metric)),
+                                                na.rm = TRUE)) else
+            xmDf <- data.frame(method = rowMeans(
+                        as.matrix(proxy::simil(x, y, method = metric, weights = weights)),
+                                                na.rm = TRUE))
+        names(xmDf) <- metric
+        xmDf
+    }
+
+    # yDf <- foreach(obsIx = c(1:nrow(y)), .combine = rbind) %do% {
+    # yDf <- foreach(obsIx = c(1:nrow(y)), .combine = rbind) %dopar% {
+    #     xyDf <- data.frame(      cor = mean(
+    #         proxy::simil(x, y[obsIx, ,drop = FALSE], method = "correlation"),
+    #         na.rm = TRUE),
+    #         cosineSmy = mean(
+    #             proxy::simil(x, y[obsIx, ,drop = FALSE], method = "cosine"),
+    #             na.rm = TRUE))
+    #     if (!is.null(weights))
+    #         xyDf <- cbind(xyDf,
+    #                       # cosineWgtSmy = mean(proxy::simil(x, y[obsIx, ], method = "mywgtdcosine",
+    #                       cosineWgtSmy = mean(
+    #             proxy::simil(x, y[obsIx, ,drop = FALSE], method = "mywgtCosine", weights = weights),
+    #                           na.rm = TRUE))
+    #     xyDf
+    # }
+
+    print(sprintf("lclgetMatrixSimilarity: duration: %f secs",
+                  proc.time()["elapsed"] - startTm))
+    return(xDf)
+}
+
+# print(lclgetMatrixSimilarity(x = mtxObsNew[1:10, ], y = mtxObsTrn[1:3, ], weights = ftrWgt))
+# obsIx = 2
+
+# lclgetMatrixSimilarity works faster with O(100) obs in each
+# tmpObsFit = mtxObsFit[1:400, ]
+# tmpObsOOB = mtxObsOOB[1:100, ]
+# startTm = proc.time()["elapsed"]
+# print(sprintf("cor of Fit vs. OOB: %.4f",
+#               mean(lclgetMatrixSimilarity(tmpObsFit, tmpObsOOB), na.rm = TRUE)))
+# print(sprintf("lclgetMatrixSimilarity: duration: %f secs",
+#                       proc.time()["elapsed"] - startTm))
+# startTm = proc.time()["elapsed"]
+# print(sprintf("cor of Fit vs. OOB: %.4f", mean(
+#         colMeans(proxy::simil(tmpObsFit, tmpObsOOB, method = "correlation"), na.rm = TRUE),
+#                                                 na.rm = TRUE)))
+# print(sprintf("proxy::simil: duration: %f secs",
+#                       proc.time()["elapsed"] - startTm))
+
+# print(sprintf("cor of Fit vs. OOB: %.4f", mean(
+#         colMeans(proxy::simil(mtxObsFit, mtxObsOOB, method = "correlation"), na.rm = TRUE),
+#                                                 na.rm = TRUE)))
 
 ## 04.3	    cross-validation sample
 
@@ -2597,10 +2799,10 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
             if (grepl(alg, mdl_specs_lst[["train.method"]], ignore.case=TRUE)) {
                 if (is.null(OOB_df)) {
                     mdl_specs_lst[["trainControl.method"]] <- "none"
-                    stopifnot(grepl("Final\\.", myparseMdlId(mdl_specs_lst$id)$family))
+                    stopifnot(grepl("Trn\\.", myparseMdlId(mdl_specs_lst$id)$family))
                     if (is.null(mdl_specs_lst$train.tuneGrid)) {
                         # gather bestTune specs from the base model
-                        baseMdlId <- sub("Final\\.", "", mdl_specs_lst$id)
+                        baseMdlId <- sub("Trn\\.", "", mdl_specs_lst$id)
                         stopifnot(!is.null(glb_models_lst[[baseMdlId]]))
                         mdl_specs_lst$train.tuneGrid <- glb_models_lst[[baseMdlId]]$bestTune
                     }
@@ -2736,7 +2938,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 				(mdl$bestTune[1, param] == max(mdl$results[, param])))
 				warning("model's bestTune found at an extreme of tuneGrid for parameter: ", param)
 		}
-	} else print(mdl$bestTune) # might be needed later to fit "Final" models
+	} else print(mdl$bestTune) # might be needed later to fit "Trn" models
 	myprint_mdl(mdl)
 	if (mdl_specs_lst[["train.method"]] == "glm")
 	    mydisplayOutliers(mdl, fit_df)
@@ -2787,7 +2989,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	glb_models_df <<- all_models_df
 
 	# Prep for ensemble models; can't keep all models in glb_models_lst
-	if (!is.null(OOB_df)) { # not "Final" model(s)
+	if (!is.null(OOB_df)) { # not "Trn" model(s)
 	    pdnObsTrn <- glb_get_predictions(df = glbObsTrn,
 	                                     mdl_id = models_df$id,
 	                                     rsp_var = rsp_var,
@@ -2798,11 +3000,11 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	              row.names = FALSE)
 	}
 
-	# Keep only the best OOB (non pca) for each family or "Final" models in glb_models_lst
+	# Keep only the best OOB (non pca) for each family or "Trn" models in glb_models_lst
 	#   non pca models are needed to seach for .Inc famiy
 	# Some myfit_mdl crashes leave a stump in glb_models_lst
 	#   so, nullify all models in glb_models_lst that are not in glb_models_df
-	chkMdlId <- names(glb_models_lst)[!grepl("(Final|pca)", names(glb_models_lst))]
+	chkMdlId <- names(glb_models_lst)[!grepl("(Trn\\.|pca)", names(glb_models_lst))]
 	if (length(chkMdlId) > 1) {
         # stop("myfit_mdl: not implemented yet")
 	    fml_models_df <- orderBy(glbgetModelSelectFormula(), glb_models_df)
