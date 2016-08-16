@@ -516,7 +516,7 @@ myplot_plotly <- function(ggplot_obj) {
 }
 
 myplot_prediction_classification <- function(df, feat_x, feat_y,
-                            rsp_var, rsp_var_out, id_vars, prob_threshold=NULL) {
+                            rsp_var, rsp_var_out, id_vars, prob_threshold=NULL, mdl = NULL) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
@@ -581,6 +581,16 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
         plt_df <- df
         tmpName <- gsub("\\*", "_", predct_accurate_var_name)
         plt_df[, tmpName] <- plt_df[, predct_accurate_var_name]
+
+        # Set up data for tiles
+        if ((is.numeric(plt_df[, feat_x])) || (is.numeric(plt_df[, feat_y])))
+            stop(sprintf("myplot_prediction_classification: feat_x: %s OR feat_y: %s is numeric; Not implemented yet",
+                         feat_x, feat_y))
+        tileDf <- expand.grid(x = sort(unique(plt_df[, feat_x])),
+                              y = sort(unique(plt_df[, feat_y])))
+        names(tileDf) <- c(feat_x, feat_y)
+        medianDf <- mycompute_stats_df(df, stats_fns = c(.median = median))
+
         gp <- ggplot(plt_df, aes_string(x = feat_x, y = feat_y)) +
             geom_point(aes_string(color = color_var,
                                   shape = tmpName),
@@ -589,7 +599,8 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
             geom_text(aes_string(label = ".label"), color = "NavyBlue",
                       size = 3.5) +
             facet_wrap(reformulate(tmpName)) +
-            scale_color_brewer(type = "qual", palette = "Set1")
+            scale_color_brewer(type = "qual", palette = "Set1") +
+            ggtitle(tmpName)
         return(gp)
     } else return(NULL)
 }

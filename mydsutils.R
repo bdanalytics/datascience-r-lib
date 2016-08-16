@@ -559,13 +559,14 @@ mycompute_medians_df <- function(df, byvars_lst=factor(0), keep.names=FALSE) {
 #                                     FUN=c(median), na.rm=TRUE)
 # medians_df <- summaryBy(value ~ variable , mltd_df, FUN=c(median), na.rm=TRUE)
 
-mycompute_stats_df <- function(df, byvars_vctr = factor(0)) {
+mycompute_stats_df <- function(df, byvars_vctr = factor(0),
+                               stats_fns = c(.mean = mean, .median = median, .sum = sum)) {
 
     if (!any(class(df) %in% c("data.frame")))
         stop("df argument is not a data.frame: it is ", paste(class(pltLvl), collapse = ","))
 
     ret_df <- data.frame()
-    stats_fns <- c(.mean = mean, .median = median, .sum = sum)
+    # stats_fns <- c(.mean = mean, .median = median, .sum = sum)
     #stats_fns <- c(.mean = mean, .median = median)
     # names(stats_fns) <- c(".mean", ".median", ".sum")
 
@@ -577,10 +578,31 @@ mycompute_stats_df <- function(df, byvars_vctr = factor(0)) {
         # Requires hard-coding of FUN ???
 #         ret_df <- summaryBy(as.formula(paste0(num_vctr, " ~ ", byvars_vctr)), data=df,
 #                             FUN=stats_fns)
-        ret_df <- summaryBy(as.formula(paste0(paste0(num_vctr, collapse="+"),
-                                              " ~ ", byvars_vctr)), data=df,
-                            #FUN=interp(~stats_fns), na.rm=TRUE)
-                            FUN=c(mean, median, sum), na.rm=TRUE)
+
+        # For some odd reason, summaryBy does not work with named functions
+        # lclStatsFns <- stats_fns; names(lclStatsFns) <- NULL
+        lclStatsFns <- stats_fns;
+        for (fnIx in 1:length(lclStatsFns))
+            # lclStatsFns[[fnIx]] <- switch(names(lclStatsFns)[fnIx],
+            #                             ".mean"   = mean,
+            #                             ".median" = median,
+            #                             ".sum"    = sum,
+            #                             "otherwise" = stop
+            #                             )
+        {
+            thsRetDf <- summaryBy(as.formula(paste0(paste0(num_vctr, collapse = "+"),
+                                                    " ~ ", byvars_vctr)), data = df,
+                                  FUN = lclStatsFns[[fnIx]], na.rm = TRUE)
+            names(thsRetDf) <- gsub(".lclStatsFns[[fnIx]]",
+                                    names(lclStatsFns)[fnIx], names(thsRetDf), fixed = TRUE)
+            if (nrow(ret_df) == 0) ret_df <- thsRetDf else
+                ret_df <- merge(ret_df, thsRetDf)
+        }
+        # ret_df <- summaryBy(as.formula(paste0(paste0(num_vctr, collapse="+"),
+        #                                       " ~ ", byvars_vctr)), data=df,
+        #                     #FUN=interp(~stats_fns), na.rm=TRUE)
+        #                     FUN=c(mean, median, sum), na.rm=TRUE)
+        #                     # FUN = lclStatsFns, na.rm = TRUE)
 
         if (inherits(ret_df[, byvars_vctr], "factor") &&
             sum(is.na(ret_df[, byvars_vctr])) > 0) {
@@ -1370,8 +1392,8 @@ mywgtCosineSimilarity <- function(x, y = NULL, weights = NULL) {
     stopifnot(dim(x)[2] == length(weights))
 
     # Force +ve #s since dist = 1 - simil & simil can be -ve if x / y is -ve
-    stopifnot(min(x, na.rm = TRUE) > 0)
-    stopifnot(min(y, na.rm = TRUE) > 0)
+    stopifnot(min(x, na.rm = TRUE) >= 0)
+    stopifnot(min(y, na.rm = TRUE) >= 0)
 
     # i = components (columns) of w, x, y vectors (rows)
     # (sum w[i]*x[i]*y[i]) / sqrt[(sum w[i]*x[i]^2)*(sum w[i]*y[i]^2)].
@@ -1750,6 +1772,49 @@ mygetCategoryEntropy <- function(obs_df, entropy_var, by_var=NULL) {
 ## 05.5.2   cv of significance
 ## 05.6     scale / normalize selected features for data distribution requirements in various models
 
+mygetPartitionStats <- function(obs_df, vars=NULL) {
+
+    lcl_vars <- NULL
+    for (var in c(vars, glb_rsp_var_raw)) {
+        if (!(var %in% names(obs_df)))
+            next
+
+        if ((length(unique(obs_df[, var])) > 5) && is.numeric(obs_df[, var])) {
+            cut_var <- paste0(var, ".cut.fctr")
+            obs_df[, cut_var] <- cut(obs_df[, var], 3)
+            lcl_vars <- union(lcl_vars, cut_var)
+        } else lcl_vars <- union(lcl_vars, var)
+    }
+
+    print("Partition stats:")
+    print(mycreate_sqlxtab_df(obs_df, union(lcl_vars, ".src")))
+    retDfLst <- list()
+    for (var in lcl_vars) {
+        myprint_df(freq_df <- mycreate_sqlxtab_df(obs_df, union(var, ".src")))
+        if ((nrow(freq_df) > 10) && is.character(obs_df[, var])) {
+            first <- 10
+            while ((nrow(freq_df) > 10) && (first >= 2)) {
+                newVar <- sprintf("%s.first.%d", var, first)
+                obs_df[, newVar] <- substr(obs_df[, var], 1, first)
+                myprint_df(freq_df <- mycreate_sqlxtab_df(obs_df, union(newVar, ".src")))
+                if (nrow(freq_df) > 10) first <- first - 2
+            }
+            var <- newVar
+        }
+        freq_df$.nTrnRatio <- freq_df$.n / sum(subset(freq_df, .src == "Train")$.n, na.rm = TRUE)
+        # print(myplot_hbar(freq_df, ".src", ".n", colorcol_name = var))
+        # print(myplot_hbar(freq_df, ".src", c(".n", ".nTrnRatio"), colorcol_name = var))
+        pltDf <- freq_df %>% tidyr::gather_("key", "value", c(".n", ".nTrnRatio"))
+        print(ggplot(data = pltDf, aes(x = .src, y = value)) +
+                  geom_bar(aes_string(color = var, fill = var), stat = "identity") +
+                  facet_wrap(~key, scales = "free"))
+        retDfLst[[var]] <- freq_df
+    }
+    print(mycreate_sqlxtab_df(obs_df, ".src"))
+
+    return(retDfLst)
+}
+
 ## 06.	    select models
 ## 06.1	    select base models
 ## 06.1.1	regression models
@@ -2089,7 +2154,7 @@ mygetClassifierAccuracy <- function(mdl, obs_df, proba_threshold,
     # mrg_obs_xtab_df structure:
     #   Actual Level 1, TN, FP
     #   Actual Level 2, FN, TP
-    #accuracy <- (TN + TP) / ((TN + TP) + FP + FN)
+    #Accuracy <- (TN + TP) / ((TN + TP) + FP + FN)
     stopifnot(sum(is.na(mrg_obs_xtab_df)) == 0)
     return(accuracy <- (mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) /
                ((mrg_obs_xtab_df[1,2] + mrg_obs_xtab_df[2,3]) +
@@ -2433,7 +2498,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		    mycompute_classifier_f.score(mdl, obs_df = df,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
 		                                 rsp_var, rsp_var_out))
-		thresholds_df$accuracy <- sapply(1:nrow(thresholds_df), function(row_ix)
+		thresholds_df$Accuracy <- sapply(1:nrow(thresholds_df), function(row_ix)
 		    mygetClassifierAccuracy(mdl, obs_df = df,
 		                                 proba_threshold = thresholds_df[row_ix, "threshold"],
 		                                 rsp_var, rsp_var_out))
@@ -2456,7 +2521,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 # 		    }
 # 		}
 
-		metric <- "accuracy"
+		metric <- ifelse(is.null(model_metric), "Accuracy", model_metric)
 		maxMetricDf <- thresholds_df[thresholds_df[, metric] == max(thresholds_df[, metric]), ]
 		if (nrow(maxMetricDf) == 1) prob_threshold <- maxMetricDf$threshold else {
 		    # if all thresholds are <= 0.5, pick max
@@ -2480,7 +2545,7 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 		#                      mapping = aes(x = threshold, y = f.score),
 		#                      shape = 5, color = "red", size = 4) +
 		#           ggtitle(paste(mdl$.myId, label, sep = ":")))
-		print(myplot_line(thresholds_df, "threshold", c("accuracy", "f.score", "g.score")) +
+		print(myplot_line(thresholds_df, "threshold", c("Accuracy", "f.score", "g.score")) +
 		          geom_point(data = subset(thresholds_df, threshold == prob_threshold),
 		                     mapping = aes_string(x = "threshold", y = metric),
 		                     shape = 5, color = "black", size = 4) +
@@ -2512,6 +2577,13 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
     	for (stat in c("Accuracy", "AccuracyLower", "AccuracyUpper", "Kappa")) {
     		stats_df[, paste0("max.", stat, ".", label)] <- conf_lst$overall[stat]
     	}
+
+    	# Log loss is defined as: −log(p) if y=1 else −log(1−p)
+    	#   as.numeric(factor) is 1 based, not 0 based
+    	logLoss <- -log(df[, paste0(rsp_var_out, ".prob")])
+    	logLoss[as.numeric(df[, rsp_var]) != 2] <-
+    	    -log(1 - df[as.numeric(df[, rsp_var]) != 2, paste0(rsp_var_out, ".prob")])
+    	stats_df[, paste0("min.", "log.loss.mean", ".", label)] <- mean(logLoss, na.rm = TRUE)
 
     	if (!is.null(model_summaryFunction)) {
     		df$obs <- df[, rsp_var]; df$pred <- df[, rsp_var_out]
@@ -2907,7 +2979,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 	print(sprintf("myfit_mdl: setup complete: %f secs", proc.time()["elapsed"] - startTm))
 	set.seed(111)
 	# reformulate(".", response=rsp_var) # does not handle interaction var specs
-	mdl <- train(reformulate(sort(indepVar), response=rsp_var), data=fit_df
+	mdl <- caret::train(reformulate(sort(indepVar), response=rsp_var), data=fit_df
 				 , method=mdl_specs_lst[["train.method"]]
 				 , preProcess=mdl_specs_lst[["train.preProcess"]]
 				 , metric=mdl_specs_lst[["train.metric"]]
