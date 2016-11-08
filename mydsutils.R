@@ -50,7 +50,7 @@ myrmNullObj <- function(x) {
 ## 01. 		import data
 
 myimport_data <- function(specs, nrows=-1, comment=NULL,
-							force_header=FALSE, print_diagn=TRUE, ...){
+							force_header=FALSE, print_diagn=TRUE, rm.periods = TRUE, ...){
     if (!file.exists("./data")) dir.create("data")
 
     url <- specs$url; filename <- specs$name
@@ -163,8 +163,11 @@ myimport_data <- function(specs, nrows=-1, comment=NULL,
 		myprint_str_df(obsDf)
     }
 
-    if (length(problems <- grep("\\.", names(obsDf), value = TRUE)) > 0)
-        stop("column names with periods will cause havoc during Fit vs. OOB partition: ", problems)
+    if (length(problems <- grep("\\.", names(obsDf), value = TRUE)) > 0) {
+        if (rm.periods) names(obsDf) <- gsub("\\.", "", names(obsDf))
+        else stop("column names with periods will cause havoc during Fit vs. OOB partition: ",
+             problems)
+    }
 
     return(obsDf)
 }
@@ -611,6 +614,16 @@ mycompute_stats_df <- function(df, byvars_vctr = factor(0),
             row.names(ret_df) <- row_names
         } else row.names(ret_df) <- ret_df[, byvars_vctr]
     }
+    
+    # For factors return the actual factor vs. the level index
+    clmFcr <- sapply(names(df), function(col) if (is.factor(df[, col])) return(col))
+    clmFcr <- unlist(clmFcr[!sapply(clmFcr, is.null)])
+    # stats not computed for byvars_vctr
+    clmFcr <- setdiff(clmFcr, byvars_vctr)
+    for (clm in clmFcr)
+      ret_df[, paste(clm, "median", sep = ".")] <- 
+        factor(levels(df[, clm])[ret_df[, paste(clm, "median", sep = ".")]], 
+                                 levels = levels(df[, clm])) 
 
     # summaryBy does not compute stats for factor / Date class variables
     non_num_lst <- sapply(names(df), function(col)
@@ -898,17 +911,6 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
                           data.frame(.date = strptime(df[, var],
                                                       glbFeatsDateTime[[var]]["format"],
                                                      tz = glbFeatsDateTime[[var]]["timezone"])))
-        #         print(dates_df[is.na(dates_df$.date), c("ID", "Arrest.fctr", ".date")])
-        #         print(glbObsAll[is.na(dates_df$.date), c("ID", "Arrest.fctr", "Date")])
-        #         print(head(glbObsAll[grepl("4/7/02 .:..", glbObsAll$Date), c("ID", "Arrest.fctr", "Date")]))
-        #         print(head(strptime(glbObsAll[grepl("4/7/02 .:..", glbObsAll$Date), "Date"], "%m/%e/%y %H:%M"))
-        # Wrong data during EST->EDT transition
-        #         tmp <- strptime("4/7/02 2:00","%m/%e/%y %H:%M:%S"); print(tmp); print(is.na(tmp))
-        #         dates_df[dates_df$ID == 2068197, .date] <- tmp
-        #         grep("(.*?) 2:(.*)", glbObsAll[is.na(dates_df$.date), "Date"], value=TRUE)
-        #         dates_df[is.na(dates_df$.date), ".date"] <-
-        #             data.frame(.date=strptime(gsub("(.*?) 2:(.*)", "\\1 3:\\2",
-        #                 glbObsAll[is.na(dates_df$.date), "Date"]), "%m/%e/%y %H:%M"))$.date
         if (sum(is.na(dates_df$.date)) > 0) {
             tmpDf <- df[is.na(dates_df$.date), c(id_vars, rsp_var, var)]
             print(dim(tmpDf)); print(tmpDf)
@@ -950,49 +952,71 @@ myextract_dates_df <- function(df, vars, id_vars, rsp_var) {
 
         # Get US Federal Holidays for relevant years
         require(XML)
-        hldays <- c(NULL)
-        for (year in sort(unique(format(.date, "%Y")))) {
-            doc.url <- paste0('http://about.usps.com/news/events-calendar/',
-                              year, '-federal-holidays.htm')
-            print(sprintf("   accessing url: %s", doc.url))
-            doc.html <- try(htmlTreeParse(doc.url, useInternalNodes = TRUE))
-            if (inherits(doc.html, "try-error")) {
-                warning("unable to access url:", doc.url, "; skipping ...")
-                next
-            }
-
-            #         # Extract all the paragraphs (HTML tag is p, starting at
-            #         # the root of the document). Unlist flattens the list to
-            #         # create a character vector.
-            #         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
-            #         # Replace all \n by spaces
-            #         doc.text = gsub('\\n', ' ', doc.text)
-            #         # Join all the elements of the character vector into a single
-            #         # character string, separated by spaces
-            #         doc.text = paste(doc.text, collapse = ' ')
-
-            # parse the tree by tables
-            # txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
-            # parse the tree by span & ul
-            txt <- xpathSApply(doc.html, "//span/ul", xmlValue)
-            if (length(txt) == 0) {
-                warning("  xpathSApply did not work for url:", doc.url, "; skipping ...")
-                next
-            }
-            txt <- unlist(strsplit(txt, "\n"))
-
-            # do some clean up with regular expressions
-            txt <- grep("day, ", txt, value = TRUE)
-            txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
-            txt <- gsub("(.+) ([[:digit:]]+) (.*)", "\\1 \\2", txt)
-            #         txt <- gsub("\t","",txt)
-            #         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
-            #         txt <- txt[!(txt %in% c("", "|"))]
-            hldays <- union(hldays,
-                    format(strptime(paste(txt, " ", year, sep = ""), "%B %e %Y"), "%Y-%m-%d"))
-            if (any(is.na(hldays)))
-                warning("US Federal Holidays not found for year: ", year)
-        }
+        require(RCurl)
+        
+    #     hldays <- c(NULL)
+    #     for (year in sort(unique(format(.date, "%Y")))) {
+    #         doc.url <- paste0(
+    # "http://www.opm.gov/policy-data-oversight/snow-dismissal-procedures/federal-holidays/#url=",
+    #                           year)
+    #         # doc.url <- paste0('http://about.usps.com/news/events-calendar/',
+    #         #                   year, '-federal-holidays.htm')
+    #         print(sprintf("   accessing url: %s", doc.url))
+    #         tryURL <- function(url) {
+    #           tabs <- RCurl::getURL(doc.url); 
+    #           # return(readHTMLTable(tabs, stringsAsFactors = F))
+    #           return(xmlParse(tabs))              
+    #         }
+    #         doc.xml <- try(tryURL(doc.url))
+    #         # doc.xml <- try(xmlTreeParse(doc.url, useInternalNodes = TRUE))            
+    #         if (inherits(doc.xml, "try-error")) {
+    #             warning("unable to access url:", doc.url, "; skipping ...")
+    #             next
+    #         }
+    # 
+    #         #         # Extract all the paragraphs (HTML tag is p, starting at
+    #         #         # the root of the document). Unlist flattens the list to
+    #         #         # create a character vector.
+    #         #         doc.text = unlist(xpathApply(doc.html, '//p', xmlValue))
+    #         #         # Replace all \n by spaces
+    #         #         doc.text = gsub('\\n', ' ', doc.text)
+    #         #         # Join all the elements of the character vector into a single
+    #         #         # character string, separated by spaces
+    #         #         doc.text = paste(doc.text, collapse = ' ')
+    # 
+    #         # parse the tree by tables
+    #         # txt <- unlist(strsplit(xpathSApply(doc.html, "//*/table", xmlValue), "\n"))
+    #         # parse the tree by span & ul
+    #         txt <- xpathSApply(doc.xml, "//span/ul", xmlValue)
+    #         if (length(txt) == 0) {
+    #             warning("  xpathSApply did not work for url:", doc.url, "; skipping ...")
+    #             next
+    #         }
+    #         txt <- unlist(strsplit(txt, "\n"))
+    # 
+    #         # do some clean up with regular expressions
+    #         txt <- grep("day, ", txt, value = TRUE)
+    #         txt <- trimws(gsub("(.*?)day, (.*)", "\\2", txt))
+    #         txt <- gsub("(.+) ([[:digit:]]+) (.*)", "\\1 \\2", txt)
+    #         #         txt <- gsub("\t","",txt)
+    #         #         txt <- sub("^[[:space:]]*(.*?)[[:space:]]*$", "\\1", txt, perl=TRUE)
+    #         #         txt <- txt[!(txt %in% c("", "|"))]
+    #         hldays <- union(hldays,
+    #                 format(strptime(paste(txt, " ", year, sep = ""), "%B %e %Y"), "%Y-%m-%d"))
+    #         if (any(is.na(hldays)))
+    #             warning("US Federal Holidays not found for year: ", year)
+    #     }
+        
+        # Hard-coding due to time constraint
+        hldays <- c(NULL
+          , "2014-01-01", "2014-01-20", "2014-02-17", "2014-05-26", "2014-07-04", "2014-09-01"
+              , "2014-10-13", "2014-11-11", "2014-11-27", "2014-12-25"
+          , "2015-01-01", "2015-01-19", "2015-02-16", "2015-05-25", "2015-07-03", "2015-09-07"
+            , "2015-10-12", "2015-11-11", "2015-11-26", "2015-12-25"
+          , "2016-01-01", "2016-01-18", "2016-02-15", "2016-05-30", "2016-07-04", "2016-09-05"
+            , "2016-10-10", "2016-11-11", "2016-11-24", "2016-12-25"
+        )
+        
         dates_df[, paste0(var, ".hlday")] <-
             ifelse(format(.date, "%Y-%m-%d") %in% hldays, 1, 0)
         #print(table(format(dates_df[dates_df[, paste0(var, ".hlday")] == 1, ".date"], "%Y-%m-%d")))
@@ -1108,8 +1132,11 @@ myextractTimeLags <- function(Obs, FeatTime, rsp_var, rsp_var_raw, impute.na = "
 
     if (length(myfind_numerics_missing(Obs[,
                                           grepl(FeatTime, names(Obs), fixed = TRUE)], NULL)) > 0) {
-        impObs <- myimputeMissingData(Obs[, setdiff(names(Obs),
-                c(rsp_var, rsp_var_raw, paste0(FeatTime, ".POSIX"), paste0(FeatTime, ".zoo")))])
+        impObs <- 
+            myimputeMissingData(Obs[, 
+                setdiff(grep(paste0("^", gsub(".", "\\.", FeatTime, fixed = TRUE), "\\."), 
+                             names(Obs), value = TRUE),
+                        c(paste0(FeatTime, ".POSIX"), paste0(FeatTime, ".zoo")))])
         Obs <- cbind(Obs[, setdiff(names(Obs), names(impObs))], impObs)
     }
     retObs <- orderBy(~.order, Obs[, c(".order", addedFeats), FALSE])
@@ -1234,7 +1261,7 @@ myimputeMissingData <- function(inpObs, miceSeed = 144) {
     set.seed(miceSeed)
     print("Summary before imputation: ")
     print(summary(inpObs))
-    retObs <- complete(mice(inpObs[, setdiff(names(inpObs), myfind_chr_cols_df(inpObs))]))
+    retObs <- mice::complete(mice(inpObs[, setdiff(names(inpObs), myfind_chr_cols_df(inpObs))]))
     print(summary(retObs))
 
     ret_vars <- sapply(names(retObs),
@@ -1505,6 +1532,18 @@ mygetMatrixSimilarity <- function(x, y = NULL, weights = NULL) {
     #  y parallel ys: 15.1890, 15.0170 secs
     startTm <- proc.time()["elapsed"]
 
+    maxObs <- 1000
+    if (dim(x)[1] >= maxObs) { 
+      # Takes way too long
+      warning("  mygetMatrixSimilarity: nrow(x): ", nrow(x), " sampled down to ", maxObs)
+      x <- as.matrix(x[sample.int(dim(x)[1], maxObs), ], ncol = dim(x)[2], byrow = TRUE)
+    }  
+    if (!missing(y) && (dim(y)[1] >= maxObs)) {
+      # Takes way too long
+      warning("  mygetMatrixSimilarity: nrow(y): ", nrow(y), " sampled down to ", maxObs)      
+      y <- as.matrix(y[sample.int(dim(y)[1], maxObs), ], ncol = dim(y)[2], byrow = TRUE)
+    }  
+    
     # yDf <- foreach(obsIx = c(1:nrow(y)), .combine = rbind) %do% {
     metrics = c("correlation", "cosine")
     if (!is.null(weights)) metrics = c(metrics, "mywgtCosine")
@@ -2028,9 +2067,6 @@ myprint_mdl <- function(mdl) {
 #    stop("not implemented yet: ", class(lcl_mdl))
 
 # 	#Customized plots for each method
-# 	if (method == "glm") plot(native_mdl <-
-# 			glm(reformulate(indep_vars_vctr, response=rsp_var), data=fit_df,
-# 				   family="binomial"), ask=FALSE) else
 # 	if (method == "rpart") {
 # 		require(rpart)
 # 	    require(rpart.plot)
@@ -2521,7 +2557,8 @@ mypredict_mdl <- function(mdl, df, rsp_var, label,
 # 		    }
 # 		}
 
-		metric <- ifelse(is.null(model_metric), "Accuracy", model_metric)
+		#metric <- ifelse(is.null(model_metric), "Accuracy", model_metric)
+		metric <- "g.score"		
 		maxMetricDf <- thresholds_df[thresholds_df[, metric] == max(thresholds_df[, metric]), ]
 		if (nrow(maxMetricDf) == 1) prob_threshold <- maxMetricDf$threshold else {
 		    # if all thresholds are <= 0.5, pick max
@@ -2707,7 +2744,10 @@ myinit_mdl_specs_lst <- function(mdl_specs_lst=list()) {
     #     retSpecs[["trainControl.blockParallel"]] <- TRUE
     if (!is.null(blockParallelSpecs <- inpSpecs[["trainControl.blockParallel"]]))
         retSpecs[["trainControl.allowParallel"]] <-
-            !(retSpecs$id %in% inpSpecs$trainControl.blockParallel)
+              (retSpecs$id %in% inpSpecs$trainControl.blockParallel) else
+        retSpecs[["trainControl.allowParallel"]] <-
+             !(retSpecs$id %in% inpSpecs$trainControl.blockParallel)      
+              
 
     # Model specific customizations
     if (retSpecs[["train.method"]] == "rf") {
@@ -3012,7 +3052,7 @@ myfit_mdl <- function(mdl_specs_lst, indepVar, rsp_var, fit_df, OOB_df=NULL) {
 		}
 	} else print(mdl$bestTune) # might be needed later to fit "Trn" models
 	myprint_mdl(mdl)
-	if (mdl_specs_lst[["train.method"]] == "glm")
+	if (mdl_specs_lst[["train.method"]] %in% c("glm"))
 	    mydisplayOutliers(mdl, fit_df)
 
     #models_df$n.fit <- nrow(fit_df)
@@ -3226,6 +3266,7 @@ myget_feats_importance <- function(mdl, featsimp_df = NULL) {
     if ((inherits(mdl$finalModel, "rpart")) &&
         is.null(mdl$splits)) {
         # varImp crashes for an empty tree
+        #stop("empty rpart tree")
         return(NULL)
     }
 

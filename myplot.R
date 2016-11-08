@@ -516,7 +516,9 @@ myplot_plotly <- function(ggplot_obj) {
 }
 
 myplot_prediction_classification <- function(df, feat_x, feat_y,
-                            rsp_var, rsp_var_out, id_vars, prob_threshold=NULL, mdl = NULL) {
+                                             rsp_var, rsp_var_out, id_vars, 
+                                             prob_threshold = NULL, mdl = NULL,
+                                             title = NULL) {
 
     if (feat_x == ".rownames")
         df[, ".rownames"] <- rownames(df)
@@ -565,44 +567,75 @@ myplot_prediction_classification <- function(df, feat_x, feat_y,
     }
 
     dsp_vars <- c(id_vars, grep(rsp_var, names(df), value = TRUE))
+    print("Min/Max Boundaries: ")
+    myprint_df(df[, c(dsp_vars, ".label")] %>%
+                 subset(.label != "") %>%
+                 arrange_(interp(~var, var = as.name(predct_error_var_name))))
+    plt_df <- df
+    # Set up data for tiles
+    if (!is.numeric(plt_df[, feat_x])) grdX <- sort(unique(plt_df[, feat_x])) else
+      # grdX <- summary(plt_df[, feat_x])
+      grdX <- seq(from = min(plt_df[, feat_x]),
+                  to   = max(plt_df[, feat_x]),
+                  length.out = 10)
+    if (!is.numeric(plt_df[, feat_y])) grdY <- sort(unique(plt_df[, feat_y])) else
+      # grdY <- summary(plt_df[, feat_y])
+      grdY <- seq(from = min(plt_df[, feat_y]),
+                  to   = max(plt_df[, feat_y]),
+                  length.out = 10)
+    tileDf <- expand.grid(x = grdX, y = grdY)
+    if (inherits(tileDf$x, "table")) tileDf$x <- as.numeric(tileDf$x)
+    if (inherits(tileDf$y, "table")) tileDf$y <- as.numeric(tileDf$y)
+    names(tileDf) <- c(feat_x, feat_y)
+    medianDf <- mycompute_stats_df(df, stats_fns = c(.median = median))
+    if (is.null(mdl))
+      stop("myplot_prediction_classification: mdl required for geom_tile plots") else {
+        mdlFtr <- myextract_actual_feats(row.names(caret::varImp(mdl)$importance))
+        tileDf[, setdiff(mdlFtr, names(tileDf))] <- 
+          medianDf[1, paste(setdiff(mdlFtr, names(tileDf)), "median", sep = ".")]
+        tileDf <- glb_get_predictions(df = tileDf, mdl$.myId, rsp_var, prob_threshold)
+      }
+    
+    tmp_var_out <- paste0(rsp_var, ".mdl")
+    plt_df[, tmp_var_out] <- plt_df[, rsp_var_out]
+    
+    gp <- ggplot(plt_df, aes_string(x = feat_x, y = feat_y))
+    if (max(table(tileDf[, rsp_var_out])) != nrow(tileDf)) # Boundaries are visible !
+      gp <- gp + 
+      geom_tile(data = tileDf,
+                mapping = aes_string(x = feat_x, y = feat_y, fill = rsp_var_out))
     if (any(!is.na(df[, predct_accurate_var_name]))) {
-        print("Min/Max Boundaries: ")
-        myprint_df(df[, c(dsp_vars, ".label")] %>%
-            subset(.label != "") %>%
-            arrange_(interp(~var, var = as.name(predct_error_var_name))))
-#         myprint_df(orderBy(reformulate(predct_error_var_name),
-#                            subset(df[, c(dsp_vars, ".label")], .label != "")))
         print("Inaccurate: ")
         myprint_df(df[!df[, predct_accurate_var_name], c(dsp_vars)] %>%
             arrange_(interp(~var, var = as.name(predct_error_var_name))))
-#         myprint_df(orderBy(reformulate(predct_error_var_name),
-#                            df[!df[, predct_accurate_var_name], c(dsp_vars)]))
 
-        plt_df <- df
         tmpName <- gsub("\\*", "_", predct_accurate_var_name)
         plt_df[, tmpName] <- plt_df[, predct_accurate_var_name]
 
-        # Set up data for tiles
-        if ((is.numeric(plt_df[, feat_x])) || (is.numeric(plt_df[, feat_y])))
-            stop(sprintf("myplot_prediction_classification: feat_x: %s OR feat_y: %s is numeric; Not implemented yet",
-                         feat_x, feat_y))
-        tileDf <- expand.grid(x = sort(unique(plt_df[, feat_x])),
-                              y = sort(unique(plt_df[, feat_y])))
-        names(tileDf) <- c(feat_x, feat_y)
-        medianDf <- mycompute_stats_df(df, stats_fns = c(.median = median))
-
-        gp <- ggplot(plt_df, aes_string(x = feat_x, y = feat_y)) +
-            geom_point(aes_string(color = color_var,
-                                  shape = tmpName),
+        gp <- gp +
+            geom_point(aes_string(shape = tmpName, color = tmp_var_out),                       
                        position = "jitter") +
-            scale_shape_manual(values = c(4,3)) + guides(shape = FALSE) +
+            scale_shape_manual(values = c(4,3), guide = "legend", name = "accurate") +          
+            scale_color_discrete(guide = "legend", name = paste0(rsp_var, ".<idMdl>")) +
             geom_text(aes_string(label = ".label"), color = "NavyBlue",
                       size = 3.5) +
-            facet_wrap(reformulate(tmpName)) +
+            facet_wrap(reformulate(tmpName)) +          
             scale_color_brewer(type = "qual", palette = "Set1") +
-            ggtitle(tmpName)
-        return(gp)
-    } else return(NULL)
+            theme(legend.position="top", axis.text.x=element_text(hjust=1, angle=45)) +
+            ggtitle(ifelse(is.null(title), tmpName, title))
+    } else {
+      gp <- gp +
+        geom_point(aes_string(shape = tmp_var_out), color = "black",                       
+                   position = "jitter") +
+        scale_shape_manual(values = c(4,3), guide = "legend", name = "prediction") +        
+        scale_color_discrete(guide = "legend", name = paste0(rsp_var, ".<idMdl>")) +
+        geom_text(aes_string(label = ".label"), color = "NavyBlue",
+                  size = 3.5) +
+        scale_color_brewer(type = "qual", palette = "Set1") +
+        theme(legend.position="top", axis.text.x=element_text(hjust=1, angle=45)) +
+        ggtitle(ifelse(is.null(title), tmpName, title))
+    }
+    return(gp)
 }
 
 myplot_prediction_regression <- function(df, feat_x, feat_y, rsp_var, rsp_var_out, id_vars) {

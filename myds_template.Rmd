@@ -40,22 +40,114 @@ setwd("~/Documents/Work/<ProjectPath>")
 
 # Synopsis:
 
-Based on analysis utilizing <> techniques, <conclusion heading>:  
+## Background
 
-Summary of key steps & error improvement stats:
+US Federal Government:
+Bureau of Consumer Financial Protection (CFPB): Consumer Complaint Database: 
+Metadata Updated: Sep 26, 2015 
 
-### Prediction Accuracy Enhancement Options:
-- transform.data chunk:
-    - derive features from multiple features
+CFPB can increase its effectiveness & customer satisfaction by minimizing disputes escalated by consumers when businesses initially respond to consumer complaints in a timely manner.
+
+The objective is to create a classifier that predicts if a customer will dispute the resolution of a specific complaint with a bank:  Consumer Dispute? (Yes or No).
+
+The observations are complaints CFPB received about financial products and services from US residents.
+
+## Results: Prepaid Cards only:
+
+### Feature Importance of selected Generalized Boosted Model (GBM) 
+
+![](varImp_glbMdlFnlNslId.png)
+
+The model suggests that resolutions are disputed mainly based on the period of the year the complaints are first registered and the "velocity" of such complaints.
+
+![](NewPredictions1.png)
+
+For some reason complaints registered in Q2 of any year does not result in disputes compared to other quarters. Further investigation is warranted to understand this driver / issue.
+
+![](Datereceived_month_fctr.png)
+
+Additionally, when the velocity of complaints decreases, the number of disputes increase. 
+
+![](NewPredictions2.png)
+
+This is completely counter-intuitive and the initial hypothesis is that when complaint submissions are rare, the financial company has more time to investigate the complaint and it might be naturally biased to resolve it in favor of the company. This hypothesis needs to be tested and verified. If true, the company could potentially adopt one or more of the following approaches to resolve the complaint:
+
+- Have CFPB / company use a "neutral" arbitrator to generate the initial "resolution".
+- Train the resolution team to minimize any bias (implict / explicit).
+- Have CFPB review the initial resolution prior to communicating it to the complainant.
+
+![](Response.png)
+
+Any "relief" (monetary / non-monetary) minimizes chances of complaint escalating to a dispute.
+
+![](gCompany.png)
+
+American Express seems to lead in percent of complaints escalating to a dispute. CFPB might consider conducting workshops for Amex personnel and/or process mining techniques to alleviate this.
+
+## Analytics Process Key Steps:
+
+- Feature Engineering:
+  - Extractions from dates include:
+    - "Datereceived.year.fctr"    "Datereceived.month.fctr"  
+    - "Datereceived.date.fctr"    "Datereceived.juliandate"  
+    - "Datereceived.wkday.fctr"   "Datereceived.wkend"       
+    - "Datereceived.last2.log1p" 
+    - "Datereceived.last4.log1p"  "Datereceived.last8.log1p" 
+    - "Datereceived.last16.log1p" "Datereceived.last32.log1p"
     
-- manage.missing.data chunk:
-    - Not fill missing vars
-    - Fill missing numerics with a different algorithm
-    - Fill missing chars with data based on clusters 
+    - "Datereceived.hlday"  (Federal holidays were sourced from US Government OPM website)      
+
+    - "Sent.Recd.Dys"       
+    - "Sent.Recd.Dys.log1p" "Sent.Recd.Dys.root2" "Sent.Recd.Dys.nexp" 
+    - Similar transformations were included for all non-normal distributions
     
-### ![](<filename>.png)
+- Clustering:
+
+  Hierarchial clustering by Subproduct decreased entropy of dataset from 0.4267 to 0.4067 (~ 4.6%)
+    
+- Rebalance classes
+
+![](Unbalanced.png)
+  
+  Since the number of disputes is a small proportion (< 15%) of the complaints, undisputed complaints that did not meet the Tomek link criteria were not fed to the classifier training process.
+  
+![](MdlResults.png)  
+
+Multiple algorithms were tested and gbm was selected based on accuracy (g.score) and value of insights suggested by the model
+
+![](gbmCV.png)
+
+The selected model utilized repeated cross-validation of 7 folds with 3 repeats and 5 tuning grid specifications
+
+![](gbmAUC.png)
+
+![](gbmPrbThd.png)
+
+![](gbmPrtOOB2.png)
 
 ## Potential next steps include:
+
+- Feature Engineering:
+  - DateRecieved, DateSenttocompany: 
+    - Add State & City holidays for each year
+    - Add number of complaints received and sent for this complaint's date
+    
+  - Product: Include all & create product groups to minimize model stacks  
+    
+  - NLP: Issue, SubIssue, "Consumercomplaintnarrative", "Companypublicresponse"
+  - Company: 
+    - Identify Industry based on stock / Dun & Bradstreet listing
+    - Create clusters based on Product, Subproduct & Company
+    
+- Identify outliers in fitting data frame [glbObsFit, glbObsTrn] and if any, move to validation data frame [glbObsOOB, None]     
+
+- Fine tune algorithm hyper-parameters (e.g. alpha & lambda for glmnet)
+
+- Testing options:  
+  - Preprocessing (center, scaling, PCA, etc.)
+  - Resampling (Boot strapping, LGOCV, etc.)
+  - Ensemble models
+  
 - Organization:
     - Categorize by chunk
     - Priority criteria:
@@ -190,7 +282,9 @@ glb_map_rsp_raw_to_var <- NULL
 #     return(exp(-raw / 2))
 #     
 # chk ref value against frequencies vs. alpha sort order
-#     ret_vals <- rep_len(NA, length(raw)); ret_vals[!is.na(raw)] <- ifelse(raw[!is.na(raw)] == 1, "Y", "N"); return(relevel(as.factor(ret_vals), ref="N"))
+#    ret_vals <- rep_len(NA, length(raw)); 
+#    ret_vals[raw != ""] <- ifelse(raw[raw != ""] == "Yes", "Y", "N");
+#    return(relevel(as.factor(ret_vals), ref="N"))
 #
 #     as.factor(paste0("B", raw))
 #     as.factor(gsub(" ", "\\.", raw))    
@@ -268,17 +362,17 @@ glbFeatsDerive <- list();
 #data.frame(ImageId = mapfn(glbObsAll$.src, glbObsAll$.pos))[7045:7055, ]
 
     # character
-#     mapfn = function(Education) { raw <- Education; raw[is.na(raw)] <- "NA.my"; return(as.factor(raw)) } 
-#     mapfn = function(Week) { return(substr(Week, 1, 10)) }
-#     mapfn = function(Name) { return(sapply(Name, function(thsName) 
+#     mapfn = function(raw1) { raw1[is.na(raw1)] <- "NA.my"; return(as.factor(raw1)) } 
+#     mapfn = function(raw1) { return(substr(raw1, 1, 10)) }
+#     mapfn = function(raw1) { return(sapply(raw1, function(thsName) 
 #                                             str_sub(unlist(str_split(thsName, ","))[1], 1, 1))) } 
 
-#     mapfn = function(descriptor) { return(plyr::revalue(descriptor, c(
+#     mapfn = function(raw1) { return(plyr::revalue(raw1, c(
 #         "ABANDONED BUILDING"  = "OTHER",
 #         "**"                  = "**"
 #                                           ))) }
 
-#     mapfn = function(description) { mod_raw <- description;
+#     mapfn = function(raw1) { mod_raw <- raw1;
     # This is here because it does not work if it's in txt_map_filename
 #         mod_raw <- gsub(paste0(c("\n", "\211", "\235", "\317", "\333"), collapse = "|"), " ", mod_raw)
     # Don't parse for "." because of ".com"; use customized gsub for that text
@@ -298,6 +392,10 @@ glbFeatsDerive <- list();
 
 #         return(mod_raw) }
 
+	# date
+#	    mapfn = function(raw1, raw2) { return(as.numeric(difftime(strptime(raw1, format = "%m/%d/%Y"),  strptime(raw2, format = "%m/%d/%Y"), units = "days"))) }
+
+
     # numeric
 # Create feature based on record position/id in data   
 glbFeatsDerive[[".pos"]] <- list(
@@ -311,21 +409,21 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #   Derive & keep multiple transformations of the same feature, if normality is hard to achieve with just one transformation
 #   Right skew: logp1; sqrt; ^ 1/3; logp1(logp1); log10; exp(-<feat>/constant)
 # glbFeatsDerive[["WordCount.log1p"]] <- list(
-#     mapfn = function(WordCount) { return(log1p(WordCount)) } 
+#     mapfn = function(raw1) { return(log1p(raw1)) } 
 #   , args = c("WordCount"))
 # glbFeatsDerive[["WordCount.root2"]] <- list(
-#     mapfn = function(WordCount) { return(WordCount ^ (1/2)) } 
+#     mapfn = function(raw1) { return(raw1 ^ (1/2)) } 
 #   , args = c("WordCount"))
 # glbFeatsDerive[["WordCount.nexp"]] <- list(
-#     mapfn = function(WordCount) { return(exp(-WordCount)) } 
+#     mapfn = function(raw1) { return(exp(-raw1)) } 
 #   , args = c("WordCount"))
 #print(summary(glbObsAll$WordCount))
 #print(summary(mapfn(glbObsAll$WordCount)))
     
 # If imputation shd be skipped for this feature
 # glbFeatsDerive[["District.fctr"]] <- list(
-#     mapfn = function(District) {
-#         raw <- District;
+#     mapfn = function(raw1) {
+#         raw <- raw1;
 #         ret_vals <- rep_len("NA", length(raw)); 
 #         ret_vals[!is.na(raw)] <- sapply(raw[!is.na(raw)], function(elm) 
 #                                         ifelse(elm < 10, "1-9", 
@@ -350,11 +448,11 @@ glbFeatsDerive[[".pos.y"]] <- list(
 
 # If imputation of missing data is not working ...
 # glbFeatsDerive[["FertilityRate.nonNA"]] <- list(
-#     mapfn = function(FertilityRate, Region) {
-#         RegionMdn <- tapply(FertilityRate, Region, FUN = median, na.rm = TRUE)
+#     mapfn = function(raw1, raw2) {
+#         RegionMdn <- tapply(raw1, raw2, FUN = median, na.rm = TRUE)
 # 
-#         retVal <- FertilityRate
-#         retVal[is.na(FertilityRate)] <- RegionMdn[Region[is.na(FertilityRate)]]
+#         retVal <- raw1
+#         retVal[is.na(raw1)] <- RegionMdn[raw2[is.na(raw1)]]
 #         return(retVal)
 #     }
 #     , args = c("FertilityRate", "Region"))
@@ -383,42 +481,41 @@ glbFeatsDerive[[".pos.y"]] <- list(
 #         }
 #         , args = c(qsn))
     
-#     mapfn = function(HOSPI.COST) { return(cut(HOSPI.COST, 5, breaks = c(0, 100000, 200000, 300000, 900000), labels = NULL)) }     
-#     mapfn = function(Rasmussen)  { return(ifelse(sign(Rasmussen) >= 0, 1, 0)) } 
-#     mapfn = function(startprice) { return(startprice ^ (1/2)) }       
-#     mapfn = function(startprice) { return(log(startprice)) }   
-#     mapfn = function(startprice) { return(exp(-startprice / 20)) }
-#     mapfn = function(startprice) { return(scale(log(startprice))) }     
-#     mapfn = function(startprice) { return(sign(sprice.predict.diff) * (abs(sprice.predict.diff) ^ (1/10))) }        
+#     mapfn = function(raw1) { return(cut(raw1, 5, breaks = c(0, 100000, 200000, 300000, 900000), labels = NULL)) }     
+#     mapfn = function(raw1)  { return(ifelse(sign(raw1) >= 0, 1, 0)) } 
+#     mapfn = function(raw1) { return(raw1 ^ (1/2)) }       
+#     mapfn = function(raw1) { return(log1p(raw1)) }   
+#     mapfn = function(raw1) { return(exp(-raw1 / 20)) }
+#     mapfn = function(raw1) { return(scale(log1p(raw1))) }     
+#     mapfn = function(raw1) { return(sign(raw1) * (abs(raw1) ^ (1/10))) }        
 
     # factor      
-#     mapfn = function(PropR) { return(as.factor(ifelse(PropR >= 0.5, "Y", "N"))) }
-#     mapfn = function(productline, description) { as.factor(gsub(" ", "", productline)) }
-#     mapfn = function(purpose) { return(relevel(as.factor(purpose), ref="all_other")) }
-#     mapfn = function(raw) { tfr_raw <- as.character(cut(raw, 5)); 
+#     mapfn = function(raw1) { return(as.factor(ifelse(raw1 >= 0.5, "Y", "N"))) }
+#     mapfn = function(raw1) { as.factor(gsub(" ", "", raw1)) }
+#     mapfn = function(raw1) { return(relevel(as.factor(raw1), ref="all_other")) }
+#     mapfn = function(raw1) { tfr_raw <- as.character(cut(raw1, 5)); 
 #                             tfr_raw[is.na(tfr_raw)] <- "NA.my";
 #                             return(as.factor(tfr_raw)) }
-#     mapfn = function(startprice.log10) { return(cut(startprice.log10, 3)) }
-#     mapfn = function(startprice.log10) { return(cut(sprice.predict.diff, c(-1000, -100, -10, -1, 0, 1, 10, 100, 1000))) }    
+#     mapfn = function(raw1) { return(cut(raw1, 3)) }
+#     mapfn = function(raw1) { return(cut(raw1, c(-1000, -100, -10, -1, 0, 1, 10, 100, 1000))) }    
 
 #     , args = c("<arg1>"))
     
     # multiple args
-#     mapfn = function(id, date) { return(paste(as.character(id), as.character(date), sep = "#")) }        
-#     mapfn = function(PTS, oppPTS) { return(PTS - oppPTS) }
-#     mapfn = function(startprice.log10.predict, startprice) {
-#                  return(spdiff <- (10 ^ startprice.log10.predict) - startprice) } 
-#     mapfn = function(productline, description) { as.factor(
-#         paste(gsub(" ", "", productline), as.numeric(nchar(description) > 0), sep = "*")) }
-#     mapfn = function(.src, .pos) { 
-#         return(paste(.src, sprintf("%04d", 
-#                                    ifelse(.src == "Train", .pos, .pos - 7049)
+#     mapfn = function(raw1, raw2) { return(paste(as.character(raw1), as.character(raw2), sep = "#")) }        
+#     mapfn = function(raw1, raw2) { return(raw1 - raw2) }
+#     mapfn = function(raw1, raw2) { return(spdiff <- (10 ^ raw1) - raw2) } 
+#     mapfn = function(raw1, raw2) { as.factor(
+#         paste(gsub(" ", "", raw1), as.numeric(nchar(raw2) > 0), sep = "*")) }
+#     mapfn = function(raw1, raw2) { 
+#         return(paste(raw1, sprintf("%04d", 
+#                                    ifelse(raw1 == "Train", raw2, raw2 - 7049)
 #                                    ), sep = "#")) }       
 
 # # If glbObsAll is not sorted in the desired manner
-#     mapfn=function(Week) { return(coredata(lag(zoo(orderBy(~Week, glbObsAll)$ILI), -2, na.pad=TRUE))) }
-#     mapfn=function(ILI) { return(coredata(lag(zoo(ILI), -2, na.pad=TRUE))) }
-#     mapfn=function(ILI.2.lag) { return(log(ILI.2.lag)) }
+#     mapfn=function(raw1) { return(coredata(lag(zoo(orderBy(~Week, glbObsAll)$ILI), -2, na.pad=TRUE))) }
+#     mapfn=function(raw1) { return(coredata(lag(zoo(raw1), -2, na.pad=TRUE))) }
+#     mapfn=function(raw1) { return(log1p(raw1)) }
 
 # glbFeatsDerive[["<var1>"]] <- glbFeatsDerive[["<var2>"]]
 
@@ -460,7 +557,8 @@ if (length(glbFeatsText) > 0) {
     require(tm)
     require(stringr)
 
-    glb_txt_stop_words[["<txt_var>"]] <- sort(myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
+    glb_txt_stop_words[["<txt_var>"]] <- 
+      sort(myreplacePunctuation(str_to_lower(gsub(" ", "", c(NULL
         # Remove any words from stopwords            
 #         , setdiff(myreplacePunctuation(stopwords("english")), c("<keep_wrd1>", <keep_wrd2>"))
                                 
@@ -682,7 +780,7 @@ glbFctrMaxUniqVals <- 20 # default: 20
 glb_impute_na_data <- FALSE # or TRUE
 glb_mice_complete.seed <- 144 # or any integer
 
-glbFeatsCluster <- NULL # NULL: default or  c("<feat1>", "<feat2>")
+glbFeatsCluster <- NULL # NULL: default or  c("<feat1>", "<feat2>") or '%<d-% setdiff(names(glbObsAll), c(glb_rsp_var_raw, glb_rsp_var, glbFeatsExclude, glbFeatsCategory, glbFeatsId, ".rnorm", ".pos"))'
 glb_cluster.seed <- 189 # or any integer
 glbClusterEntropyVar <- NULL # c(glb_rsp_var, as.factor(cut(glb_rsp_var, 3)), default: NULL)
 glbFeatsClusterVarsExclude <- FALSE # default FALSE
@@ -937,7 +1035,7 @@ glbMdlMetricSummaryFn <- NULL # or function(data, lev=NULL, model=NULL) {
 # }
 
 glbMdlCheckRcv <- FALSE # Turn it on when needed; otherwise takes long time
-glb_rcv_n_folds <- 3 # or NULL
+glb_rcv_n_folds <- 7 # or NULL
 glb_rcv_n_repeats <- 3 # or NULL
 
 glb_clf_proba_threshold <- NULL # 0.5
@@ -977,7 +1075,9 @@ glbMdlEnsembleSampleMethods <- c("boot", "boot632", "cv", "repeatedcv"
 #step.glm <- step(ntv.glm)
 
 glbMdlSltId <- NULL #select from c(NULL, "All.X##rcv#glmnet", "RFE.X##rcv#glmnet", <mdlId>)
-glbMdlFnlId <- NULL #select from c(NULL, glbMdlSelId)
+glbMdlFnlId <- NULL #select from c(NULL, glbMdlSltId)
+glbMdlFnlNslId <- NULL
+glbMdlFnlRslId <- NULL
 
 glb_dsp_cols <- c(".pos", glbFeatsId, glbFeatsCategory, glb_rsp_var
 #               List critical cols excl. above
@@ -1087,12 +1187,12 @@ if (glb_is_classification && glb_is_binomial) {
     #                                         mygetPredictIds(glb_rsp_var, glbMdlId)$value])"
     glbObsOut$vars[["Predictions"]] <-
         "%<d-% glb_map_rsp_var_to_raw(glbObsNew[,
-                                            mygetPredictIds(glb_rsp_var, glbMdlId)$value])"
+                                            mygetPredictIds(glb_rsp_var, glbMdlFnlNslId)$value])"
 } else {
 #     glbObsOut$vars[[glbFeatsId]] <- 
 #         "%<d-% as.integer(gsub('Test#', '', glbObsNew[, glbFeatsId]))"
     glbObsOut$vars[[glb_rsp_var]] <- 
-        "%<d-% glbObsNew[, mygetPredictIds(glb_rsp_var, glbMdlId)$value]"
+        "%<d-% glbObsNew[, mygetPredictIds(glb_rsp_var, glbMdlFnlNslId)$value]"
 #     for (outVar in setdiff(glbFeatsExcludeLcl, glb_rsp_var_raw))
 #         glbObsOut$vars[[outVar]] <- 
 #             paste0("%<d-% mean(glbObsAll[, \"", outVar, "\"], na.rm = TRUE)")
@@ -1129,7 +1229,6 @@ if (!is.null(chkChunksLabels <- knitr::all_labels()) && # knitr::all_labels() do
 glbChunks[["first"]] <- NULL #default: script will load envir from previous chunk
 glbChunks[["last"]] <- NULL #"extract.features.end" #NULL #default: script will save envir at end of this chunk 
 glbChunks[["inpFilePathName"]] <- NULL # NULL: default or "data/<prvScriptName>_<lstChunkLbl>.RData"
-#mysavChunk(glbOut$pfx, glbChunks[["last"]]) # called from myevlChunk
 
 # Inspect max OOB FP
 #chkObsOOB <- subset(glbObsOOB, !label.fctr.All.X..rcv.glmnet.is.acc)
